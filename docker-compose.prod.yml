@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: menumine_db_prod
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - menumine_network
+      
+  redis:
+    image: redis:7-alpine
+    container_name: menumine_redis_prod
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    restart: unless-stopped
+    networks:
+      - menumine_network
+      
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: menumine_backend_prod
+    expose:
+      - "8000"
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+    volumes:
+      - ./config:/app/config:ro
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - menumine_network
+      
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: menumine_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - static_volume:/var/www/static:ro
+      - media_volume:/var/www/media:ro
+      - ./frontend/build:/var/www/frontend:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - menumine_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_volume:
+  media_volume:
+
+networks:
+  menumine_network:
+    driver: bridge

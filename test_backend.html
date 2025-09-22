@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MenuMind AI - Backend Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+        .header { text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .status-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .status { padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-left: 10px; }
+        .status.online { background-color: #4CAF50; color: white; }
+        .status.offline { background-color: #f44336; color: white; }
+        .status.loading { background-color: #ff9800; color: white; }
+        .test-section { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .button { background-color: #007bff; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer; }
+        .button:hover { background-color: #0056b3; }
+        .result { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin-top: 10px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+        .success { border-left: 4px solid #4CAF50; }
+        .error { border-left: 4px solid #f44336; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🥗🤖 MenuMind AI - Backend Tester</h1>
+        <p>Debug and test your Django backend</p>
+    </div>
+
+    <div class="status-card">
+        <h2>Server Status</h2>
+        <p>Backend: <span id="serverStatus" class="status loading">Checking...</span></p>
+        <p>Health: <span id="healthStatus" class="status loading">Checking...</span></p>
+        <p>Base URL: <code>http://localhost:8000</code></p>
+        <div id="debugInfo"></div>
+    </div>
+
+    <div class="grid">
+        <div class="test-section">
+            <h3>🔧 Core Endpoints</h3>
+            <button class="button" onclick="testEndpoint('/health/')">Health Check</button>
+            <button class="button" onclick="testEndpoint('/')">API Root</button>
+            <button class="button" onclick="testEndpoint('/admin/')">Admin Panel</button>
+            <div id="coreResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📡 API Endpoints</h3>
+            <button class="button" onclick="testEndpoint('/api/')">API Root</button>
+            <button class="button" onclick="testEndpoint('/api/shopping/')">Shopping API</button>
+            <button class="button" onclick="testEndpoint('/api/nutrition/')">Nutrition API</button>
+            <button class="button" onclick="testEndpoint('/api/ai/')">AI API</button>
+            <button class="button" onclick="testEndpoint('/api/users/')">Users API</button>
+            <div id="apiResult" class="result" style="display:none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔍 Debug Tools</h3>
+            <button class="button" onclick="testCORS()">Test CORS</button>
+            <button class="button" onclick="testAllEndpoints()">Test All</button>
+            <button class="button" onclick="clearResults()">Clear Results</button>
+            <div id="debugResult" class="result" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const baseUrl = 'http://localhost:8000';
+
+        window.onload = function() {
+            checkServerStatus();
+            checkHealthStatus();
+        };
+
+        async function checkServerStatus() {
+            const statusEl = document.getElementById('serverStatus');
+            const debugEl = document.getElementById('debugInfo');
+            
+            try {
+                console.log('Checking server status...');
+                const response = await fetch(baseUrl);
+                
+                console.log('Server response:', response);
+                debugEl.innerHTML = '<small>Status: ' + response.status + ', OK: ' + response.ok + '</small>';
+                
+                if (response.ok) {
+                    statusEl.textContent = 'Online';
+                    statusEl.className = 'status online';
+                } else {
+                    statusEl.textContent = 'Error (' + response.status + ')';
+                    statusEl.className = 'status offline';
+                }
+            } catch (error) {
+                console.error('Server check failed:', error);
+                statusEl.textContent = 'Offline';
+                statusEl.className = 'status offline';
+                debugEl.innerHTML = '<small>Error: ' + error.message + '</small>';
+            }
+        }
+
+        async function checkHealthStatus() {
+            const healthEl = document.getElementById('healthStatus');
+            
+            try {
+                console.log('Checking health status...');
+                const response = await fetch(baseUrl + '/health/');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Health data:', data);
+                    healthEl.textContent = 'Healthy';
+                    healthEl.className = 'status online';
+                } else {
+                    healthEl.textContent = 'Unhealthy (' + response.status + ')';
+                    healthEl.className = 'status offline';
+                }
+            } catch (error) {
+                console.error('Health check failed:', error);
+                healthEl.textContent = 'Error';
+                healthEl.className = 'status offline';
+            }
+        }
+
+        async function testEndpoint(endpoint) {
+            const url = baseUrl + endpoint;
+            console.log('Testing endpoint:', url);
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                let data;
+                
+                try {
+                    data = JSON.parse(text);
+                } catch {
+                    data = text.substring(0, 500) + (text.length > 500 ? '...' : '');
+                }
+
+                const result = {
+                    url: url,
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok,
+                    data: data
+                };
+
+                displayResult('coreResult', result);
+                console.log('Endpoint result:', result);
+                
+            } catch (error) {
+                console.error('Endpoint test failed:', error);
+                displayResult('coreResult', {
+                    url: url,
+                    error: error.message,
+                    ok: false
+                });
+            }
+        }
+
+        async function testCORS() {
+            try {
+                const response = await fetch(baseUrl + '/health/', {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'GET'
+                    }
+                });
+
+                const corsHeaders = {};
+                response.headers.forEach((value, key) => {
+                    if (key.startsWith('access-control')) {
+                        corsHeaders[key] = value;
+                    }
+                });
+
+                displayResult('debugResult', {
+                    message: 'CORS preflight test',
+                    status: response.status,
+                    headers: corsHeaders
+                });
+                
+            } catch (error) {
+                displayResult('debugResult', {
+                    message: 'CORS test failed',
+                    error: error.message
+                });
+            }
+        }
+
+        async function testAllEndpoints() {
+            const endpoints = ['/', '/health/', '/api/', '/api/shopping/', '/api/nutrition/', '/api/ai/', '/api/users/'];
+            const results = [];
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const response = await fetch(baseUrl + endpoint);
+                    results.push({
+                        endpoint: endpoint,
+                        status: response.status,
+                        ok: response.ok
+                    });
+                } catch (error) {
+                    results.push({
+                        endpoint: endpoint,
+                        error: error.message,
+                        ok: false
+                    });
+                }
+            }
+            
+            displayResult('debugResult', { allEndpoints: results });
+        }
+
+        function displayResult(elementId, result) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = 'result ' + (result.ok !== false ? 'success' : 'error');
+            element.textContent = JSON.stringify(result, null, 2);
+        }
+
+        function clearResults() {
+            document.querySelectorAll('.result').forEach(el => {
+                el.style.display = 'none';
+                el.textContent = '';
+            });
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            checkServerStatus();
+            checkHealthStatus();
+        }, 30000);
+    </script>
+</body>
+</html>

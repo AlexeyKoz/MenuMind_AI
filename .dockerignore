@@ -1,0 +1,181 @@
+# ==========================================
+# MenuMind AI - Main Docker Ignore
+# ==========================================
+
+# ==========================================
+# Version Control
+# ==========================================
+.git
+.gitignore
+.gitattributes
+.github/
+
+# ==========================================
+# Documentation
+# ==========================================
+README.md
+*.md
+docs/
+
+# ==========================================
+# Development Files
+# ==========================================
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+**/coverage
+.pytest_cache/
+.coverage
+.mypy_cache/
+
+# ==========================================
+# Backend Specific
+# ==========================================
+
+# Python virtual environments
+**/venv/
+**/env/
+**/.venv/
+**/.env/
+
+# Django development database
+**/db.sqlite3
+**/db.sqlite3-journal
+
+# Django collected static files (will be collected in container)
+**/staticfiles/
+**/media/
+
+# Python build artifacts
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
+**/build/
+**/dist/
+**/*.egg-info/
+
+# ==========================================
+# Frontend Specific
+# ==========================================
+
+# Node.js
+**/node_modules/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Build outputs
+**/build/
+**/dist/
+
+# Cache
+**/.npm/
+**/.yarn/cache/
+.parcel-cache/
+
+# ==========================================
+# Environment & Secrets
+# ==========================================
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*.local
+
+# Keep example files
+!.env.example
+!.env.development.example
+!.env.production.example
+
+# ==========================================
+# Docker
+# ==========================================
+
+# Dockerfile variants (keep only needed ones)
+**/Dockerfile.dev
+**/Dockerfile.prod
+Dockerfile*
+!backend/Dockerfile.dev
+!backend/Dockerfile.prod
+!frontend/Dockerfile.dev
+!frontend/Dockerfile.prod
+!nginx/Dockerfile
+
+# Docker compose files
+docker-compose*.yml
+!docker-compose.yml
+!docker-compose.prod.yml
+
+# ==========================================
+# Deployment & Scripts
+# ==========================================
+
+# Deployment scripts (not needed in image)
+scripts/
+Makefile
+
+# SSL certificates
+ssl/
+certs/
+*.pem
+*.key
+*.crt
+
+# Backup files
+backups/
+*.backup
+*.bak
+
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+
+# Logs
+**/*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# ==========================================
+# OS Specific
+# ==========================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ==========================================
+# Archive Files
+# ==========================================
+*.zip
+*.tar.gz
+*.rar
