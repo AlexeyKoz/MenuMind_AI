@@ -73,3 +73,5 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"✅ Cleanup completed: {deleted_count} lists permanently deleted")
         )
+
+

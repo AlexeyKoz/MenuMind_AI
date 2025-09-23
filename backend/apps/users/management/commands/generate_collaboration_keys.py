@@ -54,3 +54,5 @@ class Command(BaseCommand):
             if not User.objects.filter(collaboration_key=key).exists():
                 return key
 
+
+

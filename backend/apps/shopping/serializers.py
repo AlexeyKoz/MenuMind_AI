@@ -27,9 +27,9 @@ class ShoppingItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShoppingItem
         fields = [
-            'id', 'name', 'quantity', 'unit', 'category', 'notes',
-            'is_completed', 'completed_by', 'completed_by_name', 'completed_at',
-            'added_by', 'added_by_name', 'added_by_first_name',
+            'id', 'name', 'quantity', 'unit', 'weight_quantity', 'liquid_quantity',
+            'category', 'notes', 'is_completed', 'completed_by', 'completed_by_name',
+            'completed_at', 'added_by', 'added_by_name', 'added_by_first_name',
             'ai_suggested', 'nutrition_data', 'estimated_price',
             'user_color', 'priority', 'display_color', 'is_recent',
             'created_at', 'updated_at'
@@ -92,13 +92,12 @@ class AddCollaboratorSerializer(serializers.Serializer):
     can_invite_others = serializers.BooleanField(default=False)
 
     def validate_collaboration_key(self, value):
-        """Validate that the collaboration key exists"""
-        from apps.users.models import User
-        try:
-            User.objects.get(collaboration_key=value)
-            return value
-        except User.DoesNotExist:
-            raise serializers.ValidationError("Invalid collaboration key")
+        """Validate that the collaboration key format is correct"""
+        # Only validate format, not existence - let the view handle user lookup for better error messages
+        if not value or len(value) != 6:
+            raise serializers.ValidationError(
+                "Collaboration key must be exactly 6 characters")
+        return value
 
 
 class UpdateCollaboratorPermissionsSerializer(serializers.Serializer):
@@ -132,4 +131,3 @@ class ShoppingEventSerializer(serializers.ModelSerializer):
             'currency', 'items_data', 'receipt_image', 'created_at'
         ]
         read_only_fields = ['id', 'user', 'created_at']
-

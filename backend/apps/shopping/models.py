@@ -157,6 +157,17 @@ class ShoppingItem(models.Model):
     name = models.CharField(max_length=200)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit = models.CharField(max_length=20, default='unit')
+
+    # Additional quantity measurements
+    weight_quantity = models.DecimalField(
+        max_digits=10, decimal_places=3, default=0,
+        help_text='Weight quantity in grams (converted to user preference on display)'
+    )
+    liquid_quantity = models.DecimalField(
+        max_digits=10, decimal_places=3, default=0,
+        help_text='Liquid quantity in milliliters (converted to user preference on display)'
+    )
+
     category = models.CharField(
         max_length=20, choices=CATEGORIES, default='other')
 

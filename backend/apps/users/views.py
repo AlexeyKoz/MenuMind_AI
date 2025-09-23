@@ -9,7 +9,8 @@ from django.shortcuts import get_object_or_404
 from .models import User
 from .serializers import (
     UserSerializer, UserRegistrationSerializer,
-    UserProfileSerializer, PartnerConnectionSerializer
+    UserProfileSerializer, PartnerConnectionSerializer,
+    UserSettingsSerializer
 )
 
 
@@ -141,6 +142,35 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             'color': color,
             'message': 'Personal color updated successfully'
         })
+
+    @action(detail=False, methods=['get'])
+    def user_settings(self, request):
+        """Get user settings and preferences"""
+        serializer = UserSettingsSerializer(request.user)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['patch'])
+    def update_settings(self, request):
+        """Update user settings and preferences"""
+        serializer = UserSettingsSerializer(
+            request.user,
+            data=request.data,
+            partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'success': True,
+                'message': 'Settings updated successfully',
+                'data': serializer.data
+            })
+
+        return Response({
+            'success': False,
+            'errors': serializer.errors,
+            'message': 'Failed to update settings'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])

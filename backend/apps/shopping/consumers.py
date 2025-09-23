@@ -69,11 +69,20 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
         print(
             f"🔗 Registered connection for user {self.user.username} to list {self.list_id}")
 
-        # Join room group
+        # Join room group for this specific list
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
         )
+
+        # Also join user-specific group for personal notifications
+        user_group_name = f'user_{self.user.id}'
+        await self.channel_layer.group_add(
+            user_group_name,
+            self.channel_name
+        )
+        print(
+            f"👤 Added user {self.user.username} to personal group: {user_group_name}")
 
         await self.accept()
 
@@ -229,8 +238,16 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
                     self.channel_name
                 )
                 print(f"🚪 Left room group: {self.room_group_name}")
+
+                # Leave user-specific group
+                user_group_name = f'user_{self.user.id}'
+                await self.channel_layer.group_discard(
+                    user_group_name,
+                    self.channel_name
+                )
+                print(f"🚪 Left personal group: {user_group_name}")
             except Exception as e:
-                print(f"❌ Error leaving room group: {e}")
+                print(f"❌ Error leaving groups: {e}")
 
         print(
             f"✅ WebSocket disconnection complete for {getattr(self.user, 'username', 'Unknown')}")
@@ -361,28 +378,8 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
         except ShoppingList.DoesNotExist:
             return None
 
-    async def send_initial_data(self):
-        """Send initial shopping list data to connected user"""
-        print(f"🔍 Getting shopping list data for list: {self.list_id}")
-        try:
-            data = await self.get_shopping_list_data()
-            print(f"📊 Got data: {data is not None}")
-            if data:
-                print(f"📤 Sending initial data via WebSocket")
-                await self.send(text_data=json.dumps({
-                    'type': 'initial_data',
-                    'data': data
-                }, cls=UUIDEncoder))
-                print(f"✅ Initial data sent successfully")
-            else:
-                print(f"❌ No data found for shopping list: {self.list_id}")
-        except Exception as e:
-            print(f"❌ Error in send_initial_data: {e}")
-            import traceback
-            traceback.print_exc()
-            raise
-
     # Event handlers
+
     async def handle_add_item(self, data):
         """Handle adding new item to shopping list"""
         if not await self.check_add_permission():
@@ -621,6 +618,35 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
                 'user': event['user'],
                 'is_typing': event['is_typing']
             }, cls=UUIDEncoder))
+
+    async def list_deleted(self, event):
+        """Send list deletion notification to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'list_deleted',
+            'list_id': event['list_id'],
+            'list_name': event['list_name'],
+            'deleted_by': event['deleted_by'],
+            'message': event['message']
+        }, cls=UUIDEncoder))
+
+    async def participant_left(self, event):
+        """Send participant left notification to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'participant_left',
+            'list_id': event['list_id'],
+            'list_name': event['list_name'],
+            'participant': event['participant'],
+            'message': event['message']
+        }, cls=UUIDEncoder))
+
+    async def list_access_granted(self, event):
+        """Send list access granted notification to WebSocket"""
+        await self.send(text_data=json.dumps({
+            'type': 'list_access_granted',
+            'list': event['list'],
+            'invited_by': event['invited_by'],
+            'message': event['message']
+        }, cls=UUIDEncoder))
 
     async def send_error(self, message):
         """Send error message to WebSocket"""

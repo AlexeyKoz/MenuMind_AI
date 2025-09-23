@@ -282,7 +282,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             )
 
             if created:
-                # Send WebSocket notification
+                # Send WebSocket notification to existing participants in the list
                 channel_layer = get_channel_layer()
                 if channel_layer:
                     async_to_sync(channel_layer.group_send)(
@@ -304,6 +304,31 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         }
                     )
 
+                    # Send a separate notification to the newly added participant
+                    # about gaining access to a new list
+                    async_to_sync(channel_layer.group_send)(
+                        f'user_{collaborator_user.id}',
+                        {
+                            'type': 'list_access_granted',
+                            'list': {
+                                'id': str(shopping_list.id),
+                                'name': shopping_list.name,
+                                'is_collaborative': shopping_list.is_collaborative,
+                                'creator': {
+                                    'username': shopping_list.creator.username,
+                                    'first_name': shopping_list.creator.first_name
+                                }
+                            },
+                            'invited_by': {
+                                'username': request.user.username,
+                                'first_name': request.user.first_name
+                            },
+                            'message': f'You have been added to "{shopping_list.name}" by {request.user.username}'
+                        }
+                    )
+                    print(
+                        f"📡 WebSocket notifications sent for new collaborator: {collaborator_user.username} to list: {shopping_list.name}")
+
                 return Response({
                     'success': True,
                     'message': f'Successfully added {collaborator_user.username} as collaborator',
@@ -322,8 +347,21 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
         except User.DoesNotExist:
             return Response(
-                {'error': 'Invalid collaboration key'},
+                {
+                    'error': 'User not found',
+                    'message': 'No user found with this collaboration key. Please check the key and try again.',
+                    'error_type': 'user_not_found'
+                },
                 status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {
+                    'error': 'One of parameters is wrong - please try again',
+                    'message': 'There was an issue with the provided information. Please verify all details and try again.',
+                    'error_type': 'invalid_parameters'
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
 
     @action(detail=True, methods=['post'])
@@ -422,6 +460,62 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             'total': len(collaborators_data)
         })
 
+    @action(detail=True, methods=['post'])
+    def leave_list(self, request, pk=None):
+        """Allow a participant to leave/remove themselves from a list"""
+        shopping_list = self.get_object()
+
+        # Check if user is a participant (not creator)
+        if shopping_list.creator == request.user:
+            return Response(
+                {'error': 'Creator cannot leave their own list. Use delete instead.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if user is actually a participant
+        if not shopping_list.participants.filter(id=request.user.id).exists():
+            return Response(
+                {'error': 'You are not a participant of this list'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Remove user from participants
+        shopping_list.participants.remove(request.user)
+
+        # Get user info for notifications
+        user_color = getattr(request.user, 'personal_color', '#4F46E5')
+        user_info = {
+            'id': str(request.user.id),
+            'username': request.user.username,
+            'first_name': request.user.first_name,
+            'color': user_color
+        }
+
+        # Send WebSocket notification to remaining participants and creator
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                async_to_sync(channel_layer.group_send)(
+                    f'shopping_list_{pk}',
+                    {
+                        'type': 'participant_left',
+                        'list_id': str(shopping_list.id),
+                        'list_name': shopping_list.name,
+                        'participant': user_info,
+                        'message': f'{request.user.username} has left the list'
+                    }
+                )
+                print(
+                    f"📡 WebSocket notification sent: {request.user.username} left list {shopping_list.name}")
+        except Exception as ws_error:
+            print(
+                f"⚠️ WebSocket notification failed for participant leaving: {ws_error}")
+
+        return Response({
+            'message': f'You have successfully left "{shopping_list.name}"',
+            'list_name': shopping_list.name
+        }, status=status.HTTP_200_OK)
+
     def destroy(self, request, *args, **kwargs):
         """Soft delete the shopping list (move to archive)"""
         shopping_list = self.get_object()
@@ -433,11 +527,41 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Get list name before deletion for notification
+        list_name = shopping_list.name
+        list_id = str(shopping_list.id)
+
         # Perform soft delete
         shopping_list.soft_delete(request.user)
 
+        # Send WebSocket notification to all participants
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                user_color = getattr(request.user, 'personal_color', '#4F46E5')
+                async_to_sync(channel_layer.group_send)(
+                    f'shopping_list_{list_id}',
+                    {
+                        'type': 'list_deleted',
+                        'list_id': list_id,
+                        'list_name': list_name,
+                        'deleted_by': {
+                            'id': str(request.user.id),
+                            'username': request.user.username,
+                            'first_name': request.user.first_name,
+                            'color': user_color
+                        },
+                        'message': f'List "{list_name}" has been moved to archive by {request.user.username}'
+                    }
+                )
+                print(
+                    f"📡 WebSocket notification sent for deleted list: {list_name}")
+        except Exception as ws_error:
+            print(
+                f"⚠️ WebSocket notification failed for list deletion: {ws_error}")
+
         return Response({
-            'message': f'List "{shopping_list.name}" moved to archive',
+            'message': f'List "{list_name}" moved to archive',
             'deleted_at': shopping_list.deleted_at
         }, status=status.HTTP_200_OK)
 
@@ -501,7 +625,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['delete'], url_path='permanent-delete')
     def permanent_delete(self, request, pk=None):
-        """Permanently delete a list from archive"""
+        """Permanently delete a list from archive or remove user from archived list"""
         try:
             # Get archived list
             shopping_list = ShoppingList.objects.get(
@@ -509,19 +633,30 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 deleted_at__isnull=False
             )
 
-            # Check permission (only creator or person who deleted can permanently delete)
-            if not shopping_list.can_user_restore(request.user):
+            list_name = shopping_list.name
+
+            # If user is the creator, permanently delete the entire list
+            if shopping_list.creator == request.user:
+                shopping_list.delete()  # This will permanently delete
+                return Response({
+                    'message': f'List "{list_name}" permanently deleted',
+                    'action': 'permanent_delete'
+                })
+
+            # If user is a participant, remove them from the list
+            elif shopping_list.participants.filter(id=request.user.id).exists():
+                shopping_list.participants.remove(request.user)
+                return Response({
+                    'message': f'List "{list_name}" removed from your archive',
+                    'action': 'removed_from_view'
+                })
+
+            # If user has no relation to this list
+            else:
                 return Response(
-                    {'error': 'You do not have permission to permanently delete this list'},
+                    {'error': 'You do not have permission to delete this list'},
                     status=status.HTTP_403_FORBIDDEN
                 )
-
-            list_name = shopping_list.name
-            shopping_list.delete()  # This will permanently delete
-
-            return Response({
-                'message': f'List "{list_name}" permanently deleted'
-            })
 
         except ShoppingList.DoesNotExist:
             return Response(
@@ -664,6 +799,124 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
             traceback.print_exc()
             return Response(
                 {'error': f'Failed to toggle item: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['patch'])
+    def update_weight_quantity(self, request, pk=None):
+        """Update item weight quantity"""
+        try:
+            item = self.get_object()
+            weight_quantity = request.data.get('weight_quantity', 0)
+
+            print(
+                f"📊 Updating weight quantity for item: {item.name} to: {weight_quantity}g")
+
+            # Check permissions
+            user_lists = ShoppingList.objects.filter(
+                Q(creator=request.user) | Q(participants=request.user)
+            )
+            if item.shopping_list not in user_lists:
+                return Response(
+                    {'error': 'You do not have permission to update this item'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            item.weight_quantity = weight_quantity
+            item.save()
+
+            print(f"✅ Weight quantity updated successfully: {item.name}")
+
+            # Send WebSocket notification
+            try:
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    user_color = getattr(
+                        request.user, 'personal_color', '#4F46E5')
+                    async_to_sync(channel_layer.group_send)(
+                        f'shopping_list_{item.shopping_list.id}',
+                        {
+                            'type': 'item_updated',
+                            'item': ShoppingItemSerializer(item).data,
+                            'user': {
+                                'id': str(request.user.id),
+                                'username': request.user.username,
+                                'color': user_color
+                            }
+                        }
+                    )
+                    print(
+                        f"📡 WebSocket notification sent for weight update: {item.name}")
+            except Exception as ws_error:
+                print(f"⚠️ WebSocket notification failed: {ws_error}")
+
+            return Response(ShoppingItemSerializer(item).data)
+
+        except Exception as e:
+            print(f"❌ Error updating weight quantity: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to update weight quantity: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['patch'])
+    def update_liquid_quantity(self, request, pk=None):
+        """Update item liquid quantity"""
+        try:
+            item = self.get_object()
+            liquid_quantity = request.data.get('liquid_quantity', 0)
+
+            print(
+                f"🥤 Updating liquid quantity for item: {item.name} to: {liquid_quantity}ml")
+
+            # Check permissions
+            user_lists = ShoppingList.objects.filter(
+                Q(creator=request.user) | Q(participants=request.user)
+            )
+            if item.shopping_list not in user_lists:
+                return Response(
+                    {'error': 'You do not have permission to update this item'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            item.liquid_quantity = liquid_quantity
+            item.save()
+
+            print(f"✅ Liquid quantity updated successfully: {item.name}")
+
+            # Send WebSocket notification
+            try:
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    user_color = getattr(
+                        request.user, 'personal_color', '#4F46E5')
+                    async_to_sync(channel_layer.group_send)(
+                        f'shopping_list_{item.shopping_list.id}',
+                        {
+                            'type': 'item_updated',
+                            'item': ShoppingItemSerializer(item).data,
+                            'user': {
+                                'id': str(request.user.id),
+                                'username': request.user.username,
+                                'color': user_color
+                            }
+                        }
+                    )
+                    print(
+                        f"📡 WebSocket notification sent for liquid update: {item.name}")
+            except Exception as ws_error:
+                print(f"⚠️ WebSocket notification failed: {ws_error}")
+
+            return Response(ShoppingItemSerializer(item).data)
+
+        except Exception as e:
+            print(f"❌ Error updating liquid quantity: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to update liquid quantity: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

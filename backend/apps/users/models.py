@@ -55,6 +55,26 @@ class User(AbstractUser):
         default='en'
     )
 
+    # Unit Preferences
+    weight_unit = models.CharField(
+        max_length=10,
+        choices=[('kg', 'Kilograms'), ('lbs', 'Pounds')],
+        default='kg',
+        help_text='Preferred weight unit for display'
+    )
+    volume_unit = models.CharField(
+        max_length=10,
+        choices=[('liters', 'Liters'), ('gallons', 'Gallons')],
+        default='liters',
+        help_text='Preferred volume unit for display'
+    )
+    time_format = models.CharField(
+        max_length=5,
+        choices=[('24h', '24 Hour'), ('12h', '12 Hour (AM/PM)')],
+        default='24h',
+        help_text='Preferred time format for display'
+    )
+
     # Collaboration Features
     collaboration_key = models.CharField(
         max_length=6,
@@ -93,6 +113,17 @@ class User(AbstractUser):
             if not User.objects.filter(couple_code=code).exists():
                 self.couple_code = code
                 return code
+
+    def generate_collaboration_key(self):
+        """Generate unique collaboration key for shopping list sharing"""
+        import random
+        import string
+        while True:
+            key = ''.join(random.choices(
+                string.ascii_uppercase + string.digits, k=6))
+            if not User.objects.filter(collaboration_key=key).exists():
+                self.collaboration_key = key
+                return key
 
     def connect_partner(self, partner_user):
         """Connect two users as partners"""
