@@ -195,3 +195,13 @@ class UserNotificationConsumer(AsyncWebsocketConsumer):
             'invited_by': event['invited_by'],
             'message': event['message']
         }, cls=UUIDEncoder))
+
+    async def collaboration_key_regenerated(self, event):
+        """Send collaboration key regenerated notification to WebSocket"""
+        print(
+            f"📡 Sending collaboration_key_regenerated notification to user {self.user.username}")
+        await self.send(text_data=json.dumps({
+            'type': 'collaboration_key_regenerated',
+            'new_collaboration_key': event['new_collaboration_key'],
+            'message': event['message']
+        }, cls=UUIDEncoder))

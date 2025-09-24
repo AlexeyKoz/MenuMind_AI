@@ -74,6 +74,9 @@ TEMPLATES = [
     },
 ]
 
+# ASGI
+ASGI_APPLICATION = 'menumine_ai.asgi.application'
+
 # Database
 # Database - Use SQLite for development, PostgreSQL for production
 if env.bool('USE_POSTGRES', default=False):
@@ -98,14 +101,15 @@ else:
 # Redis & Channels
 REDIS_URL = env('REDIS_URL', default='redis://localhost:6379/0')
 
+# Channels
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [REDIS_URL],
+        },
     },
 }
-
-# ASGI
-ASGI_APPLICATION = 'menumine_ai.asgi.application'
 
 # REST Framework
 REST_FRAMEWORK = {

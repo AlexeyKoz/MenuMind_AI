@@ -315,7 +315,26 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     'can_invite_others', False)
             )
 
+            print(
+                f"🔍 add_collaborator result: collaborator={collaborator_user.username}, created={created}")
+
+            # ALWAYS regenerate key for the PARTICIPANT (not creator) when adding collaborator
+            print(
+                f"🔄 Always regenerating key for PARTICIPANT for security when adding collaborator")
+
+            # Auto-regenerate the PARTICIPANT'S collaboration key for security
+            print(
+                f"🔄 Starting key regeneration for PARTICIPANT {collaborator_user.username}")
+            old_key = collaborator_user.collaboration_key
+            print(f"🔍 Old key: {old_key}")
+            new_key = collaborator_user.generate_collaboration_key()  # This now saves the model
+            print(f"🔍 New key: {new_key}")
+            print(
+                f"🔑 Auto-regenerated collaboration key for PARTICIPANT {collaborator_user.username}: {old_key} → {new_key}")
+
+            # Send WebSocket notifications and handle response
             if created:
+                print(f"✅ New collaborator added - sending notifications")
                 # Send WebSocket notification to existing participants in the list
                 channel_layer = get_channel_layer()
                 if channel_layer:
@@ -387,21 +406,64 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     print(
                         f"📡 WebSocket notifications sent for new collaborator: {collaborator_user.username} to list: {shopping_list.name}")
 
+                # Send notification to participant about their key change
+                if channel_layer:
+                    print(
+                        f"📡 Sending key regeneration notification to user_{collaborator_user.id}")
+                    async_to_sync(channel_layer.group_send)(
+                        f'user_{collaborator_user.id}',
+                        {
+                            'type': 'collaboration_key_regenerated',
+                            'new_collaboration_key': new_key,
+                            'message': f'Your collaboration key has been automatically updated for security after being added to "{shopping_list.name}"'
+                        }
+                    )
+                    print(f"📡 Key regeneration notification sent successfully")
+
                 return Response({
                     'success': True,
-                    'message': f'Successfully added {collaborator_user.username} as collaborator',
+                    'message': f'Successfully added {collaborator_user.username} as collaborator. Their collaboration key has been updated for security.',
                     'collaborator': {
                         'id': str(collaborator_user.id),
                         'username': collaborator_user.username,
                         'first_name': collaborator_user.first_name,
                         'color': collaborator_user.personal_color
-                    }
+                    },
+                    'participant_new_key': new_key,
+                    'key_regenerated_for': 'participant'
                 })
             else:
-                return Response(
-                    {'error': 'User is already a collaborator'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                print(
+                    f"✅ Collaborator {collaborator_user.username} already exists - but key WAS regenerated")
+
+                # Send notification to participant about their key change (existing collaborator)
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    print(
+                        f"📡 Sending key regeneration notification to existing collaborator user_{collaborator_user.id}")
+                    async_to_sync(channel_layer.group_send)(
+                        f'user_{collaborator_user.id}',
+                        {
+                            'type': 'collaboration_key_regenerated',
+                            'new_collaboration_key': new_key,
+                            'message': f'Your collaboration key has been automatically updated for security (re-added to "{shopping_list.name}")'
+                        }
+                    )
+                    print(
+                        f"📡 Key regeneration notification sent successfully to existing collaborator")
+
+                return Response({
+                    'success': True,
+                    'message': f'{collaborator_user.username} was already a collaborator, but their key has been refreshed for security',
+                    'collaborator': {
+                        'id': str(collaborator_user.id),
+                        'username': collaborator_user.username,
+                        'first_name': collaborator_user.first_name,
+                        'color': collaborator_user.personal_color
+                    },
+                    'participant_new_key': new_key,
+                    'key_regenerated_for': 'participant'
+                })
 
         except User.DoesNotExist:
             return Response(
@@ -802,12 +864,15 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['delete'], url_path='permanent-delete')
     def permanent_delete(self, request, pk=None):
         """Step 2: Creator permanently deletes from archive (but keeps in DB for claims)"""
+        print(
+            f"🗑️ permanent_delete called with pk={pk}, user={request.user.username}")
         try:
             # Get the specific archived list
             shopping_list = ShoppingList.objects.get(
                 id=pk,
                 deleted_at__isnull=False
             )
+            print(f"🗑️ Found archived list: {shopping_list.name}")
 
             # Check if user has permission to delete this list
             user_is_creator = shopping_list.creator == request.user
@@ -961,6 +1026,16 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 )
 
         except ShoppingList.DoesNotExist:
+            print(
+                f"❌ ShoppingList.DoesNotExist: No archived list found with id={pk}")
+            # Try to find any list with this ID to debug
+            try:
+                any_list = ShoppingList.objects.get(id=pk)
+                print(
+                    f"🔍 List exists but not archived: {any_list.name}, deleted_at={any_list.deleted_at}, is_active={any_list.is_active}")
+            except ShoppingList.DoesNotExist:
+                print(f"🔍 No list found with id={pk} at all")
+
             return Response(
                 {'error': 'Archived list not found'},
                 status=status.HTTP_404_NOT_FOUND

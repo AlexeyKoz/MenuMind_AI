@@ -123,6 +123,7 @@ class User(AbstractUser):
                 string.ascii_uppercase + string.digits, k=6))
             if not User.objects.filter(collaboration_key=key).exists():
                 self.collaboration_key = key
+                self.save()  # Save the model with the new key
                 return key
 
     def connect_partner(self, partner_user):
