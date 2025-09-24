@@ -135,16 +135,19 @@ backend/venv/
 
 # Dependencies
 node_modules/
+**/node_modules/
 /.pnp
 .pnp.js
 
 # Testing
 /coverage
+frontend/coverage/
 
 # Production builds
 /build
 /dist
 frontend/build/
+frontend/dist/
 
 # Runtime data
 pids
@@ -234,6 +237,27 @@ typings/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# pnpm
+.pnpm-store/
+.pnpm-debug.log*
+
+# Turborepo
+.turbo/
+
+# Vercel
+.vercel
+
+# Storybook
+storybook-static/
+
+# Chromatic
+chromatic.log
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
 
 # ==========================================
 # Environment Variables & Secrets
@@ -335,6 +359,22 @@ auto-save-list
 tramp
 .\#*
 
+# Cursor IDE
+.cursor/
+
+# GitHub Codespaces
+.devcontainer/
+
+# JetBrains IDEs
+.fleet/
+
+# VS Code Remote
+.vscode-server/
+
+# Replit
+.replit
+replit.nix
+
 # ==========================================
 # Operating System
 # ==========================================
@@ -409,6 +449,18 @@ api-docs/
 # Local configuration overrides
 local_settings.py
 config/local.py
+
+# Development test files
+test_*.py
+debug_*.py
+*_test.py
+check_*.py
+create_test_*.py
+
+# Development scripts and artifacts
+*.bat.bak
+*.orig
+*.rej
 
 # ==========================================
 # Archive Files
