@@ -20,11 +20,14 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'menumine_ai.settings')
 # is populated before importing code that may import ORM models.
 django_asgi_app = get_asgi_application()
 
-# Import consumers after Django is initialized
+# ⚠️ CRITICAL: Import consumers AFTER Django is initialized above!
+# ⚠️ DO NOT move these imports to the top of the file!
 from apps.shopping.consumers import ShoppingListConsumer
+from apps.shopping.user_consumer import UserNotificationConsumer
 
 websocket_urlpatterns = [
     path('ws/shopping/<uuid:list_id>/', ShoppingListConsumer.as_asgi()),
+    path('ws/user/notifications/', UserNotificationConsumer.as_asgi()),
 ]
 
 application = ProtocolTypeRouter({
@@ -33,3 +36,4 @@ application = ProtocolTypeRouter({
         URLRouter(websocket_urlpatterns)
     ),
 })
+

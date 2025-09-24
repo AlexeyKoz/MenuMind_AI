@@ -13,18 +13,36 @@
         .status.offline { background-color: #f44336; color: white; }
         .status.loading { background-color: #ff9800; color: white; }
         .test-section { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .button { background-color: #007bff; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer; }
+        .button { background-color: #007bff; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer; font-size: 12px; }
         .button:hover { background-color: #0056b3; }
-        .result { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin-top: 10px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+        .button.post { background-color: #28a745; }
+        .button.post:hover { background-color: #1e7e34; }
+        .button.delete { background-color: #dc3545; }
+        .button.delete:hover { background-color: #c82333; }
+        .button.patch { background-color: #ffc107; color: #212529; }
+        .button.patch:hover { background-color: #e0a800; }
+        .result { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin-top: 10px; font-family: monospace; white-space: pre-wrap; max-height: 300px; overflow-y: auto; font-size: 11px; }
         .success { border-left: 4px solid #4CAF50; }
         .error { border-left: 4px solid #f44336; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
+        .input-group { margin: 10px 0; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .input-group input, .input-group textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .input-group textarea { height: 60px; resize: vertical; }
+        .endpoint-info { background-color: #e7f3ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 12px; }
+        .method-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; margin-right: 5px; }
+        .method-get { background-color: #007bff; color: white; }
+        .method-post { background-color: #28a745; color: white; }
+        .method-delete { background-color: #dc3545; color: white; }
+        .method-patch { background-color: #ffc107; color: #212529; }
+        .section-title { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+        .auth-note { background-color: #fff3cd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 11px; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🥗🤖 MenuMind AI - Backend Tester</h1>
-        <p>Debug and test your Django backend</p>
+        <p>Comprehensive testing for Shopping Lists, Collaboration & Archive APIs</p>
     </div>
 
     <div class="status-card">
@@ -32,39 +50,244 @@
         <p>Backend: <span id="serverStatus" class="status loading">Checking...</span></p>
         <p>Health: <span id="healthStatus" class="status loading">Checking...</span></p>
         <p>Base URL: <code>http://localhost:8000</code></p>
+        <div class="auth-note">⚠️ Most shopping APIs require authentication. Use Django admin or frontend to get auth tokens.</div>
         <div id="debugInfo"></div>
     </div>
 
     <div class="grid">
+        <!-- Core Endpoints -->
         <div class="test-section">
-            <h3>🔧 Core Endpoints</h3>
-            <button class="button" onclick="testEndpoint('/health/')">Health Check</button>
-            <button class="button" onclick="testEndpoint('/')">API Root</button>
-            <button class="button" onclick="testEndpoint('/admin/')">Admin Panel</button>
+            <div class="section-title">
+                <h3>🔧 Core Endpoints</h3>
+            </div>
+            <div class="endpoint-info">Basic server health and API discovery endpoints</div>
+            <button class="button" onclick="testEndpoint('/health/')">
+                <span class="method-badge method-get">GET</span>Health Check
+            </button>
+            <button class="button" onclick="testEndpoint('/')">
+                <span class="method-badge method-get">GET</span>API Root
+            </button>
+            <button class="button" onclick="testEndpoint('/admin/')">
+                <span class="method-badge method-get">GET</span>Admin Panel
+            </button>
+            <button class="button" onclick="testEndpoint('/api/')">
+                <span class="method-badge method-get">GET</span>API Discovery
+            </button>
             <div id="coreResult" class="result" style="display:none;"></div>
         </div>
 
+        <!-- Shopping Lists CRUD -->
         <div class="test-section">
-            <h3>📡 API Endpoints</h3>
-            <button class="button" onclick="testEndpoint('/api/')">API Root</button>
-            <button class="button" onclick="testEndpoint('/api/shopping/')">Shopping API</button>
-            <button class="button" onclick="testEndpoint('/api/nutrition/')">Nutrition API</button>
-            <button class="button" onclick="testEndpoint('/api/ai/')">AI API</button>
-            <button class="button" onclick="testEndpoint('/api/users/')">Users API</button>
-            <div id="apiResult" class="result" style="display:none;"></div>
+            <div class="section-title">
+                <h3>📋 Shopping Lists CRUD</h3>
+            </div>
+            <div class="endpoint-info">Basic shopping list operations: create, read, update, delete</div>
+            <button class="button" onclick="testEndpoint('/api/shopping/')">
+                <span class="method-badge method-get">GET</span>Shopping API Root
+            </button>
+            <button class="button" onclick="testEndpoint('/api/shopping/lists/')">
+                <span class="method-badge method-get">GET</span>All Lists
+            </button>
+            <div class="input-group">
+                <label>List ID for Detail:</label>
+                <input type="text" id="listId" placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000" />
+            </div>
+            <button class="button" onclick="testListDetail()">
+                <span class="method-badge method-get">GET</span>List Detail
+            </button>
+            <div class="input-group">
+                <label>New List Name:</label>
+                <input type="text" id="newListName" placeholder="My New Shopping List" />
+            </div>
+            <button class="button post" onclick="createList()">
+                <span class="method-badge method-post">POST</span>Create List
+            </button>
+            <div id="listsResult" class="result" style="display:none;"></div>
         </div>
 
+        <!-- List Items Management -->
         <div class="test-section">
-            <h3>🔍 Debug Tools</h3>
+            <div class="section-title">
+                <h3>🛒 List Items</h3>
+            </div>
+            <div class="endpoint-info">Add, remove, and manage items within shopping lists</div>
+            <div class="input-group">
+                <label>List ID:</label>
+                <input type="text" id="itemListId" placeholder="List ID for item operations" />
+            </div>
+            <div class="input-group">
+                <label>Item Name:</label>
+                <input type="text" id="itemName" placeholder="Milk, Bread, etc." />
+            </div>
+            <button class="button post" onclick="addItem()">
+                <span class="method-badge method-post">POST</span>Add Item
+            </button>
+            <div class="input-group">
+                <label>AI Items Request:</label>
+                <textarea id="aiItemsInput" placeholder="Add ingredients for pasta dinner"></textarea>
+            </div>
+            <button class="button post" onclick="addAIItems()">
+                <span class="method-badge method-post">POST</span>AI Add Items
+            </button>
+            <button class="button" onclick="testEndpoint('/api/shopping/items/')">
+                <span class="method-badge method-get">GET</span>All Items
+            </button>
+            <div id="itemsResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Collaboration Features -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>👥 Collaboration</h3>
+            </div>
+            <div class="endpoint-info">Manage collaborators, permissions, and real-time sharing</div>
+            <div class="input-group">
+                <label>List ID:</label>
+                <input type="text" id="collabListId" placeholder="List ID for collaboration" />
+            </div>
+            <button class="button" onclick="getCollaborators()">
+                <span class="method-badge method-get">GET</span>Get Collaborators
+            </button>
+            <div class="input-group">
+                <label>Friend Name:</label>
+                <input type="text" id="friendName" placeholder="Friend's name" />
+            </div>
+            <div class="input-group">
+                <label>Collaboration Key:</label>
+                <input type="text" id="collabKey" placeholder="Friend's collaboration key" />
+            </div>
+            <button class="button post" onclick="addCollaborator()">
+                <span class="method-badge method-post">POST</span>Add Collaborator
+            </button>
+            <button class="button post" onclick="leaveList()">
+                <span class="method-badge method-post">POST</span>Leave List
+            </button>
+            <div class="input-group">
+                <label>User ID for permissions:</label>
+                <input type="text" id="userId" placeholder="User ID to update permissions" />
+            </div>
+            <button class="button post" onclick="updatePermissions()">
+                <span class="method-badge method-post">POST</span>Update Permissions
+            </button>
+            <div id="collabResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Archive & Deletion -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>🗑️ Archive & Deletion</h3>
+            </div>
+            <div class="endpoint-info">Soft delete, archive, restore, and permanent deletion with ownership transfer</div>
+            <button class="button" onclick="testEndpoint('/api/shopping/lists/archived/')">
+                <span class="method-badge method-get">GET</span>Archived Lists
+            </button>
+            <div class="input-group">
+                <label>List ID for deletion/restore:</label>
+                <input type="text" id="deleteListId" placeholder="List ID" />
+            </div>
+            <button class="button delete" onclick="softDeleteList()">
+                <span class="method-badge method-delete">DELETE</span>Soft Delete (Archive)
+            </button>
+            <button class="button post" onclick="restoreList()">
+                <span class="method-badge method-post">POST</span>Restore from Archive
+            </button>
+            <button class="button delete" onclick="permanentDeleteList()">
+                <span class="method-badge method-delete">DELETE</span>Permanent Delete
+            </button>
+            <div id="archiveResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Inventory Management -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>📦 Inventory</h3>
+            </div>
+            <div class="endpoint-info">Track quantities, weights, volumes, and expiration dates</div>
+            <button class="button" onclick="testEndpoint('/api/shopping/inventory/')">
+                <span class="method-badge method-get">GET</span>All Inventory
+            </button>
+            <button class="button" onclick="testEndpoint('/api/shopping/inventory/expiring_soon/')">
+                <span class="method-badge method-get">GET</span>Expiring Soon
+            </button>
+            <button class="button" onclick="testEndpoint('/api/shopping/inventory/low_stock/')">
+                <span class="method-badge method-get">GET</span>Low Stock
+            </button>
+            <div class="input-group">
+                <label>Item ID for quantity update:</label>
+                <input type="text" id="inventoryItemId" placeholder="Item ID" />
+            </div>
+            <div class="input-group">
+                <label>Weight Quantity:</label>
+                <input type="number" id="weightQuantity" placeholder="1.5" step="0.1" />
+            </div>
+            <button class="button patch" onclick="updateWeight()">
+                <span class="method-badge method-patch">PATCH</span>Update Weight
+            </button>
+            <div class="input-group">
+                <label>Liquid Quantity:</label>
+                <input type="number" id="liquidQuantity" placeholder="2.0" step="0.1" />
+            </div>
+            <button class="button patch" onclick="updateLiquid()">
+                <span class="method-badge method-patch">PATCH</span>Update Liquid
+            </button>
+            <div id="inventoryResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Store Integration -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>🏪 Store Integration</h3>
+            </div>
+            <div class="endpoint-info">Mock store ordering and external integrations</div>
+            <div class="input-group">
+                <label>Store Type:</label>
+                <input type="text" id="storeType" placeholder="wolt, glovo, etc." />
+            </div>
+            <div class="input-group">
+                <label>Items (JSON):</label>
+                <textarea id="storeItems" placeholder='["item1", "item2"]'></textarea>
+            </div>
+            <button class="button post" onclick="mockStoreOrder()">
+                <span class="method-badge method-post">POST</span>Mock Store Order
+            </button>
+            <div id="storeResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Other APIs -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>🌐 Other APIs</h3>
+            </div>
+            <div class="endpoint-info">Nutrition, AI, and user management endpoints</div>
+            <button class="button" onclick="testEndpoint('/api/nutrition/')">
+                <span class="method-badge method-get">GET</span>Nutrition API
+            </button>
+            <button class="button" onclick="testEndpoint('/api/ai/')">
+                <span class="method-badge method-get">GET</span>AI API
+            </button>
+            <button class="button" onclick="testEndpoint('/api/users/')">
+                <span class="method-badge method-get">GET</span>Users API
+            </button>
+            <div id="otherResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Debug Tools -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>🔍 Debug Tools</h3>
+            </div>
+            <div class="endpoint-info">CORS testing, batch testing, and diagnostics</div>
             <button class="button" onclick="testCORS()">Test CORS</button>
-            <button class="button" onclick="testAllEndpoints()">Test All</button>
-            <button class="button" onclick="clearResults()">Clear Results</button>
+            <button class="button" onclick="testAllEndpoints()">Test All Endpoints</button>
+            <button class="button" onclick="clearResults()">Clear All Results</button>
+            <button class="button" onclick="exportResults()">Export Results</button>
             <div id="debugResult" class="result" style="display:none;"></div>
         </div>
     </div>
 
     <script>
         const baseUrl = 'http://localhost:8000';
+        const allResults = {};
 
         window.onload = function() {
             checkServerStatus();
@@ -120,42 +343,267 @@
             }
         }
 
-        async function testEndpoint(endpoint) {
-            const url = baseUrl + endpoint;
-            console.log('Testing endpoint:', url);
+        async function makeRequest(url, options = {}) {
+            const fullUrl = url.startsWith('http') ? url : baseUrl + url;
+            console.log('Making request:', fullUrl, options);
             
             try {
-                const response = await fetch(url);
-                const text = await response.text();
-                let data;
+                const response = await fetch(fullUrl, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
                 
-                try {
-                    data = JSON.parse(text);
-                } catch {
+                let data;
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
                     data = text.substring(0, 500) + (text.length > 500 ? '...' : '');
                 }
 
                 const result = {
-                    url: url,
+                    url: fullUrl,
+                    method: options.method || 'GET',
                     status: response.status,
                     statusText: response.statusText,
                     ok: response.ok,
-                    data: data
+                    data: data,
+                    timestamp: new Date().toISOString()
                 };
 
-                displayResult('coreResult', result);
-                console.log('Endpoint result:', result);
+                allResults[fullUrl] = result;
+                return result;
                 
             } catch (error) {
-                console.error('Endpoint test failed:', error);
-                displayResult('coreResult', {
-                    url: url,
+                console.error('Request failed:', error);
+                const result = {
+                    url: fullUrl,
+                    method: options.method || 'GET',
                     error: error.message,
-                    ok: false
-                });
+                    ok: false,
+                    timestamp: new Date().toISOString()
+                };
+                allResults[fullUrl] = result;
+                return result;
             }
         }
 
+        async function testEndpoint(endpoint) {
+            const result = await makeRequest(endpoint);
+            displayResult('coreResult', result);
+        }
+
+        // Shopping Lists Functions
+        async function testListDetail() {
+            const listId = document.getElementById('listId').value;
+            if (!listId) {
+                alert('Please enter a List ID');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/`);
+            displayResult('listsResult', result);
+        }
+
+        async function createList() {
+            const name = document.getElementById('newListName').value;
+            if (!name) {
+                alert('Please enter a list name');
+                return;
+            }
+            const result = await makeRequest('/api/shopping/lists/', {
+                method: 'POST',
+                body: JSON.stringify({ name: name })
+            });
+            displayResult('listsResult', result);
+        }
+
+        // Items Functions
+        async function addItem() {
+            const listId = document.getElementById('itemListId').value;
+            const itemName = document.getElementById('itemName').value;
+            if (!listId || !itemName) {
+                alert('Please enter both List ID and Item Name');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/add_item/`, {
+                method: 'POST',
+                body: JSON.stringify({ name: itemName })
+            });
+            displayResult('itemsResult', result);
+        }
+
+        async function addAIItems() {
+            const listId = document.getElementById('itemListId').value;
+            const aiInput = document.getElementById('aiItemsInput').value;
+            if (!listId || !aiInput) {
+                alert('Please enter both List ID and AI request');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/ai_add_items/`, {
+                method: 'POST',
+                body: JSON.stringify({ ai_input: aiInput })
+            });
+            displayResult('itemsResult', result);
+        }
+
+        // Collaboration Functions
+        async function getCollaborators() {
+            const listId = document.getElementById('collabListId').value;
+            if (!listId) {
+                alert('Please enter a List ID');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/collaborators/`);
+            displayResult('collabResult', result);
+        }
+
+        async function addCollaborator() {
+            const listId = document.getElementById('collabListId').value;
+            const friendName = document.getElementById('friendName').value;
+            const collabKey = document.getElementById('collabKey').value;
+            if (!listId || !friendName || !collabKey) {
+                alert('Please enter List ID, Friend Name, and Collaboration Key');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/add_collaborator/`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    friend_name: friendName,
+                    collaboration_key: collabKey,
+                    can_edit: true,
+                    can_add_items: true,
+                    can_invite_others: false
+                })
+            });
+            displayResult('collabResult', result);
+        }
+
+        async function leaveList() {
+            const listId = document.getElementById('collabListId').value;
+            if (!listId) {
+                alert('Please enter a List ID');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/leave_list/`, {
+                method: 'POST'
+            });
+            displayResult('collabResult', result);
+        }
+
+        async function updatePermissions() {
+            const listId = document.getElementById('collabListId').value;
+            const userId = document.getElementById('userId').value;
+            if (!listId || !userId) {
+                alert('Please enter both List ID and User ID');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/update_collaborator_permissions/`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    user_id: userId,
+                    can_edit: true,
+                    can_add_items: true,
+                    can_invite_others: false
+                })
+            });
+            displayResult('collabResult', result);
+        }
+
+        // Archive & Deletion Functions
+        async function softDeleteList() {
+            const listId = document.getElementById('deleteListId').value;
+            if (!listId) {
+                alert('Please enter a List ID');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/soft-delete/`, {
+                method: 'DELETE'
+            });
+            displayResult('archiveResult', result);
+        }
+
+        async function restoreList() {
+            const listId = document.getElementById('deleteListId').value;
+            if (!listId) {
+                alert('Please enter a List ID');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/restore/`, {
+                method: 'POST'
+            });
+            displayResult('archiveResult', result);
+        }
+
+        async function permanentDeleteList() {
+            const listId = document.getElementById('deleteListId').value;
+            if (!listId) {
+                alert('Please enter a List ID');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/permanent-delete/`, {
+                method: 'DELETE'
+            });
+            displayResult('archiveResult', result);
+        }
+
+        // Inventory Functions
+        async function updateWeight() {
+            const itemId = document.getElementById('inventoryItemId').value;
+            const weight = document.getElementById('weightQuantity').value;
+            if (!itemId || !weight) {
+                alert('Please enter both Item ID and Weight');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/items/${itemId}/update_weight_quantity/`, {
+                method: 'PATCH',
+                body: JSON.stringify({ weight_quantity: parseFloat(weight) })
+            });
+            displayResult('inventoryResult', result);
+        }
+
+        async function updateLiquid() {
+            const itemId = document.getElementById('inventoryItemId').value;
+            const liquid = document.getElementById('liquidQuantity').value;
+            if (!itemId || !liquid) {
+                alert('Please enter both Item ID and Liquid Quantity');
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/items/${itemId}/update_liquid_quantity/`, {
+                method: 'PATCH',
+                body: JSON.stringify({ liquid_quantity: parseFloat(liquid) })
+            });
+            displayResult('inventoryResult', result);
+        }
+
+        // Store Functions
+        async function mockStoreOrder() {
+            const storeType = document.getElementById('storeType').value;
+            const storeItems = document.getElementById('storeItems').value;
+            if (!storeType || !storeItems) {
+                alert('Please enter Store Type and Items');
+                return;
+            }
+            try {
+                const items = JSON.parse(storeItems);
+                const result = await makeRequest('/api/shopping/lists/mock_store_order/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        store_type: storeType,
+                        items: items
+                    })
+                });
+                displayResult('storeResult', result);
+            } catch (error) {
+                alert('Invalid JSON format for items');
+            }
+        }
+
+        // Debug Functions
         async function testCORS() {
             try {
                 const response = await fetch(baseUrl + '/health/', {
@@ -188,27 +636,47 @@
         }
 
         async function testAllEndpoints() {
-            const endpoints = ['/', '/health/', '/api/', '/api/shopping/', '/api/nutrition/', '/api/ai/', '/api/users/'];
+            const endpoints = [
+                { url: '/', method: 'GET' },
+                { url: '/health/', method: 'GET' },
+                { url: '/api/', method: 'GET' },
+                { url: '/api/shopping/', method: 'GET' },
+                { url: '/api/shopping/lists/', method: 'GET' },
+                { url: '/api/shopping/lists/archived/', method: 'GET' },
+                { url: '/api/shopping/items/', method: 'GET' },
+                { url: '/api/shopping/inventory/', method: 'GET' },
+                { url: '/api/shopping/inventory/expiring_soon/', method: 'GET' },
+                { url: '/api/shopping/inventory/low_stock/', method: 'GET' },
+                { url: '/api/nutrition/', method: 'GET' },
+                { url: '/api/ai/', method: 'GET' },
+                { url: '/api/users/', method: 'GET' }
+            ];
+            
             const results = [];
             
             for (const endpoint of endpoints) {
-                try {
-                    const response = await fetch(baseUrl + endpoint);
-                    results.push({
-                        endpoint: endpoint,
-                        status: response.status,
-                        ok: response.ok
-                    });
-                } catch (error) {
-                    results.push({
-                        endpoint: endpoint,
-                        error: error.message,
-                        ok: false
-                    });
-                }
+                const result = await makeRequest(endpoint.url, { method: endpoint.method });
+                results.push(result);
             }
             
-            displayResult('debugResult', { allEndpoints: results });
+            displayResult('debugResult', { 
+                message: 'Batch endpoint test completed',
+                totalEndpoints: endpoints.length,
+                results: results 
+            });
+        }
+
+        function exportResults() {
+            const dataStr = JSON.stringify(allResults, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `menumine-api-test-results-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         }
 
         function displayResult(elementId, result) {
@@ -223,6 +691,7 @@
                 el.style.display = 'none';
                 el.textContent = '';
             });
+            Object.keys(allResults).forEach(key => delete allResults[key]);
         }
 
         // Auto-refresh every 30 seconds

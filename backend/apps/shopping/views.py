@@ -26,6 +26,10 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
     serializer_class = ShoppingListSerializer
     permission_classes = [IsAuthenticated]
 
+    # Allow DELETE but override destroy method to prevent permanent deletion
+    http_method_names = ['get', 'post', 'put',
+                         'patch', 'delete', 'head', 'options']
+
     def get_queryset(self):
         """Get user's created lists and collaborative lists (only active ones)"""
         return ShoppingList.objects.filter(
@@ -72,13 +76,31 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             print(
                 f"🛒 Adding item to shopping list: {shopping_list.name} by user: {request.user.username}")
 
-            # Check if user is creator or collaborator (simplified permission check)
+            # Check permissions properly
             is_creator = shopping_list.creator == request.user
-            is_collaborator = hasattr(shopping_list, 'collaborators') and shopping_list.collaborators.filter(
-                user=request.user).exists()
 
-            if not (is_creator or is_collaborator):
-                print(f"❌ Permission denied for user {request.user.username}")
+            if is_creator:
+                # Creator has all permissions
+                can_add_items = True
+            else:
+                # Check collaborator permissions
+                try:
+                    collaborator = shopping_list.collaborators.get(
+                        user=request.user)
+                    can_add_items = collaborator.can_add_items
+                    print(
+                        f"🔒 Collaborator {request.user.username} can_add_items: {can_add_items}")
+                except shopping_list.collaborators.model.DoesNotExist:
+                    print(
+                        f"❌ User {request.user.username} is not a collaborator")
+                    return Response(
+                        {'error': 'You do not have permission to add items to this list'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+            if not can_add_items:
+                print(
+                    f"❌ Permission denied: {request.user.username} cannot add items")
                 return Response(
                     {'error': 'You do not have permission to add items to this list'},
                     status=status.HTTP_403_FORBIDDEN
@@ -106,6 +128,18 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             )
 
             print(f"✅ Item created successfully: {item.name}")
+
+            # Increment items_added_count for the user (if they are a collaborator)
+            if not is_creator:
+                try:
+                    collaborator = shopping_list.collaborators.get(
+                        user=request.user)
+                    collaborator.items_added_count += 1
+                    collaborator.save()
+                    print(
+                        f"📊 Incremented items_added_count for {request.user.username}: {collaborator.items_added_count}")
+                except shopping_list.collaborators.model.DoesNotExist:
+                    pass  # Shouldn't happen since we checked permissions above
 
             # Send WebSocket notification
             try:
@@ -326,6 +360,30 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                             'message': f'You have been added to "{shopping_list.name}" by {request.user.username}'
                         }
                     )
+
+                    # Also send individual notifications to existing participants to refresh their collaborators list
+                    for existing_collaborator in shopping_list.collaborators.exclude(user=collaborator_user):
+                        if existing_collaborator.user != request.user:  # Don't notify the person who added the collaborator
+                            async_to_sync(channel_layer.group_send)(
+                                f'user_{existing_collaborator.user.id}',
+                                {
+                                    'type': 'collaborator_joined',
+                                    'list': {
+                                        'id': str(shopping_list.id),
+                                        'name': shopping_list.name,
+                                    },
+                                    'collaborator': {
+                                        'username': collaborator_user.username,
+                                        'first_name': collaborator_user.first_name,
+                                    },
+                                    'invited_by': {
+                                        'username': request.user.username,
+                                        'first_name': request.user.first_name,
+                                    },
+                                    'message': f'{collaborator_user.username} was added to "{shopping_list.name}" by {request.user.username}'
+                                }
+                            )
+
                     print(
                         f"📡 WebSocket notifications sent for new collaborator: {collaborator_user.username} to list: {shopping_list.name}")
 
@@ -517,8 +575,15 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
-        """Soft delete the shopping list (move to archive)"""
+        """Step 1: Creator deletes from active lists → Move to archive (soft delete only)"""
         shopping_list = self.get_object()
+
+        print(
+            f"🗑️ STEP 1 DELETE: Moving list to archive: {shopping_list.name} (ID: {shopping_list.id})")
+        print(
+            f"🗑️ Current state - deleted_at: {shopping_list.deleted_at}, permanently_deleted_at: {getattr(shopping_list, 'permanently_deleted_at', None)}")
+        print(
+            f"🗑️ Participants: {[p.username for p in shopping_list.participants.all()]}")
 
         # Check if user has permission to delete
         if shopping_list.creator != request.user:
@@ -532,7 +597,26 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         list_id = str(shopping_list.id)
 
         # Perform soft delete
+        print(f"🗑️ Calling soft_delete for list: {list_name}")
         shopping_list.soft_delete(request.user)
+        print(f"🗑️ After soft_delete - deleted_at: {shopping_list.deleted_at}")
+        print(
+            f"🗑️ After soft_delete - deleted_by: {shopping_list.deleted_by.username if shopping_list.deleted_by else 'None'}")
+
+        # Verify the list still exists in DB after soft delete
+        try:
+            still_exists = ShoppingList.objects.get(id=shopping_list.id)
+            print(
+                f"🗑️ ✅ List still exists in DB after soft delete: {still_exists.name}")
+            print(
+                f"🗑️ ✅ Participants still exist: {[p.username for p in still_exists.participants.all()]}")
+        except ShoppingList.DoesNotExist:
+            print(
+                f"🗑️ ❌ ERROR: List was actually deleted from DB instead of soft deleted!")
+            return Response(
+                {'error': 'List was permanently deleted instead of archived'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         # Send WebSocket notification to all participants
         try:
@@ -560,6 +644,82 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             print(
                 f"⚠️ WebSocket notification failed for list deletion: {ws_error}")
 
+        # CRITICAL: Do NOT call super().destroy() - this would permanently delete the object
+        return Response({
+            'message': f'List "{list_name}" moved to archive',
+            'deleted_at': shopping_list.deleted_at
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['delete'], url_path='soft-delete')
+    def soft_delete_list(self, request, pk=None):
+        """Soft delete the shopping list (move to archive) - NEW METHOD"""
+        shopping_list = self.get_object()
+
+        print(
+            f"🗑️ SOFT DELETE ACTION called for list: {shopping_list.name} (ID: {shopping_list.id})")
+        print(f"🗑️ Before delete - deleted_at: {shopping_list.deleted_at}")
+        print(
+            f"🗑️ Participants before delete: {[p.username for p in shopping_list.participants.all()]}")
+
+        # Check if user has permission to delete
+        if shopping_list.creator != request.user:
+            return Response(
+                {'error': 'Only the creator can delete this list'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get list name before deletion for notification
+        list_name = shopping_list.name
+        list_id = str(shopping_list.id)
+
+        # Perform soft delete
+        print(f"🗑️ Calling soft_delete for list: {list_name}")
+        shopping_list.soft_delete(request.user)
+        print(f"🗑️ After soft_delete - deleted_at: {shopping_list.deleted_at}")
+        print(
+            f"🗑️ After soft_delete - deleted_by: {shopping_list.deleted_by.username if shopping_list.deleted_by else 'None'}")
+
+        # Verify the list still exists in DB after soft delete
+        try:
+            still_exists = ShoppingList.objects.get(id=shopping_list.id)
+            print(
+                f"🗑️ ✅ List still exists in DB after soft delete: {still_exists.name}")
+            print(
+                f"🗑️ ✅ Participants still exist: {[p.username for p in still_exists.participants.all()]}")
+        except ShoppingList.DoesNotExist:
+            print(
+                f"🗑️ ❌ ERROR: List was actually deleted from DB instead of soft deleted!")
+            return Response(
+                {'error': 'List was permanently deleted instead of archived'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Send WebSocket notification to all participants
+        try:
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                user_color = getattr(request.user, 'personal_color', '#4F46E5')
+                async_to_sync(channel_layer.group_send)(
+                    f'shopping_list_{list_id}',
+                    {
+                        'type': 'list_deleted',
+                        'list_id': list_id,
+                        'list_name': list_name,
+                        'deleted_by': {
+                            'id': str(request.user.id),
+                            'username': request.user.username,
+                            'first_name': request.user.first_name,
+                            'color': user_color
+                        },
+                        'message': f'{request.user.username} moved "{list_name}" to archive'
+                    }
+                )
+                print(
+                    f"📡 WebSocket notification sent for deleted list: {list_name}")
+        except Exception as ws_error:
+            print(
+                f"⚠️ WebSocket notification failed for list deletion: {ws_error}")
+
         return Response({
             'message': f'List "{list_name}" moved to archive',
             'deleted_at': shopping_list.deleted_at
@@ -568,10 +728,24 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def archived(self, request):
         """Get archived (deleted) lists for the user"""
+        print(f"🗃️ User {request.user.username} requesting archived lists")
+
+        # Get archived lists: user is creator OR participant, but exclude permanently deleted lists where user is creator but not participant
         archived_lists = ShoppingList.objects.filter(
             Q(creator=request.user) | Q(participants=request.user),
             deleted_at__isnull=False
+        ).exclude(
+            # Exclude lists that are permanently deleted by this user where they're no longer a participant
+            Q(permanently_deleted_by=request.user) & ~Q(
+                participants=request.user)
         ).distinct().prefetch_related('collaborators__user', 'items')
+
+        print(
+            f"🗃️ Found {archived_lists.count()} archived lists for user {request.user.username}")
+        for archived_list in archived_lists:
+            print(f"   - {archived_list.name} (ID: {archived_list.id}) - Creator: {archived_list.creator.username}, Deleted by: {archived_list.deleted_by.username if archived_list.deleted_by else 'Unknown'}")
+            participants = archived_list.participants.all()
+            print(f"     Participants: {[p.username for p in participants]}")
 
         archived_data = []
         for shopping_list in archived_lists:
@@ -579,12 +753,14 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 'id': str(shopping_list.id),
                 'name': shopping_list.name,
                 'deleted_at': shopping_list.deleted_at,
+                'permanently_deleted_at': getattr(shopping_list, 'permanently_deleted_at', None),
                 'items_count': shopping_list.items.count(),
                 'creator': {
                     'username': shopping_list.creator.username,
                     'first_name': shopping_list.creator.first_name,
                 },
                 'can_restore': shopping_list.can_user_restore(request.user),
+                'is_permanently_deleted': shopping_list.is_permanently_deleted(),
                 'days_until_auto_delete': shopping_list.days_until_auto_delete
             })
 
@@ -625,23 +801,149 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['delete'], url_path='permanent-delete')
     def permanent_delete(self, request, pk=None):
-        """Permanently delete a list from archive or remove user from archived list"""
+        """Step 2: Creator permanently deletes from archive (but keeps in DB for claims)"""
         try:
-            # Get archived list
+            # Get the specific archived list
             shopping_list = ShoppingList.objects.get(
                 id=pk,
                 deleted_at__isnull=False
             )
 
-            list_name = shopping_list.name
+            # Check if user has permission to delete this list
+            user_is_creator = shopping_list.creator == request.user
+            user_is_participant = shopping_list.participants.filter(
+                id=request.user.id).exists()
+            user_permanently_deleted = shopping_list.permanently_deleted_by == request.user
 
-            # If user is the creator, permanently delete the entire list
+            if not (user_is_creator or user_is_participant or user_permanently_deleted):
+                return Response(
+                    {'error': 'You do not have permission to delete this list'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            list_name = shopping_list.name
+            print(
+                f"🗑️ STEP 2 DELETE: Permanent delete requested for: {list_name}")
+            print(
+                f"🗑️ Current state - permanently_deleted_at: {getattr(shopping_list, 'permanently_deleted_at', None)}")
+
+            # If user is the creator
             if shopping_list.creator == request.user:
-                shopping_list.delete()  # This will permanently delete
-                return Response({
-                    'message': f'List "{list_name}" permanently deleted',
-                    'action': 'permanent_delete'
-                })
+                if shopping_list.is_permanently_deleted():
+                    # Creator already permanently deleted, now they want to remove from their view
+                    # Check if creator is still in participants (shouldn't be, but handle gracefully)
+                    if shopping_list.participants.filter(id=request.user.id).exists():
+                        shopping_list.participants.remove(request.user)
+                        print(
+                            f"🗑️ ✅ Creator removed themselves from participants after permanent deletion")
+                    else:
+                        print(
+                            f"🗑️ ✅ Creator was already removed from participants, marking as removed from view")
+
+                    return Response({
+                        'message': f'List "{list_name}" removed from your archive',
+                        'action': 'removed_from_view'
+                    })
+                else:
+                    # First time permanent delete by creator - try automatic transfer
+                    print(
+                        f"🔄 Attempting automatic ownership transfer for list: {list_name}")
+
+                    # Check if there are participants to transfer to
+                    participants_count = shopping_list.participants.exclude(
+                        id=request.user.id).count()
+                    print(
+                        f"🔍 Found {participants_count} participants for potential transfer")
+
+                    if participants_count > 0:
+                        # Automatic ownership transfer
+                        success, new_owner, transfer_message = shopping_list.transfer_ownership_to_next_participant(
+                            'creator_deleted')
+
+                        if success:
+                            print(f"🏆 {transfer_message}")
+
+                            # Send WebSocket notification to the new owner
+                            try:
+                                channel_layer = get_channel_layer()
+                                if channel_layer:
+                                    user_color = getattr(
+                                        request.user, 'personal_color', '#4F46E5')
+
+                                    # Notify the new owner
+                                    async_to_sync(channel_layer.group_send)(
+                                        f'user_{new_owner.id}',
+                                        {
+                                            'type': 'ownership_transferred',
+                                            'list': {
+                                                'id': str(shopping_list.id),
+                                                'name': shopping_list.name,
+                                                'is_collaborative': shopping_list.is_collaborative,
+                                            },
+                                            'new_owner': {
+                                                'id': str(new_owner.id),
+                                                'username': new_owner.username,
+                                                'first_name': new_owner.first_name,
+                                            },
+                                            'previous_owner': {
+                                                'id': str(request.user.id),
+                                                'username': request.user.username,
+                                                'first_name': request.user.first_name,
+                                                'color': user_color
+                                            },
+                                            'message': f'You became owner of list "{list_name}" after deletion by previous owner. The list is in your archive - restore it to make it active again.'
+                                        }
+                                    )
+
+                                    # Notify other remaining participants
+                                    for participant in shopping_list.participants.all():
+                                        if participant.user != new_owner:
+                                            async_to_sync(channel_layer.group_send)(
+                                                f'user_{participant.user.id}',
+                                                {
+                                                    'type': 'ownership_transferred',
+                                                    'list': {
+                                                        'id': str(shopping_list.id),
+                                                        'name': shopping_list.name,
+                                                    },
+                                                    'new_owner': {
+                                                        'username': new_owner.username,
+                                                        'first_name': new_owner.first_name,
+                                                    },
+                                                    'previous_owner': {
+                                                        'username': request.user.username,
+                                                        'first_name': request.user.first_name,
+                                                    },
+                                                    'message': f'{new_owner.username} is now the owner of "{list_name}"'
+                                                }
+                                            )
+
+                                    print(
+                                        f"📡 WebSocket notifications sent for ownership transfer: {list_name}")
+                            except Exception as ws_error:
+                                print(
+                                    f"⚠️ WebSocket notification failed for ownership transfer: {ws_error}")
+
+                            return Response({
+                                'message': f'List "{list_name}" ownership transferred to {new_owner.username}. The list remains in their archive until they choose to restore it.',
+                                'action': 'ownership_transferred',
+                                'new_owner': {
+                                    'username': new_owner.username,
+                                    'first_name': new_owner.first_name
+                                }
+                            })
+                        else:
+                            print(f"❌ Transfer failed: {transfer_message}")
+
+                    # No participants or transfer failed - permanently delete the list
+                    print(
+                        f"🗑️ No participants available, permanently deleting list: {list_name}")
+                    shopping_list.delete()
+
+                    return Response({
+                        'message': f'List "{list_name}" permanently deleted (no participants)',
+                        'action': 'permanent_delete'
+                    })
 
             # If user is a participant, remove them from the list
             elif shopping_list.participants.filter(id=request.user.id).exists():
@@ -678,6 +980,57 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
         )
         return ShoppingItem.objects.filter(shopping_list__in=user_lists)
 
+    def destroy(self, request, *args, **kwargs):
+        """Delete shopping item with proper permission checking"""
+        try:
+            item = self.get_object()
+            shopping_list = item.shopping_list
+
+            print(
+                f"🗑️ Deleting item: {item.name} by user: {request.user.username}")
+
+            # Check permissions properly
+            is_creator = shopping_list.creator == request.user
+
+            if is_creator:
+                # Creator has all permissions
+                can_edit = True
+            else:
+                # Check collaborator permissions
+                try:
+                    collaborator = shopping_list.collaborators.get(
+                        user=request.user)
+                    can_edit = collaborator.can_edit
+                    print(
+                        f"🔒 Collaborator {request.user.username} can_edit: {can_edit}")
+                except shopping_list.collaborators.model.DoesNotExist:
+                    print(
+                        f"❌ User {request.user.username} is not a collaborator")
+                    return Response(
+                        {'error': 'You do not have permission to delete items from this list'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+            if not can_edit:
+                print(
+                    f"❌ Permission denied: {request.user.username} cannot delete items")
+                return Response(
+                    {'error': 'You do not have permission to delete items from this list'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Perform the deletion
+            return super().destroy(request, *args, **kwargs)
+
+        except Exception as e:
+            print(f"❌ Error deleting item: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to delete item: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def update(self, request, *args, **kwargs):
         """Update shopping item (including quantity)"""
         try:
@@ -688,13 +1041,34 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
             print(f"📝 Update data: {request.data}")
             print(f"🔍 Request method: {request.method}")
 
-            # Check permissions
-            user_lists = ShoppingList.objects.filter(
-                Q(creator=request.user) | Q(participants=request.user)
-            )
-            if instance.shopping_list not in user_lists:
+            # Check permissions properly
+            shopping_list = instance.shopping_list
+            is_creator = shopping_list.creator == request.user
+
+            if is_creator:
+                # Creator has all permissions
+                can_edit = True
+            else:
+                # Check collaborator permissions
+                try:
+                    collaborator = shopping_list.collaborators.get(
+                        user=request.user)
+                    can_edit = collaborator.can_edit
+                    print(
+                        f"🔒 Collaborator {request.user.username} can_edit: {can_edit}")
+                except shopping_list.collaborators.model.DoesNotExist:
+                    print(
+                        f"❌ User {request.user.username} is not a collaborator")
+                    return Response(
+                        {'error': 'You do not have permission to update items in this list'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+            if not can_edit:
+                print(
+                    f"❌ Permission denied: {request.user.username} cannot edit items")
                 return Response(
-                    {'error': 'You do not have permission to update this item'},
+                    {'error': 'You do not have permission to update items in this list'},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
@@ -750,8 +1124,39 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
         """Toggle item completion status"""
         try:
             item = self.get_object()
+            shopping_list = item.shopping_list
             print(
                 f"🔄 Toggling completion for item: {item.name} by user: {request.user.username}")
+
+            # Check permissions
+            is_creator = shopping_list.creator == request.user
+
+            if is_creator:
+                # Creator has all permissions
+                can_edit = True
+            else:
+                # Check collaborator permissions
+                try:
+                    collaborator = shopping_list.collaborators.get(
+                        user=request.user)
+                    can_edit = collaborator.can_edit
+                    print(
+                        f"🔒 Collaborator {request.user.username} can_edit: {can_edit}")
+                except shopping_list.collaborators.model.DoesNotExist:
+                    print(
+                        f"❌ User {request.user.username} is not a collaborator")
+                    return Response(
+                        {'error': 'You do not have permission to edit items in this list'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+            if not can_edit:
+                print(
+                    f"❌ Permission denied: {request.user.username} cannot edit items")
+                return Response(
+                    {'error': 'You do not have permission to edit items in this list'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
             if item.is_completed:
                 item.is_completed = False
@@ -812,13 +1217,34 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
             print(
                 f"📊 Updating weight quantity for item: {item.name} to: {weight_quantity}g")
 
-            # Check permissions
-            user_lists = ShoppingList.objects.filter(
-                Q(creator=request.user) | Q(participants=request.user)
-            )
-            if item.shopping_list not in user_lists:
+            # Check permissions properly
+            shopping_list = item.shopping_list
+            is_creator = shopping_list.creator == request.user
+
+            if is_creator:
+                # Creator has all permissions
+                can_edit = True
+            else:
+                # Check collaborator permissions
+                try:
+                    collaborator = shopping_list.collaborators.get(
+                        user=request.user)
+                    can_edit = collaborator.can_edit
+                    print(
+                        f"🔒 Collaborator {request.user.username} can_edit: {can_edit}")
+                except shopping_list.collaborators.model.DoesNotExist:
+                    print(
+                        f"❌ User {request.user.username} is not a collaborator")
+                    return Response(
+                        {'error': 'You do not have permission to update items in this list'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+            if not can_edit:
+                print(
+                    f"❌ Permission denied: {request.user.username} cannot edit items")
                 return Response(
-                    {'error': 'You do not have permission to update this item'},
+                    {'error': 'You do not have permission to update items in this list'},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
@@ -871,13 +1297,34 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
             print(
                 f"🥤 Updating liquid quantity for item: {item.name} to: {liquid_quantity}ml")
 
-            # Check permissions
-            user_lists = ShoppingList.objects.filter(
-                Q(creator=request.user) | Q(participants=request.user)
-            )
-            if item.shopping_list not in user_lists:
+            # Check permissions properly
+            shopping_list = item.shopping_list
+            is_creator = shopping_list.creator == request.user
+
+            if is_creator:
+                # Creator has all permissions
+                can_edit = True
+            else:
+                # Check collaborator permissions
+                try:
+                    collaborator = shopping_list.collaborators.get(
+                        user=request.user)
+                    can_edit = collaborator.can_edit
+                    print(
+                        f"🔒 Collaborator {request.user.username} can_edit: {can_edit}")
+                except shopping_list.collaborators.model.DoesNotExist:
+                    print(
+                        f"❌ User {request.user.username} is not a collaborator")
+                    return Response(
+                        {'error': 'You do not have permission to update items in this list'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+            if not can_edit:
+                print(
+                    f"❌ Permission denied: {request.user.username} cannot edit items")
                 return Response(
-                    {'error': 'You do not have permission to update this item'},
+                    {'error': 'You do not have permission to update items in this list'},
                     status=status.HTTP_403_FORBIDDEN
                 )
 

@@ -14,10 +14,33 @@ class ShoppingListCollaborator(models.Model):
     can_add_items = models.BooleanField(default=True)
     can_invite_others = models.BooleanField(default=False)
     joined_at = models.DateTimeField(auto_now_add=True)
+    items_added_count = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ['user', 'shopping_list']
         db_table = 'shopping_list_collaborators'
+
+
+class ShoppingListOwnershipTransfer(models.Model):
+    """Track ownership transfers for shopping lists"""
+
+    shopping_list = models.ForeignKey(
+        'ShoppingList', on_delete=models.CASCADE, related_name='ownership_transfers')
+    from_user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='transferred_from_lists')
+    to_user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='transferred_to_lists')
+    reason = models.CharField(max_length=100, choices=[
+        ('creator_deleted', 'Creator Deleted List'),
+        ('auto_cleanup', 'Auto Cleanup After 60 Days'),
+        ('manual_transfer', 'Manual Transfer')
+    ], default='creator_deleted')
+    transferred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'shopping_list_ownership_transfers'
+        ordering = ['-transferred_at']
 
 
 class ShoppingList(models.Model):
@@ -43,6 +66,20 @@ class ShoppingList(models.Model):
         on_delete=models.SET_NULL,
         related_name='deleted_lists'
     )
+    # Permanent deletion by creator (but stays in DB for collaborator claims)
+    permanently_deleted_at = models.DateTimeField(null=True, blank=True)
+    permanently_deleted_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='permanently_deleted_lists'
+    )
+
+    # Auto-cleanup tracking fields
+    deletion_warning_sent = models.BooleanField(default=False)
+    deletion_warning_sent_at = models.DateTimeField(null=True, blank=True)
+    last_activity = models.DateTimeField(auto_now=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -95,9 +132,103 @@ class ShoppingList(models.Model):
         self.is_active = True
         self.save()
 
+    def permanent_delete_by_creator(self, user):
+        """Mark list as permanently deleted by creator (but keep in DB for claims)"""
+        self.permanently_deleted_at = timezone.now()
+        self.permanently_deleted_by = user
+        self.save()
+
     def can_user_restore(self, user):
-        """Check if user can restore this list"""
-        return user == self.creator or user == self.deleted_by
+        """Check if user can restore this list from archive"""
+        # Can only restore if deleted but not permanently deleted, and user is creator or deleter
+        return (self.deleted_at is not None and
+                self.permanently_deleted_at is None and
+                (user == self.creator or user == self.deleted_by))
+
+    def is_permanently_deleted(self):
+        """Check if list has been permanently deleted by creator"""
+        return self.permanently_deleted_at is not None
+
+    def is_archived_only(self):
+        """Check if list is only archived (soft deleted) but not permanently deleted"""
+        return self.deleted_at is not None and self.permanently_deleted_at is None
+
+    def get_next_owner(self):
+        """
+        Determine the next owner based on participation criteria:
+        1. Sort by joined_at (ascending) - oldest participant first
+        2. Sort by items_added_count (descending) - most active participant
+        3. Sort by username (ascending) - alphabetical as tiebreaker
+        Returns the ShoppingListCollaborator object or None if no participants
+        """
+        try:
+            # Get all current participants excluding the current creator
+            participants = self.collaborators.exclude(user=self.creator).order_by(
+                'joined_at',                    # Primary: oldest first
+                '-items_added_count',           # Secondary: most active first
+                'user__username'                # Tertiary: alphabetical
+            )
+
+            return participants.first()
+        except Exception as e:
+            print(f"Error in get_next_owner: {e}")
+            # Fallback to simple ordering
+            try:
+                participants = self.collaborators.exclude(
+                    user=self.creator).order_by('id')
+                return participants.first()
+            except Exception as e2:
+                print(f"Error in fallback get_next_owner: {e2}")
+                return None
+
+    def transfer_ownership_to_next_participant(self, reason='creator_deleted'):
+        """
+        Automatically transfer ownership to the next eligible participant.
+        Returns tuple (success: bool, new_owner: User|None, message: str)
+        """
+        next_owner_collaborator = self.get_next_owner()
+
+        if not next_owner_collaborator:
+            return False, None, "No participants available for ownership transfer"
+
+        old_creator = self.creator
+        new_owner = next_owner_collaborator.user
+
+        # Record the transfer
+        transfer_record = ShoppingListOwnershipTransfer.objects.create(
+            shopping_list=self,
+            from_user=old_creator,
+            to_user=new_owner,
+            reason=reason
+        )
+
+        # Transfer ownership
+        self.creator = new_owner
+
+        # Remove the new creator from participants to avoid duplication
+        next_owner_collaborator.delete()
+
+        # Remove the old creator from participants since they permanently deleted the list
+        # They should not automatically get access when the new owner restores it
+        try:
+            old_creator_collaborator = self.collaborators.get(user=old_creator)
+            old_creator_collaborator.delete()
+            print(
+                f"🗑️ Removed old creator {old_creator.username} from participants during ownership transfer")
+        except ShoppingListCollaborator.DoesNotExist:
+            print(
+                f"🗑️ Old creator {old_creator.username} was not a participant - no removal needed")
+
+        # Keep the list in archive for the new owner - they can restore it manually
+        # Only clear the permanently_deleted fields to prevent permanent deletion
+        if self.deleted_at and reason == 'creator_deleted':
+            self.permanently_deleted_at = None
+            self.permanently_deleted_by = None
+            # Keep deleted_at, deleted_by, and is_active=False so list stays in archive
+
+        self.save()
+
+        return True, new_owner, f"Ownership transferred from {old_creator.username} to {new_owner.username}"
 
     def is_auto_delete_eligible(self):
         """Check if list should be auto-deleted (60 days after deletion)"""
