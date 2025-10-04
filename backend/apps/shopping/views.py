@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
 from asgiref.sync import async_to_sync
+from decimal import Decimal
+from datetime import datetime
+import uuid
+
 try:
     from channels.layers import get_channel_layer
 except ImportError:
@@ -19,6 +23,22 @@ from .serializers import (
     UpdateCollaboratorPermissionsSerializer
 )
 from apps.ai_agents.services import AIOrchestrator
+
+
+def serialize_for_channels(data):
+    """Convert UUID, Decimal, and datetime objects to serializable types for channels"""
+    if isinstance(data, dict):
+        return {key: serialize_for_channels(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [serialize_for_channels(item) for item in data]
+    elif isinstance(data, uuid.UUID):
+        return str(data)
+    elif isinstance(data, Decimal):
+        return float(data)
+    elif isinstance(data, datetime):
+        return data.isoformat()
+    else:
+        return data
 
 
 class ShoppingListViewSet(viewsets.ModelViewSet):
@@ -176,65 +196,376 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def _convert_to_user_preference(self, quantity, unit, weight_pref, liquid_pref):
+        """Convert recipe units to user's preferred measurement system"""
+        unit_lower = unit.lower()
+
+        # Weight conversions
+        weight_metric_units = ['g', 'gram',
+                               'grams', 'kg', 'kilogram', 'kilograms']
+        weight_imperial_units = ['oz', 'ounce', 'ounces', 'lb', 'lbs',
+                                 'pound', 'pounds']
+
+        # Liquid conversions
+        liquid_metric_units = ['ml', 'milliliter', 'milliliters',
+                               'l', 'liter', 'liters', 'litre', 'litres']
+        liquid_imperial_units = ['fl oz', 'fluid ounce', 'fluid ounces',
+                                 'cup', 'cups', 'pint', 'pints', 'quart', 'quarts', 'gallon', 'gallons']
+
+        # Check if it's a weight unit
+        if unit_lower in weight_metric_units:
+            if weight_pref == 'imperial':
+                # Convert metric to imperial
+                if unit_lower in ['g', 'gram', 'grams']:
+                    # Convert grams to ounces
+                    quantity = quantity / 28.35
+                    unit = 'oz'
+                elif unit_lower in ['kg', 'kilogram', 'kilograms']:
+                    # Convert kg to pounds
+                    quantity = quantity * 2.205
+                    unit = 'lb'
+                print(
+                    f"[WEIGHT CONV] Metric -> Imperial: {quantity:.2f} {unit}")
+            # If metric preference, keep as is
+            return (round(quantity, 2), unit)
+
+        elif unit_lower in weight_imperial_units:
+            if weight_pref == 'metric':
+                # Convert imperial to metric
+                if unit_lower in ['oz', 'ounce', 'ounces']:
+                    # Convert ounces to grams
+                    quantity = quantity * 28.35
+                    unit = 'g'
+                elif unit_lower in ['lb', 'lbs', 'pound', 'pounds']:
+                    # Convert pounds to kg
+                    quantity = quantity / 2.205
+                    unit = 'kg'
+                print(
+                    f"[WEIGHT CONV] Imperial -> Metric: {quantity:.2f} {unit}")
+            # If imperial preference, keep as is
+            return (round(quantity, 2), unit)
+
+        # Check if it's a liquid unit
+        elif unit_lower in liquid_metric_units:
+            if liquid_pref == 'imperial':
+                # Convert metric to imperial
+                if unit_lower in ['ml', 'milliliter', 'milliliters']:
+                    # Convert ml to fl oz
+                    quantity = quantity / 29.574
+                    unit = 'fl oz'
+                elif unit_lower in ['l', 'liter', 'liters', 'litre', 'litres']:
+                    # Convert liters to gallons
+                    if quantity >= 1:
+                        quantity = quantity / 3.785
+                        unit = 'gallon'
+                    else:
+                        # Small amounts to fl oz
+                        quantity = (quantity * 1000) / 29.574
+                        unit = 'fl oz'
+                print(
+                    f"[LIQUID CONV] Metric -> Imperial: {quantity:.2f} {unit}")
+            # If metric preference, keep as is
+            return (round(quantity, 2), unit)
+
+        elif unit_lower in liquid_imperial_units:
+            if liquid_pref == 'metric':
+                # Convert imperial to metric
+                if unit_lower in ['fl oz', 'fluid ounce', 'fluid ounces']:
+                    # Convert fl oz to ml
+                    quantity = quantity * 29.574
+                    unit = 'ml'
+                elif unit_lower in ['cup', 'cups']:
+                    # Convert cups to ml
+                    quantity = quantity * 236.588
+                    unit = 'ml'
+                elif unit_lower in ['pint', 'pints']:
+                    # Convert pints to ml
+                    quantity = quantity * 473.176
+                    unit = 'ml'
+                elif unit_lower in ['quart', 'quarts']:
+                    # Convert quarts to liters
+                    quantity = quantity * 0.946
+                    unit = 'l'
+                elif unit_lower in ['gallon', 'gallons']:
+                    # Convert gallons to liters
+                    quantity = quantity * 3.785
+                    unit = 'l'
+                print(
+                    f"[LIQUID CONV] Imperial -> Metric: {quantity:.2f} {unit}")
+            # If imperial preference, keep as is
+            return (round(quantity, 2), unit)
+
+        # Not a weight or liquid unit, return as is
+        return (round(quantity, 2), unit)
+
     @action(detail=True, methods=['post'])
     def ai_add_items(self, request, pk=None):
-        """Add items using natural language"""
+        """
+        AI-powered recipe finder: User types dish name (e.g., "pasta carbonara")
+        Agent searches recipe, converts to RCIP, saves it, and adds ingredients to shopping list
+        """
         shopping_list = self.get_object()
-        text = request.data.get('text', '')
+        query = request.data.get('text', '')
 
-        # Process with AI
-        orchestrator = AIOrchestrator()
-        context = {
-            'inventory': list(Inventory.objects.filter(
-                user=request.user
-            ).values('name', 'quantity')),
-            'preferences': {
-                'dietary_restrictions': request.user.dietary_restrictions,
-                'allergies': request.user.allergies
-            }
+        if not query:
+            return Response({
+                'success': False,
+                'message': 'Please describe what you want to cook'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        print(f"[AI RECIPE REQUEST] User query: '{query}'")
+
+        # Import recipe agent service
+        try:
+            from apps.recipes.services import RecipeAgentService, RecipeDeduplicationService
+            from apps.recipes.models import Recipe
+        except ImportError as e:
+            print(f"[ERROR] Recipe app not available: {e}")
+            return Response({
+                'success': False,
+                'message': 'Recipe service is not available'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Get user preferences
+        user_preferences = {
+            'dietary_restrictions': getattr(request.user, 'dietary_restrictions', ''),
+            'allergies': getattr(request.user, 'allergies', '')
         }
 
-        # Use sync version for now
+        # Run recipe agent to find recipe
+        agent = RecipeAgentService()
         import asyncio
         loop = asyncio.new_event_loop()
-        result = loop.run_until_complete(
-            orchestrator.process_natural_language(text, context)
-        )
+        asyncio.set_event_loop(loop)
 
-        if result['success'] and result.get('action') == 'add_items':
+        try:
+            print(f"[RECIPE AGENT] Searching for: {query}")
+            success, recipe_data, message = loop.run_until_complete(
+                agent.find_and_convert_recipe(query, user_preferences)
+            )
+            loop.close()
+
+            if not success:
+                print(f"[ERROR] Recipe agent failed: {message}")
+                return Response({
+                    'success': False,
+                    'message': message or 'Could not find recipe'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            print(
+                f"[SUCCESS] Recipe found: {recipe_data.get('meta', {}).get('name')}")
+
+            # Check for duplicates and handle versioning
+            existing_recipes = RecipeDeduplicationService.find_duplicate_recipes(
+                recipe_data)
+
+            if existing_recipes:
+                existing_recipe = existing_recipes.first()
+                print(f"[REUSE] Found existing recipe: {existing_recipe.name}")
+                recipe = existing_recipe
+                created = False
+            else:
+                # Create new recipe
+                print(f"[CREATE] Creating new recipe in database")
+                recipe = Recipe(
+                    name=recipe_data['meta']['name'],
+                    description=recipe_data['meta'].get('description', ''),
+                    author=recipe_data['meta'].get('author', ''),
+                    source_url=recipe_data['meta'].get('source_url', ''),
+                    ingredients=recipe_data.get('ingredients', []),
+                    steps=recipe_data.get('steps', []),
+                    prep_time_minutes=recipe_data['meta'].get(
+                        'prep_time_minutes'),
+                    cook_time_minutes=recipe_data['meta'].get(
+                        'cook_time_minutes'),
+                    total_time_minutes=recipe_data['meta'].get(
+                        'total_time_minutes'),
+                    servings=recipe_data['meta'].get(
+                        'servings', {}).get('amount', 4),
+                    difficulty=recipe_data['meta'].get(
+                        'difficulty', 'intermediate'),
+                    cuisine=recipe_data['meta'].get('keywords', [''])[
+                        0] if recipe_data['meta'].get('keywords') else '',
+                    diet_labels=recipe_data['meta'].get('diet_labels', []),
+                    created_by=request.user
+                )
+                recipe.save()
+                created = True
+                print(f"[OK] Recipe saved to database: {recipe.id}")
+
+            # Add ingredients to shopping list with duplicate detection and unit conversion
             items_created = []
-            for item_data in result['items']:
-                item_data['shopping_list'] = shopping_list.id
-                item_data['added_by'] = request.user.id
-                item_data['ai_suggested'] = True
+            items_updated = []
+            user_color = getattr(request.user, 'personal_color', '#4F46E5')
 
-                serializer = ShoppingItemSerializer(data=item_data)
-                if serializer.is_valid():
-                    item = serializer.save()
+            # Get user preferences for unit conversion
+            user_weight_preference = getattr(
+                request.user, 'weight_unit_preference', 'metric')  # 'metric' or 'imperial'
+            user_liquid_preference = getattr(
+                request.user, 'liquid_unit_preference', 'metric')  # 'metric' or 'imperial'
+
+            print(
+                f"[USER PREFS] Weight: {user_weight_preference}, Liquid: {user_liquid_preference}")
+
+            for ingredient in recipe.ingredients:
+                ingredient_name = ingredient.get('name', '')
+                if not ingredient_name:
+                    continue
+
+                # Extract quantity and unit
+                quantity = 1.0
+                unit = 'unit'
+
+                if 'amount' in ingredient:
+                    # Convert to float to avoid Decimal issues
+                    quantity = float(
+                        ingredient['amount']) if ingredient['amount'] else 1.0
+
+                if 'unit' in ingredient:
+                    unit = ingredient['unit'] or 'unit'
+
+                # Convert units based on user preferences
+                quantity, unit = self._convert_to_user_preference(
+                    quantity, unit, user_weight_preference, user_liquid_preference
+                )
+
+                print(
+                    f"[CONVERSION] {ingredient_name}: {ingredient.get('amount')} {ingredient.get('unit')} -> {quantity} {unit}")
+
+                # Normalize ingredient name for comparison (lowercase, strip spaces)
+                normalized_name = ingredient_name.lower().strip()
+                normalized_unit = unit.lower().strip()
+
+                # Check for existing item with same name and unit
+                existing_item = ShoppingItem.objects.filter(
+                    shopping_list=shopping_list,
+                    name__iexact=ingredient_name,
+                    unit__iexact=unit,
+                    is_completed=False
+                ).first()
+
+                if existing_item:
+                    # Same item and same unit - combine quantities
+                    old_quantity = existing_item.quantity
+                    # Convert quantity to Decimal to match field type
+                    from decimal import Decimal
+                    existing_item.quantity = Decimal(
+                        str(existing_item.quantity)) + Decimal(str(quantity))
+                    existing_item.notes = (
+                        f"{existing_item.notes}\n+ {quantity} {unit} from recipe: {recipe.name}"
+                        if existing_item.notes
+                        else f"From recipe: {recipe.name} ({quantity} {unit})"
+                    )
+                    existing_item.save()
+                    items_updated.append(existing_item)
+                    print(
+                        f"[MERGED] {ingredient_name}: {old_quantity} + {quantity} = {existing_item.quantity} {unit}")
+                else:
+                    # Check for same item with different unit
+                    same_name_different_unit = ShoppingItem.objects.filter(
+                        shopping_list=shopping_list,
+                        name__iexact=ingredient_name,
+                        is_completed=False
+                    ).exclude(
+                        unit__iexact=unit
+                    ).exists()
+
+                    if same_name_different_unit:
+                        print(
+                            f"[KEEP SEPARATE] {ingredient_name} exists with different unit - adding as separate item")
+
+                    # Create new shopping item
+                    item = ShoppingItem(
+                        shopping_list=shopping_list,
+                        name=ingredient_name,
+                        quantity=quantity,
+                        unit=unit,
+                        category='other',
+                        notes=f"From recipe: {recipe.name}",
+                        added_by=request.user,
+                        user_color=user_color,
+                        ai_suggested=True
+                    )
+                    item.save()
                     items_created.append(item)
+                    print(
+                        f"[NEW] Added ingredient: {ingredient_name} ({quantity} {unit})")
 
-            # Send WebSocket notification for batch add
+            # Update recipe stats
+            recipe.times_added_to_lists += 1
+            recipe.save()
+
+            # Send WebSocket notifications
             channel_layer = get_channel_layer()
             if channel_layer:
-                async_to_sync(channel_layer.group_send)(
-                    f'shopping_list_{shopping_list.id}',
-                    {
-                        'type': 'items_batch_added',
-                        'items': [ShoppingItemSerializer(i).data for i in items_created],
-                        'user': request.user.username
-                    }
-                )
+                # Notify about new items
+                if items_created:
+                    items_data = [ShoppingItemSerializer(
+                        i).data for i in items_created]
+                    serialized_items = serialize_for_channels(items_data)
+
+                    async_to_sync(channel_layer.group_send)(
+                        f'shopping_list_{shopping_list.id}',
+                        {
+                            'type': 'items_batch_added',
+                            'items': serialized_items,
+                            'user': request.user.username
+                        }
+                    )
+                    print(
+                        f"[WEBSOCKET] Sent notification for {len(items_created)} new items")
+
+                # Notify about updated items
+                if items_updated:
+                    for item in items_updated:
+                        item_data = serialize_for_channels(
+                            ShoppingItemSerializer(item).data)
+                        async_to_sync(channel_layer.group_send)(
+                            f'shopping_list_{shopping_list.id}',
+                            {
+                                'type': 'item_updated',
+                                'item': item_data,
+                                'user': request.user.username
+                            }
+                        )
+                    print(
+                        f"[WEBSOCKET] Sent notification for {len(items_updated)} updated items")
+
+            # Prepare response message
+            total_items = len(items_created) + len(items_updated)
+            if items_created and items_updated:
+                message = f"Added {len(items_created)} new ingredients and updated {len(items_updated)} existing items from {recipe.name}"
+            elif items_created:
+                message = f"Added {len(items_created)} ingredients from {recipe.name}"
+            else:
+                message = f"Updated {len(items_updated)} existing ingredients from {recipe.name}"
 
             return Response({
                 'success': True,
+                'recipe': {
+                    'id': str(recipe.id),
+                    'name': recipe.name,
+                    'description': recipe.description,
+                    'source_url': recipe.source_url,
+                    'servings': recipe.servings,
+                    'created': created
+                },
                 'items_added': len(items_created),
-                'items': [ShoppingItemSerializer(i).data for i in items_created]
+                'items_updated': len(items_updated),
+                'total_items': total_items,
+                'new_items': [ShoppingItemSerializer(i).data for i in items_created],
+                'updated_items': [ShoppingItemSerializer(i).data for i in items_updated],
+                'message': message
             })
 
-        return Response({
-            'success': False,
-            'message': result.get('message', 'Failed to process request')
-        }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"[ERROR] Exception in ai_add_items: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'success': False,
+                'message': f'Error processing recipe: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'])
     def mock_store_order(self, request):

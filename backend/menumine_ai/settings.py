@@ -4,12 +4,18 @@ from pathlib import Path
 from datetime import timedelta
 import environ
 
-# Initialize environment variables
-env = environ.Env()
-environ.Env.read_env()
-
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Initialize environment variables
+env = environ.Env()
+# Read .env file from BASE_DIR (backend/)
+env_file = os.path.join(BASE_DIR, '.env')
+if os.path.exists(env_file):
+    environ.Env.read_env(env_file)
+    print(f"[INFO] Loaded environment from: {env_file}")
+else:
+    print(f"[WARNING] .env file not found at: {env_file}")
 
 # Add the apps directory to Python path
 sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
@@ -39,6 +45,7 @@ INSTALLED_APPS = [
     # Local apps
     'apps.users',
     'apps.shopping',
+    'apps.recipes',
     'apps.ai_agents',
     'apps.nutrition',
     'apps.core',
@@ -188,6 +195,10 @@ AUTH_USER_MODEL = 'users.User'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# AI Configuration
+GROQ_API_KEY = env('GROQ_API_KEY', default='')
+OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'

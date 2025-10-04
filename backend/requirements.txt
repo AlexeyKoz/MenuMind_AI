@@ -34,6 +34,12 @@ celery==5.4.0
 # AI & Machine Learning
 openai==1.57.4
 langchain==0.3.14
+groq>=0.4.0
+
+# Recipe Agent Dependencies
+duckduckgo-search>=6.3.0  # Also provides ddgs
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
 
 # Development Tools
 django-extensions==3.2.3

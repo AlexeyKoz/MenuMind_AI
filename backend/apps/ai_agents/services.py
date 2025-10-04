@@ -55,11 +55,23 @@ class AIOrchestrator:
     """Main AI orchestration service"""
 
     def __init__(self):
-        self.llm = ChatOpenAI(
-            temperature=AIConfig.OPENAI_TEMPERATURE,
-            model_name=AIConfig.OPENAI_MODEL,
-            openai_api_key=AIConfig.OPENAI_API_KEY
-        )
+        try:
+            self.llm = ChatOpenAI(
+                temperature=AIConfig.OPENAI_TEMPERATURE,
+                model=AIConfig.OPENAI_MODEL,  # Changed from model_name to model
+                api_key=AIConfig.OPENAI_API_KEY  # Changed from openai_api_key to api_key
+            )
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize ChatOpenAI: {e}")
+            # Fallback: try with minimal parameters
+            try:
+                self.llm = ChatOpenAI(
+                    model=AIConfig.OPENAI_MODEL,
+                    api_key=AIConfig.OPENAI_API_KEY
+                )
+            except Exception as e2:
+                print(f"[ERROR] Fallback initialization also failed: {e2}")
+                self.llm = None
         self.shopping_assistant = ShoppingAssistant(self.llm)
         self.recipe_assistant = RecipeAssistant(self.llm)
         self.nutrition_coach = NutritionCoach(self.llm)
@@ -67,6 +79,9 @@ class AIOrchestrator:
 
     async def process_natural_language(self, text: str, context: Dict) -> Dict:
         """Route natural language to appropriate agent"""
+        # Note: We don't return error here, we let fallback processing happen
+        # The individual assistants have their own fallback logic
+
         intent = await self._detect_intent(text)
 
         if intent == 'shopping':
@@ -83,6 +98,17 @@ class AIOrchestrator:
 
     async def _detect_intent(self, text: str) -> str:
         """Detect user intent from natural language"""
+        if self.llm is None:
+            # Fallback: simple keyword matching
+            text_lower = text.lower()
+            if any(word in text_lower for word in ['buy', 'shopping', 'list', 'store', 'purchase', 'get']):
+                return 'shopping'
+            elif any(word in text_lower for word in ['recipe', 'cook', 'meal', 'dish', 'food', 'make']):
+                return 'recipe'
+            elif any(word in text_lower for word in ['calories', 'nutrition', 'protein', 'carbs', 'health', 'diet']):
+                return 'nutrition'
+            return 'shopping'  # Default to shopping
+
         prompt = f"""
         Classify the following text into one of these categories:
         - shopping (adding items, creating lists, store orders)
@@ -130,6 +156,10 @@ class ShoppingAssistant:
     async def process(self, text: str, context: Dict) -> Dict:
         """Process shopping-related requests"""
 
+        if self.llm is None:
+            # Fallback: basic text parsing
+            return await self._fallback_process(text, context)
+
         # Check for simple add intent
         if any(word in text.lower() for word in ['add', 'buy', 'need', 'get']):
             items = await self.parse_shopping_items(text, context)
@@ -155,8 +185,62 @@ class ShoppingAssistant:
             'message': 'Could not process shopping request'
         }
 
+    async def _fallback_process(self, text: str, context: Dict) -> Dict:
+        """Fallback processing without AI"""
+        import re
+
+        # Simple pattern matching for items
+        items = []
+        lines = text.split('\n')
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Try to extract quantity and item name
+            # Pattern: "number unit item" or "item"
+            match = re.search(r'(\d+\.?\d*)\s*(\w+)?\s+(.+)', line)
+            if match:
+                quantity = float(match.group(1))
+                unit = match.group(2) or 'unit'
+                name = match.group(3)
+            else:
+                quantity = 1
+                unit = 'unit'
+                name = line
+
+            items.append({
+                'name': name.strip(),
+                'quantity': quantity,
+                'unit': unit,
+                'category': 'other',
+                'notes': 'Added via basic parsing (AI unavailable)'
+            })
+
+        if not items:
+            # If no items parsed, treat whole text as one item
+            items.append({
+                'name': text.strip(),
+                'quantity': 1,
+                'unit': 'unit',
+                'category': 'other',
+                'notes': 'Added via basic parsing (AI unavailable)'
+            })
+
+        return {
+            'success': True,
+            'action': 'add_items',
+            'items': items,
+            'message': f'Added {len(items)} item(s) using basic parsing (AI unavailable)'
+        }
+
     async def parse_shopping_items(self, text: str, context: Dict) -> List[Dict]:
         """Parse natural language into structured shopping items"""
+
+        if self.llm is None:
+            result = await self._fallback_process(text, context)
+            return result.get('items', [])
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", AIConfig.SHOPPING_ASSISTANT_PROMPT),

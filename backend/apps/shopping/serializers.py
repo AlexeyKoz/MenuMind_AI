@@ -75,7 +75,8 @@ class CreateShoppingListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ShoppingList
-        fields = ['name', 'is_collaborative']
+        fields = ['id', 'name', 'is_collaborative', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
         request = self.context.get('request')

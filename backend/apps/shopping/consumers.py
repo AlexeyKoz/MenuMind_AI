@@ -844,6 +844,14 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
             'updated_by': event.get('updated_by', {})
         }, cls=UUIDEncoder))
 
+    async def items_batch_added(self, event):
+        """Send items_batch_added event to WebSocket (for AI recipe ingredients)"""
+        await self.send(text_data=json.dumps({
+            'type': 'items_batch_added',
+            'items': event['items'],
+            'user': event.get('user', 'System')
+        }, cls=UUIDEncoder))
+
     async def item_deleted(self, event):
         """Send item_deleted event to WebSocket"""
         await self.send(text_data=json.dumps({
