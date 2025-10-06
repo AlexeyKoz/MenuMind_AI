@@ -196,6 +196,64 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    def _convert_to_grams(self, quantity, unit):
+        """Convert weight units to grams for storage"""
+        unit_lower = unit.lower()
+
+        # Already in grams
+        if unit_lower in ['g', 'gram', 'grams']:
+            return quantity
+
+        # Kilograms to grams
+        if unit_lower in ['kg', 'kilogram', 'kilograms']:
+            return quantity * 1000
+
+        # Ounces to grams
+        if unit_lower in ['oz', 'ounce', 'ounces']:
+            return quantity * 28.35
+
+        # Pounds to grams
+        if unit_lower in ['lb', 'lbs', 'pound', 'pounds']:
+            return quantity * 453.592
+
+        # Default
+        return quantity
+
+    def _convert_to_ml(self, quantity, unit):
+        """Convert liquid units to milliliters for storage"""
+        unit_lower = unit.lower()
+
+        # Already in ml
+        if unit_lower in ['ml', 'milliliter', 'milliliters']:
+            return quantity
+
+        # Liters to ml
+        if unit_lower in ['l', 'liter', 'liters', 'litre', 'litres']:
+            return quantity * 1000
+
+        # Fluid ounces to ml
+        if unit_lower in ['fl oz', 'fluid ounce', 'fluid ounces']:
+            return quantity * 29.574
+
+        # Cups to ml
+        if unit_lower in ['cup', 'cups']:
+            return quantity * 236.588
+
+        # Pints to ml
+        if unit_lower in ['pint', 'pints']:
+            return quantity * 473.176
+
+        # Quarts to ml
+        if unit_lower in ['quart', 'quarts']:
+            return quantity * 946.353
+
+        # Gallons to ml
+        if unit_lower in ['gallon', 'gallons']:
+            return quantity * 3785.41
+
+        # Default
+        return quantity
+
     def _convert_to_user_preference(self, quantity, unit, weight_pref, liquid_pref):
         """Convert recipe units to user's preferred measurement system"""
         unit_lower = unit.lower()
@@ -396,6 +454,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             # Add ingredients to shopping list with duplicate detection and unit conversion
             items_created = []
             items_updated = []
+            items_counter_types = {}  # Track which counter type each item uses
             user_color = getattr(request.user, 'personal_color', '#4F46E5')
 
             # Get user preferences for unit conversion
@@ -432,25 +491,74 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 print(
                     f"[CONVERSION] {ingredient_name}: {ingredient.get('amount')} {ingredient.get('unit')} -> {quantity} {unit}")
 
-                # Normalize ingredient name for comparison (lowercase, strip spaces)
-                normalized_name = ingredient_name.lower().strip()
-                normalized_unit = unit.lower().strip()
+                # Determine which counter to use based on unit type
+                unit_lower = unit.lower()
 
-                # Check for existing item with same name and unit
+                # Define unit categories
+                weight_units = ['g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms',
+                                'oz', 'ounce', 'ounces', 'lb', 'lbs', 'pound', 'pounds']
+                liquid_units = ['ml', 'milliliter', 'milliliters', 'l', 'liter', 'liters',
+                                'litre', 'litres', 'fl oz', 'fluid ounce', 'fluid ounces',
+                                'cup', 'cups', 'pint', 'pints', 'quart', 'quarts',
+                                'gallon', 'gallons']
+                count_units = ['piece', 'pieces', 'unit', 'units', 'item', 'items',
+                               'tbsp', 'tablespoon', 'tablespoons', 'tsp', 'teaspoon',
+                               'teaspoons', 'clove', 'cloves', 'slice', 'slices',
+                               'pinch', 'pinches', 'dash', 'dashes', 'can', 'cans',
+                               'jar', 'jars', 'pack', 'packs', 'package', 'packages',
+                               'bunch', 'bunches', 'head', 'heads', 'stalk', 'stalks',
+                               'leaf', 'leaves', 'sprig', 'sprigs', 'as needed', 'to taste']
+
+                # Determine counter type
+                if unit_lower in weight_units:
+                    counter_type = 'weight'
+                elif unit_lower in liquid_units:
+                    counter_type = 'liquid'
+                else:
+                    counter_type = 'quantity'
+
+                print(
+                    f"[COUNTER] {ingredient_name}: {counter_type} counter ({quantity} {unit})")
+
+                # Normalize ingredient name for comparison
+                normalized_name = ingredient_name.lower().strip()
+
+                # Check for existing item with same name
                 existing_item = ShoppingItem.objects.filter(
                     shopping_list=shopping_list,
                     name__iexact=ingredient_name,
-                    unit__iexact=unit,
                     is_completed=False
                 ).first()
 
+                from decimal import Decimal
+
                 if existing_item:
-                    # Same item and same unit - combine quantities
-                    old_quantity = existing_item.quantity
-                    # Convert quantity to Decimal to match field type
-                    from decimal import Decimal
-                    existing_item.quantity = Decimal(
-                        str(existing_item.quantity)) + Decimal(str(quantity))
+                    # Update the appropriate counter
+                    if counter_type == 'weight':
+                        old_weight = existing_item.weight_quantity
+                        # Convert to grams and add
+                        weight_in_grams = self._convert_to_grams(
+                            quantity, unit)
+                        existing_item.weight_quantity = Decimal(
+                            str(existing_item.weight_quantity)) + Decimal(str(weight_in_grams))
+                        print(
+                            f"[MERGED WEIGHT] {ingredient_name}: {old_weight}g + {weight_in_grams}g = {existing_item.weight_quantity}g")
+                    elif counter_type == 'liquid':
+                        old_liquid = existing_item.liquid_quantity
+                        # Convert to ml and add
+                        liquid_in_ml = self._convert_to_ml(quantity, unit)
+                        existing_item.liquid_quantity = Decimal(
+                            str(existing_item.liquid_quantity)) + Decimal(str(liquid_in_ml))
+                        print(
+                            f"[MERGED LIQUID] {ingredient_name}: {old_liquid}ml + {liquid_in_ml}ml = {existing_item.liquid_quantity}ml")
+                    else:
+                        old_quantity = existing_item.quantity
+                        existing_item.quantity = Decimal(
+                            str(existing_item.quantity)) + Decimal(str(quantity))
+                        existing_item.unit = unit  # Update unit for count items
+                        print(
+                            f"[MERGED QUANTITY] {ingredient_name}: {old_quantity} + {quantity} = {existing_item.quantity} {unit}")
+
                     existing_item.notes = (
                         f"{existing_item.notes}\n+ {quantity} {unit} from recipe: {recipe.name}"
                         if existing_item.notes
@@ -458,38 +566,50 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     )
                     existing_item.save()
                     items_updated.append(existing_item)
-                    print(
-                        f"[MERGED] {ingredient_name}: {old_quantity} + {quantity} = {existing_item.quantity} {unit}")
                 else:
-                    # Check for same item with different unit
-                    same_name_different_unit = ShoppingItem.objects.filter(
-                        shopping_list=shopping_list,
-                        name__iexact=ingredient_name,
-                        is_completed=False
-                    ).exclude(
-                        unit__iexact=unit
-                    ).exists()
+                    # Create new shopping item with proper counter
+                    item_data = {
+                        'shopping_list': shopping_list,
+                        'name': ingredient_name,
+                        'quantity': 1,  # Default quantity
+                        'unit': 'unit',  # Default unit
+                        'weight_quantity': 0,
+                        'liquid_quantity': 0,
+                        'category': 'other',
+                        'notes': f"From recipe: {recipe.name}",
+                        'added_by': request.user,
+                        'user_color': user_color,
+                        'ai_suggested': True
+                    }
 
-                    if same_name_different_unit:
+                    # Set the appropriate counter
+                    if counter_type == 'weight':
+                        # Convert to grams for weight_quantity storage
+                        weight_in_grams = self._convert_to_grams(
+                            quantity, unit)
+                        item_data['weight_quantity'] = weight_in_grams
                         print(
-                            f"[KEEP SEPARATE] {ingredient_name} exists with different unit - adding as separate item")
+                            f"[WEIGHT COUNTER] {ingredient_name}: {quantity} {unit} = {weight_in_grams}g")
+                    elif counter_type == 'liquid':
+                        # Convert to ml for liquid_quantity storage
+                        liquid_in_ml = self._convert_to_ml(quantity, unit)
+                        item_data['liquid_quantity'] = liquid_in_ml
+                        print(
+                            f"[LIQUID COUNTER] {ingredient_name}: {quantity} {unit} = {liquid_in_ml}ml")
+                    else:
+                        # Use quantity field for count items
+                        item_data['quantity'] = quantity
+                        item_data['unit'] = unit
+                        print(
+                            f"[QUANTITY COUNTER] {ingredient_name}: {quantity} {unit}")
 
-                    # Create new shopping item
-                    item = ShoppingItem(
-                        shopping_list=shopping_list,
-                        name=ingredient_name,
-                        quantity=quantity,
-                        unit=unit,
-                        category='other',
-                        notes=f"From recipe: {recipe.name}",
-                        added_by=request.user,
-                        user_color=user_color,
-                        ai_suggested=True
-                    )
+                    item = ShoppingItem(**item_data)
                     item.save()
                     items_created.append(item)
+                    # Track counter type for this item
+                    items_counter_types[str(item.id)] = counter_type
                     print(
-                        f"[NEW] Added ingredient: {ingredient_name} ({quantity} {unit})")
+                        f"[NEW] Added ingredient: {ingredient_name} (counter: {counter_type})")
 
             # Update recipe stats
             recipe.times_added_to_lists += 1
@@ -504,6 +624,14 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         i).data for i in items_created]
                     serialized_items = serialize_for_channels(items_data)
 
+                    # Add counter type info to each item
+                    for item_data in serialized_items:
+                        item_id = str(item_data['id'])
+                        if item_id in items_counter_types:
+                            item_data['auto_enable_counter'] = items_counter_types[item_id]
+                            print(
+                                f"[AUTO-ENABLE] {item_data['name']}: {items_counter_types[item_id]} counter")
+
                     async_to_sync(channel_layer.group_send)(
                         f'shopping_list_{shopping_list.id}',
                         {
@@ -513,7 +641,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         }
                     )
                     print(
-                        f"[WEBSOCKET] Sent notification for {len(items_created)} new items")
+                        f"[WEBSOCKET] Sent notification for {len(items_created)} new items with counter info")
 
                 # Notify about updated items
                 if items_updated:
@@ -1425,8 +1553,42 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+            # Store item info before deletion for WebSocket notification
+            item_id = str(item.id)
+            item_name = item.name
+            list_id = str(shopping_list.id)
+
             # Perform the deletion
-            return super().destroy(request, *args, **kwargs)
+            response = super().destroy(request, *args, **kwargs)
+
+            # Send WebSocket notification to all connected users
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    user_color = getattr(
+                        request.user, 'personal_color', '#4F46E5')
+                    async_to_sync(channel_layer.group_send)(
+                        f'shopping_list_{list_id}',
+                        {
+                            'type': 'item_deleted',
+                            'item_id': item_id,
+                            'deleted_by': {
+                                'id': str(request.user.id),
+                                'username': request.user.username,
+                                'color': user_color
+                            }
+                        }
+                    )
+                    print(
+                        f"📡 WebSocket notification sent for deleted item: {item_name}")
+            except Exception as ws_error:
+                print(
+                    f"⚠️ WebSocket notification failed for item deletion: {ws_error}")
+
+            return response
 
         except Exception as e:
             print(f"❌ Error deleting item: {e}")
