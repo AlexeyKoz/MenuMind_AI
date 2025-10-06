@@ -209,7 +209,7 @@
 <body>
     <div class="header">
         <h1>🥗🤖 MenuMind AI - Backend Tester</h1>
-        <p>Comprehensive testing for Shopping Lists, Collaboration & Archive APIs</p>
+        <p>Comprehensive testing for Shopping Lists, Collaboration, AI Recipe Agent & RCIP APIs</p>
     </div>
 
     <div class="status-card">
@@ -600,6 +600,71 @@
             <div id="wsResult" class="result" style="display:none;"></div>
         </div>
 
+        <!-- AI Recipe Agent & RCIP -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>🤖🍳 AI Recipe Agent & RCIP</h3>
+            </div>
+            <div class="endpoint-info">AI-powered recipe search, scraping, RCIP conversion, and ingredient extraction
+            </div>
+
+            <div class="auth-note">⚠️ Requires GROQ_API_KEY in backend/.env</div>
+
+            <!-- Recipe Search & Find -->
+            <div class="input-group">
+                <label>Recipe Query (AI):</label>
+                <input type="text" id="recipeQuery" placeholder="pasta carbonara, chicken curry, etc." />
+            </div>
+            <div class="input-group">
+                <label>List ID (to add ingredients):</label>
+                <input type="text" id="recipeListId" placeholder="Optional: Add ingredients to this list" />
+            </div>
+            <button class="button post" onclick="findRecipeAI()">
+                <span class="method-badge method-post">POST</span>🔍 Find Recipe (AI Agent)
+            </button>
+            <button class="button" onclick="testEndpoint('/api/recipes/')">
+                <span class="method-badge method-get">GET</span>All Recipes
+            </button>
+            <button class="button" onclick="testEndpoint('/api/recipes/my_recipes/')">
+                <span class="method-badge method-get">GET</span>My Saved Recipes
+            </button>
+
+            <!-- Recipe Details & Versions -->
+            <div class="input-group" style="margin-top: 15px;">
+                <label>Recipe ID for operations:</label>
+                <input type="text" id="recipeId" placeholder="Recipe UUID" />
+            </div>
+            <button class="button" onclick="getRecipeDetail()">
+                <span class="method-badge method-get">GET</span>Recipe Detail
+            </button>
+            <button class="button" onclick="getRecipeVersions()">
+                <span class="method-badge method-get">GET</span>Recipe Versions
+            </button>
+
+            <!-- Recipe Actions -->
+            <button class="button post" onclick="saveRecipe()">
+                <span class="method-badge method-post">POST</span>💾 Save Recipe
+            </button>
+            <button class="button post" onclick="unsaveRecipe()">
+                <span class="method-badge method-post">POST</span>🗑️ Unsave Recipe
+            </button>
+            <button class="button post" onclick="markRecipeCooked()">
+                <span class="method-badge method-post">POST</span>👨‍🍳 Mark as Cooked
+            </button>
+
+            <!-- RCIP Validation -->
+            <div class="input-group" style="margin-top: 15px;">
+                <label>Test RCIP JSON:</label>
+                <textarea id="rcipJson"
+                    placeholder='{"rcip_version": "1.0", "name": "Test Recipe", "ingredients": [...], "steps": [...]}'></textarea>
+            </div>
+            <button class="button post" onclick="validateRCIP()">
+                <span class="method-badge method-post">POST</span>✅ Validate RCIP Format
+            </button>
+
+            <div id="recipeResult" class="result" style="display:none;"></div>
+        </div>
+
         <!-- Other APIs -->
         <div class="test-section">
             <div class="section-title">
@@ -648,6 +713,7 @@
             <button class="button" onclick="testCollaborationFlow()">👥 Test Collaboration Flow</button>
             <button class="button delete" onclick="testDeletionFlow()">🗑️ Test Deletion Flow</button>
             <button class="button" onclick="testWebSocketFlow()">⚡ Test WebSocket Flow</button>
+            <button class="button post" onclick="testRecipeAIWorkflow()">🤖🍳 Test Recipe AI Workflow</button>
             <div class="input-group">
                 <label>Stress Test Requests:</label>
                 <input type="number" id="stressTestCount" value="10" min="1" max="100" />
@@ -1218,6 +1284,157 @@
             displayResult('registrationResult', result);
         }
 
+        // AI Recipe Agent Functions
+        async function findRecipeAI() {
+            const query = document.getElementById('recipeQuery').value;
+            const listId = document.getElementById('recipeListId').value;
+
+            if (!query) {
+                alert('Please enter a recipe query');
+                return;
+            }
+
+            displayResult('recipeResult', {
+                message: 'Finding recipe with AI... This may take 10-30 seconds',
+                status: 'loading'
+            });
+
+            const payload = { query: query };
+            if (listId) {
+                payload.shopping_list_id = listId;
+                payload.add_to_list = true;
+            }
+
+            const result = await makeRequest('/api/recipes/find_recipe/', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            displayResult('recipeResult', result);
+        }
+
+        async function getRecipeDetail() {
+            const recipeId = document.getElementById('recipeId').value;
+            if (!recipeId) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/${recipeId}/`);
+            displayResult('recipeResult', result);
+        }
+
+        async function getRecipeVersions() {
+            const recipeId = document.getElementById('recipeId').value;
+            if (!recipeId) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/${recipeId}/versions/`);
+            displayResult('recipeResult', result);
+        }
+
+        async function saveRecipe() {
+            const recipeId = document.getElementById('recipeId').value;
+            if (!recipeId) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/${recipeId}/save_recipe/`, {
+                method: 'POST'
+            });
+            displayResult('recipeResult', result);
+        }
+
+        async function unsaveRecipe() {
+            const recipeId = document.getElementById('recipeId').value;
+            if (!recipeId) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/${recipeId}/unsave_recipe/`, {
+                method: 'POST'
+            });
+            displayResult('recipeResult', result);
+        }
+
+        async function markRecipeCooked() {
+            const recipeId = document.getElementById('recipeId').value;
+            if (!recipeId) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/${recipeId}/mark_cooked/`, {
+                method: 'POST'
+            });
+            displayResult('recipeResult', result);
+        }
+
+        async function validateRCIP() {
+            const rcipJson = document.getElementById('rcipJson').value;
+            if (!rcipJson) {
+                alert('Please enter RCIP JSON to validate');
+                return;
+            }
+
+            try {
+                const rcipData = JSON.parse(rcipJson);
+
+                // Basic RCIP validation
+                const requiredFields = ['rcip_version', 'name', 'ingredients', 'steps'];
+                const missingFields = requiredFields.filter(field => !rcipData[field]);
+
+                if (missingFields.length > 0) {
+                    displayResult('recipeResult', {
+                        ok: false,
+                        error: 'RCIP validation failed',
+                        missingFields: missingFields,
+                        message: 'Required fields: rcip_version, name, ingredients (array), steps (array)'
+                    });
+                    return;
+                }
+
+                // Check ingredient format
+                if (!Array.isArray(rcipData.ingredients)) {
+                    displayResult('recipeResult', {
+                        ok: false,
+                        error: 'ingredients must be an array'
+                    });
+                    return;
+                }
+
+                // Check steps format
+                if (!Array.isArray(rcipData.steps)) {
+                    displayResult('recipeResult', {
+                        ok: false,
+                        error: 'steps must be an array'
+                    });
+                    return;
+                }
+
+                displayResult('recipeResult', {
+                    ok: true,
+                    message: '✅ RCIP format is valid!',
+                    rcipData: rcipData,
+                    stats: {
+                        version: rcipData.rcip_version,
+                        name: rcipData.name,
+                        ingredientCount: rcipData.ingredients.length,
+                        stepCount: rcipData.steps.length,
+                        hasServings: !!rcipData.servings,
+                        hasPrepTime: !!rcipData.prep_time,
+                        hasCookTime: !!rcipData.cook_time
+                    }
+                });
+
+            } catch (error) {
+                displayResult('recipeResult', {
+                    ok: false,
+                    error: 'Invalid JSON format',
+                    message: error.message
+                });
+            }
+        }
+
         // WebSocket Functions
         let testWebSocket = null;
 
@@ -1390,6 +1607,8 @@
                 { url: '/api/users/', method: 'GET', name: 'Users API' },
                 { url: '/api/users/profile/', method: 'GET', name: 'User Profile' },
                 { url: '/api/users/profile/my_collaboration_key/', method: 'GET', name: 'Collaboration Key' },
+                { url: '/api/recipes/', method: 'GET', name: 'Recipes API' },
+                { url: '/api/recipes/my_recipes/', method: 'GET', name: 'My Saved Recipes' },
                 { url: '/api/nutrition/', method: 'GET', name: 'Nutrition API' },
                 { url: '/api/ai/', method: 'GET', name: 'AI API' }
             ];
@@ -1715,6 +1934,103 @@
                     ok: false
                 });
             }
+        }
+
+        async function testRecipeAIWorkflow() {
+            if (!activeToken) {
+                displayResult('quickActionsResult', {
+                    error: 'Please login first to test Recipe AI workflow',
+                    ok: false
+                });
+                return;
+            }
+
+            const workflow = [];
+            const startTime = Date.now();
+
+            displayResult('quickActionsResult', {
+                message: 'Starting Recipe AI Workflow Test... This may take 30-60 seconds',
+                status: 'running'
+            });
+
+            // Step 1: Create a shopping list
+            workflow.push({
+                step: '1. Create shopping list',
+                result: await makeRequest('/api/shopping/lists/', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: `AI Recipe Test ${Date.now()}` })
+                })
+            });
+
+            const listId = workflow[0].result.data?.id;
+
+            if (listId) {
+                // Step 2: Find recipe with AI (adds ingredients to list)
+                workflow.push({
+                    step: '2. Find recipe with AI (pasta carbonara)',
+                    result: await makeRequest('/api/recipes/find_recipe/', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            query: 'pasta carbonara',
+                            shopping_list_id: listId,
+                            add_to_list: true
+                        })
+                    })
+                });
+
+                const recipeId = workflow[1].result.data?.recipe?.id;
+
+                // Step 3: Get list items
+                workflow.push({
+                    step: '3. Get shopping list items',
+                    result: await makeRequest(`/api/shopping/lists/${listId}/`)
+                });
+
+                if (recipeId) {
+                    // Step 4: Save recipe
+                    workflow.push({
+                        step: '4. Save recipe to my recipes',
+                        result: await makeRequest(`/api/recipes/${recipeId}/save_recipe/`, {
+                            method: 'POST'
+                        })
+                    });
+
+                    // Step 5: Mark as cooked
+                    workflow.push({
+                        step: '5. Mark recipe as cooked',
+                        result: await makeRequest(`/api/recipes/${recipeId}/mark_cooked/`, {
+                            method: 'POST'
+                        })
+                    });
+
+                    // Step 6: Get my saved recipes
+                    workflow.push({
+                        step: '6. Get my saved recipes',
+                        result: await makeRequest('/api/recipes/my_recipes/')
+                    });
+
+                    // Step 7: Get recipe versions
+                    workflow.push({
+                        step: '7. Get recipe versions',
+                        result: await makeRequest(`/api/recipes/${recipeId}/versions/`)
+                    });
+                }
+            }
+
+            const endTime = Date.now();
+
+            displayResult('quickActionsResult', {
+                message: 'Recipe AI Workflow completed',
+                totalTime: `${Math.round((endTime - startTime) / 1000)}s`,
+                listId: listId,
+                workflow: workflow,
+                summary: {
+                    totalSteps: workflow.length,
+                    successSteps: workflow.filter(w => w.result.ok).length,
+                    failedSteps: workflow.filter(w => !w.result.ok).length
+                },
+                ok: true
+            });
         }
 
         function exportResults() {

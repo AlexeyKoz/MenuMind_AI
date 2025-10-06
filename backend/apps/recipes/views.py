@@ -2,10 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
 from django.utils import timezone
+from django.http import HttpResponse
 from asgiref.sync import async_to_sync
 import asyncio
+import json
 
 from .models import Recipe, UserRecipe
 from .serializers import (
@@ -390,6 +393,135 @@ class RecipeViewSet(viewsets.ModelViewSet):
         serializer = RecipeSerializer(
             recipes, many=True, context={'request': request})
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def download_rcip(self, request, pk=None):
+        """
+        Download recipe as .rcip file
+
+        GET /api/recipes/{recipe_id}/download_rcip/
+
+        Returns: File download response with recipe in RCIP format
+        """
+        recipe = self.get_object()
+
+        # Convert to full RCIP format
+        rcip_data = recipe.to_rcip_format()
+
+        # Create JSON response with proper formatting
+        response = HttpResponse(
+            json.dumps(rcip_data, indent=2, ensure_ascii=False),
+            content_type='application/json'
+        )
+
+        # Set filename for download
+        safe_name = recipe.name.replace(' ', '_').replace('/', '_')
+        response['Content-Disposition'] = f'attachment; filename="{safe_name}.rcip"'
+
+        return response
+
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def upload_rcip(self, request):
+        """
+        Upload and import a .rcip recipe file
+
+        POST /api/recipes/upload_rcip/
+        Content-Type: multipart/form-data
+
+        Body:
+            file: .rcip file
+
+        Returns: Created recipe data
+        """
+        if 'file' not in request.FILES:
+            return Response(
+                {'error': 'No file provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        uploaded_file = request.FILES['file']
+
+        # Check file extension
+        if not uploaded_file.name.endswith('.rcip'):
+            return Response(
+                {'error': 'File must have .rcip extension'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Read and parse RCIP file
+            file_content = uploaded_file.read().decode('utf-8')
+            rcip_data = json.loads(file_content)
+
+            # Validate required RCIP fields
+            required_fields = ['rcip_version', 'meta', 'ingredients', 'steps']
+            for field in required_fields:
+                if field not in rcip_data:
+                    return Response(
+                        {'error': f'Missing required RCIP field: {field}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Extract data from RCIP format
+            meta = rcip_data['meta']
+
+            # Check for duplicates
+            dedup_service = RecipeDeduplicationService()
+            existing_recipes = dedup_service.find_duplicate_recipes(rcip_data)
+
+            if existing_recipes.exists():
+                existing = existing_recipes.first()
+                return Response({
+                    'message': 'Recipe already exists',
+                    'recipe': RecipeSerializer(existing, context={'request': request}).data,
+                    'is_duplicate': True
+                }, status=status.HTTP_200_OK)
+
+            # Create recipe from RCIP data
+            recipe = Recipe.objects.create(
+                rcip_version=rcip_data.get('rcip_version', '0.1'),
+                name=meta.get('name', 'Untitled Recipe'),
+                description=meta.get('description', ''),
+                author=meta.get('author', request.user.username),
+                source_url=meta.get('source_url'),
+                ingredients=rcip_data['ingredients'],
+                steps=rcip_data['steps'],
+                prep_time_minutes=meta.get('prep_time_minutes'),
+                cook_time_minutes=meta.get('cook_time_minutes'),
+                total_time_minutes=meta.get('total_time_minutes'),
+                servings=meta.get('servings', {}).get('amount', 4) if isinstance(
+                    meta.get('servings'), dict) else meta.get('servings', 4),
+                difficulty=meta.get('difficulty', 'intermediate'),
+                cuisine=meta.get('cuisine', ''),
+                diet_labels=meta.get('diet_labels', []),
+                created_by=request.user
+            )
+
+            # Calculate hash for deduplication
+            if not recipe.recipe_hash:
+                recipe.recipe_hash = recipe.calculate_recipe_hash()
+                recipe.save()
+
+            print(f"[UPLOAD] Recipe '{recipe.name}' imported from .rcip file")
+
+            return Response({
+                'message': 'Recipe imported successfully',
+                'recipe': RecipeSerializer(recipe, context={'request': request}).data
+            }, status=status.HTTP_201_CREATED)
+
+        except json.JSONDecodeError:
+            return Response(
+                {'error': 'Invalid JSON format in .rcip file'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            print(f"[ERROR] RCIP upload failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {'error': f'Failed to import recipe: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'])
     def ai_search(self, request):

@@ -1,0 +1,173 @@
+{
+  "rcip_version": "0.1",
+  "id": "rcip-test-001",
+  "meta": {
+    "name": "Classic Chocolate Chip Cookies",
+    "description": "Soft and chewy chocolate chip cookies with a perfect golden-brown edge. A timeless American classic that never goes out of style.",
+    "author": "Grandma's Kitchen",
+    "created_date": "2025-10-06T10:00:00Z",
+    "source_url": "https://example.com/chocolate-chip-cookies",
+    "difficulty": "beginner",
+    "servings": {
+      "amount": 24,
+      "unit": "cookies",
+      "adjustable": true
+    },
+    "prep_time_minutes": 15,
+    "cook_time_minutes": 12,
+    "total_time_minutes": 27,
+    "keywords": ["dessert", "cookies", "chocolate", "american"],
+    "diet_labels": ["vegetarian"],
+    "cuisine": "American"
+  },
+  "ingredients": [
+    {
+      "name": "All-purpose flour",
+      "quantity": "2.25",
+      "unit": "cups",
+      "human_amount": "2 1/4 cups",
+      "allergens": ["gluten"],
+      "notes": "Spoon and level for accurate measurement"
+    },
+    {
+      "name": "Baking soda",
+      "quantity": "1",
+      "unit": "tsp",
+      "human_amount": "1 tsp",
+      "allergens": []
+    },
+    {
+      "name": "Salt",
+      "quantity": "1",
+      "unit": "tsp",
+      "human_amount": "1 tsp",
+      "allergens": []
+    },
+    {
+      "name": "Unsalted butter",
+      "quantity": "1",
+      "unit": "cup",
+      "human_amount": "1 cup (2 sticks)",
+      "allergens": ["dairy"],
+      "notes": "Softened to room temperature"
+    },
+    {
+      "name": "Granulated sugar",
+      "quantity": "0.75",
+      "unit": "cup",
+      "human_amount": "3/4 cup",
+      "allergens": []
+    },
+    {
+      "name": "Brown sugar",
+      "quantity": "0.75",
+      "unit": "cup",
+      "human_amount": "3/4 cup packed",
+      "allergens": [],
+      "notes": "Light or dark brown sugar works"
+    },
+    {
+      "name": "Eggs",
+      "quantity": "2",
+      "unit": "large",
+      "human_amount": "2 large eggs",
+      "allergens": ["eggs"],
+      "notes": "Room temperature"
+    },
+    {
+      "name": "Vanilla extract",
+      "quantity": "2",
+      "unit": "tsp",
+      "human_amount": "2 tsp",
+      "allergens": []
+    },
+    {
+      "name": "Semi-sweet chocolate chips",
+      "quantity": "2",
+      "unit": "cups",
+      "human_amount": "2 cups (12 oz package)",
+      "allergens": ["dairy"],
+      "notes": "Can also use milk chocolate or dark chocolate"
+    }
+  ],
+  "steps": [
+    {
+      "step_number": 1,
+      "instruction": "Preheat your oven to 375°F (190°C). Line baking sheets with parchment paper or silicone baking mats.",
+      "human_text": "Preheat oven to 375°F and prepare baking sheets",
+      "params": {
+        "temperature_c": 190,
+        "temperature_f": 375
+      }
+    },
+    {
+      "step_number": 2,
+      "instruction": "In a medium bowl, whisk together flour, baking soda, and salt. Set aside.",
+      "human_text": "Combine dry ingredients in a bowl",
+      "params": {}
+    },
+    {
+      "step_number": 3,
+      "instruction": "In a large bowl, beat softened butter with both sugars until light and fluffy, about 2-3 minutes.",
+      "human_text": "Cream butter and sugars until fluffy",
+      "params": {
+        "time_minutes": 3
+      }
+    },
+    {
+      "step_number": 4,
+      "instruction": "Add eggs one at a time, beating well after each addition. Mix in vanilla extract.",
+      "human_text": "Add eggs and vanilla, mixing well",
+      "params": {}
+    },
+    {
+      "step_number": 5,
+      "instruction": "Gradually add the flour mixture to the butter mixture, mixing on low speed until just combined. Do not overmix.",
+      "human_text": "Fold in dry ingredients gently",
+      "params": {}
+    },
+    {
+      "step_number": 6,
+      "instruction": "Fold in chocolate chips using a spatula or wooden spoon.",
+      "human_text": "Stir in chocolate chips",
+      "params": {}
+    },
+    {
+      "step_number": 7,
+      "instruction": "Drop rounded tablespoons of dough onto prepared baking sheets, spacing them about 2 inches apart.",
+      "human_text": "Scoop dough onto baking sheets",
+      "params": {}
+    },
+    {
+      "step_number": 8,
+      "instruction": "Bake for 10-12 minutes, until edges are golden brown but centers still look slightly underbaked.",
+      "human_text": "Bake until golden brown on edges",
+      "params": {
+        "time_minutes": 12,
+        "temperature_c": 190,
+        "temperature_f": 375
+      }
+    },
+    {
+      "step_number": 9,
+      "instruction": "Let cookies cool on baking sheet for 5 minutes, then transfer to a wire rack to cool completely.",
+      "human_text": "Cool on baking sheet, then transfer to rack",
+      "params": {
+        "time_minutes": 5
+      }
+    }
+  ],
+  "extensions": {
+    "tips": [
+      "For chewier cookies, slightly underbake them",
+      "Cookies will continue to cook on the hot baking sheet after removing from oven",
+      "Store in an airtight container for up to 5 days"
+    ],
+    "variations": [
+      "Add 1 cup of chopped walnuts or pecans",
+      "Replace half the chocolate chips with butterscotch chips",
+      "Add 1 tsp of cinnamon to the dry ingredients"
+    ]
+  }
+}
+
