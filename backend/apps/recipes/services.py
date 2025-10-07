@@ -1,5 +1,6 @@
 """
 Recipe Agent Service - AI-powered recipe search, scraping, and conversion
+WITH DEDUPLICATION SUPPORT
 """
 from rcip_converter import RCIPConverter, RecipeAnalyzer
 import os
@@ -20,13 +21,16 @@ except ImportError:
         DDGS = None
 from groq import Groq
 from django.conf import settings
+from asgiref.sync import sync_to_async
+import hashlib
+import re
 
 # Import RCIP converter
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 
 class RecipeAgentService:
-    """Service for searching, scraping, and converting recipes using AI"""
+    """Service for searching, scraping, and converting recipes using AI with deduplication"""
 
     def __init__(self):
         groq_api_key = os.getenv('GROQ_API_KEY') or settings.GROQ_API_KEY if hasattr(
@@ -44,26 +48,64 @@ class RecipeAgentService:
     async def find_and_convert_recipe(
         self,
         user_query: str,
+        user,  # Django User object
         user_preferences: Dict = None
     ) -> Tuple[bool, Optional[Dict], str]:
         """
-        Main method: Search, scrape, convert recipe from user query
+        Main method: Search, scrape, convert recipe from user query WITH DEDUPLICATION
+
+        NEW FLOW:
+        1. Check if canonical recipe exists (by normalized name)
+        2. If EXISTS: Return existing canonical + create user fork
+        3. If NOT EXISTS: Search web → Create canonical → Create user fork
 
         Args:
             user_query: What user wants to cook (e.g., "Italian pasta carbonara")
+            user: Django User object (for creating fork)
             user_preferences: User dietary restrictions, allergies, etc.
 
         Returns:
-            (success: bool, recipe_data: Dict, message: str)
+            (success: bool, result_data: Dict, message: str)
+            result_data contains: canonical_recipe, user_recipe, is_new
         """
         print(f"[RECIPE AGENT] Processing query: '{user_query}'")
 
-        # Step 1: Search for recipes
+        # STEP 1: Check if canonical recipe already exists
+        normalized_name = self._normalize_recipe_name(user_query)
+        existing_canonical = await self._find_existing_canonical(normalized_name)
+
+        if existing_canonical:
+            print(
+                f"[REUSE] Found existing canonical: {existing_canonical.name}")
+
+            # Create or get user fork
+            user_fork = await self._create_or_get_user_fork(user, existing_canonical)
+
+            # Serialize for response
+            from .serializers import CanonicalRecipeSerializer, RecipeSerializer
+
+            @sync_to_async
+            def serialize_recipes():
+                canonical_data = CanonicalRecipeSerializer(
+                    existing_canonical).data
+                fork_data = RecipeSerializer(user_fork).data
+                return canonical_data, fork_data
+
+            canonical_data, fork_data = await serialize_recipes()
+
+            return True, {
+                'canonical_recipe': canonical_data,
+                'user_recipe': fork_data,
+                'is_new': False
+            }, f"Found existing recipe: {existing_canonical.name}"
+
+        # STEP 2: Recipe doesn't exist - search and create new canonical
+        print(f"[SEARCH] No canonical found, searching web...")
         recipe_urls = await self._search_recipes(user_query)
         if not recipe_urls:
             return False, None, "No recipes found for your query"
 
-        # Step 2: Scrape best recipe
+        # STEP 3: Scrape best recipe
         scraped_data = None
         for url in recipe_urls[:3]:  # Try first 3 URLs
             scraped_data = await self._scrape_recipe(url)
@@ -73,7 +115,7 @@ class RecipeAgentService:
         if not scraped_data:
             return False, None, "Could not extract recipe from websites"
 
-        # Step 3: Convert to RCIP format using AI
+        # STEP 4: Convert to RCIP format using AI
         rcip_recipe = await self._convert_to_rcip(
             scraped_data,
             user_query,
@@ -83,9 +125,211 @@ class RecipeAgentService:
         if not rcip_recipe:
             return False, None, "Failed to convert recipe to standard format"
 
+        # STEP 5: Create canonical recipe
+        canonical = await self._create_canonical_recipe(
+            rcip_recipe,
+            source_type='ai_generated',
+            original_creator=user
+        )
+
+        # STEP 6: Create user fork
+        user_fork = await self._create_user_fork(user, canonical, rcip_recipe)
+
+        print(f"[SUCCESS] Created new canonical recipe: {canonical.name}")
+
+        # Serialize for response
+        from .serializers import CanonicalRecipeSerializer, RecipeSerializer
+
+        @sync_to_async
+        def serialize_recipes():
+            canonical_data = CanonicalRecipeSerializer(canonical).data
+            fork_data = RecipeSerializer(user_fork).data
+            return canonical_data, fork_data
+
+        canonical_data, fork_data = await serialize_recipes()
+
+        return True, {
+            'canonical_recipe': canonical_data,
+            'user_recipe': fork_data,
+            'is_new': True
+        }, f"Created new recipe: {canonical.name}"
+
+    # ============================================================================
+    # DEDUPLICATION HELPER METHODS
+    # ============================================================================
+
+    def _normalize_recipe_name(self, name: str) -> str:
+        """Normalize recipe name for comparison (lowercase, remove special chars, extra spaces)"""
+        normalized = name.lower().strip()
+        normalized = re.sub(r'[^\w\s]', '', normalized)
+        normalized = ' '.join(normalized.split())
+        return normalized
+
+    @sync_to_async
+    def _find_existing_canonical(self, normalized_name: str):
+        """Check if canonical recipe exists (by normalized name or similar)"""
+        from .models import CanonicalRecipe
+        from django.db.models import Q
+
+        # Try exact normalized name match first
+        canonical = CanonicalRecipe.objects.filter(
+            name__iexact=normalized_name,
+            is_published=True
+        ).first()
+
+        if canonical:
+            return canonical
+
+        # Try partial match (first significant word)
+        words = normalized_name.split()
+        if words:
+            first_word = words[0]
+            # Find recipes starting with the same word
+            similar = CanonicalRecipe.objects.filter(
+                name__icontains=first_word,
+                is_published=True
+            ).first()
+            return similar
+
+        return None
+
+    @sync_to_async
+    def _create_or_get_user_fork(self, user, canonical_recipe):
+        """Create or retrieve user's fork of canonical recipe"""
+        from .models import Recipe
+
+        # Check if user already has a fork
+        existing_fork = Recipe.objects.filter(
+            created_by=user,
+            canonical_recipe=canonical_recipe,
+            is_fork=True
+        ).first()
+
+        if existing_fork:
+            print(f"[FORK] User already has fork: {existing_fork.id}")
+            return existing_fork
+
+        # Create new fork
+        fork = Recipe.objects.create(
+            canonical_recipe=canonical_recipe,
+            is_fork=True,
+            created_by=user,
+            name=canonical_recipe.name,
+            description=canonical_recipe.description,
+            ingredients=canonical_recipe.base_ingredients,
+            steps=canonical_recipe.base_steps,
+            cuisine=canonical_recipe.cuisine,
+            difficulty=canonical_recipe.difficulty,
+            diet_labels=canonical_recipe.diet_labels,
+            prep_time_minutes=canonical_recipe.prep_time_minutes,
+            cook_time_minutes=canonical_recipe.cook_time_minutes,
+            total_time_minutes=canonical_recipe.total_time_minutes,
+            servings=canonical_recipe.servings,
+            user_modifications={},  # No modifications yet
+            recipe_hash=None  # NULL for forks - bypasses unique constraint
+        )
+
+        # Update canonical statistics
+        canonical_recipe.total_saves += 1
+        canonical_recipe.save(update_fields=['total_saves'])
+
+        print(f"[FORK] Created new fork: {fork.id}")
+        return fork
+
+    @sync_to_async
+    def _create_canonical_recipe(self, rcip_data: Dict, source_type: str, original_creator):
+        """Create new canonical recipe from RCIP data"""
+        from .models import CanonicalRecipe
+
+        meta = rcip_data.get('meta', {})
+
+        # Calculate hash for deduplication
+        hash_string = self._calculate_recipe_hash(
+            meta.get('name', 'Untitled'),
+            rcip_data.get('ingredients', [])
+        )
+
+        # Check if hash already exists (race condition protection)
+        existing = CanonicalRecipe.objects.filter(
+            recipe_hash=hash_string).first()
+        if existing:
+            print(
+                f"[RACE CONDITION] Canonical with hash already exists: {existing.name}")
+            return existing
+
+        canonical = CanonicalRecipe.objects.create(
+            name=meta.get('name', 'Untitled Recipe'),
+            description=meta.get('description', ''),
+            source_type=source_type,
+            ai_source_url=meta.get('source_url'),
+            original_creator=original_creator,
+            base_ingredients=rcip_data.get('ingredients', []),
+            base_steps=rcip_data.get('steps', []),
+            cuisine=meta.get('keywords', [''])[
+                0] if meta.get('keywords') else '',
+            difficulty=meta.get('difficulty', 'intermediate'),
+            diet_labels=meta.get('diet_labels', []),
+            prep_time_minutes=meta.get('prep_time_minutes'),
+            cook_time_minutes=meta.get('cook_time_minutes'),
+            total_time_minutes=meta.get('total_time_minutes'),
+            servings=meta.get('servings', {}).get('amount', 4) if isinstance(
+                meta.get('servings'), dict) else meta.get('servings', 4),
+            recipe_hash=hash_string
+        )
+
         print(
-            f"[SUCCESS] Recipe Agent: Successfully processed '{rcip_recipe['meta']['name']}'")
-        return True, rcip_recipe, f"Found recipe: {rcip_recipe['meta']['name']}"
+            f"[CANONICAL] Created: {canonical.name} (hash: {hash_string[:8]}...)")
+        return canonical
+
+    @sync_to_async
+    def _create_user_fork(self, user, canonical_recipe, rcip_data: Dict):
+        """Create user's fork from canonical recipe"""
+        from .models import Recipe
+
+        fork = Recipe.objects.create(
+            canonical_recipe=canonical_recipe,
+            is_fork=True,
+            created_by=user,
+            name=canonical_recipe.name,
+            description=canonical_recipe.description,
+            ingredients=canonical_recipe.base_ingredients,
+            steps=canonical_recipe.base_steps,
+            cuisine=canonical_recipe.cuisine,
+            difficulty=canonical_recipe.difficulty,
+            diet_labels=canonical_recipe.diet_labels,
+            prep_time_minutes=canonical_recipe.prep_time_minutes,
+            cook_time_minutes=canonical_recipe.cook_time_minutes,
+            total_time_minutes=canonical_recipe.total_time_minutes,
+            servings=canonical_recipe.servings,
+            user_modifications={},
+            recipe_hash=None  # NULL for forks - bypasses unique constraint
+        )
+
+        # Update canonical statistics
+        canonical_recipe.total_saves += 1
+        canonical_recipe.save(update_fields=['total_saves'])
+
+        return fork
+
+    def _calculate_recipe_hash(self, name: str, ingredients: List[Dict]) -> str:
+        """Calculate hash based on recipe content for deduplication"""
+        # Normalize recipe name (lowercase, remove extra spaces)
+        normalized_name = ' '.join(name.lower().split())
+
+        # Sort ingredients by name for consistent hashing
+        sorted_ingredients = sorted(
+            [ing.get('name', '').lower()
+             for ing in ingredients if ing.get('name')]
+        )
+
+        # Create hash string
+        hash_string = f"{normalized_name}:{','.join(sorted_ingredients)}"
+
+        return hashlib.sha256(hash_string.encode()).hexdigest()
+
+    # ============================================================================
+    # RECIPE SEARCH & SCRAPING (Existing Methods)
+    # ============================================================================
 
     async def _search_recipes(self, query: str, max_results: int = 5) -> List[str]:
         """Search for recipes using DuckDuckGo"""
@@ -187,11 +431,22 @@ User Preferences: {user_preferences or 'None'}
 Text:
 {scraped_data['text'][:3000]}
 
+CRITICAL MEASUREMENT RULES:
+1. ALWAYS include specific measurements (never "to taste" or "some")
+2. For solids (flour, sugar, meat, vegetables): use WEIGHT (g, kg, oz, lb)
+3. For liquids (water, milk, oil, juice): use VOLUME (ml, l, cups, fl oz)
+4. For small amounts: use weight (10g butter) not vague terms (tablespoon)
+5. For eggs/items: use COUNT (2 eggs, 3 tomatoes)
+6. If original recipe is vague, estimate reasonable amounts based on servings
+
 Return in this exact format:
 
 INGREDIENTS:
 - 300g flour
+- 250ml milk
 - 2 eggs
+- 100g butter
+- 5ml vanilla extract
 ...
 
 STEPS:

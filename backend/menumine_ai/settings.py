@@ -108,15 +108,72 @@ else:
 # Redis & Channels
 REDIS_URL = env('REDIS_URL', default='redis://localhost:6379/0')
 
-# Channels
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            "hosts": [REDIS_URL],
+# Django Caching - with fallback to LocMemCache if Redis is unavailable
+try:
+    import redis
+    # Test Redis connection
+    r = redis.from_url(REDIS_URL, socket_connect_timeout=1)
+    r.ping()
+    # If Redis is available, use it
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
+                'RETRY_ON_TIMEOUT': True,
+                'MAX_CONNECTIONS': 50,
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 50,
+                    'retry_on_timeout': True,
+                },
+            }
+        }
+    }
+    print("[INFO] Using Redis for caching")
+except (ImportError, redis.exceptions.ConnectionError, Exception) as e:
+    # Fallback to in-memory cache for development
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
+    print(
+        f"[WARNING] Redis not available ({type(e).__name__}), using in-memory cache for development")
+
+# Django Channels - WebSocket Layer (Redis-backed for production performance)
+try:
+    # Test Redis connection for channels
+    r_test = redis.from_url(REDIS_URL, socket_connect_timeout=1)
+    r_test.ping()
+
+    # Redis is available - use it for channels (RECOMMENDED for production)
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                "hosts": [REDIS_URL],
+                "capacity": 1500,  # Maximum number of messages to store
+                "expiry": 10,  # Message expiry time in seconds
+                "group_expiry": 86400,  # Group expiry time (24 hours)
+                "symmetric_encryption_keys": [env('SECRET_KEY', default='change-me-in-production')],
+            },
         },
-    },
-}
+    }
+    print("[INFO] Using Redis for Django Channels (WebSocket layer)")
+except (ImportError, redis.exceptions.ConnectionError, Exception) as e:
+    # Fallback to in-memory channel layer for development without Redis
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
+    print(
+        f"[WARNING] Redis not available ({type(e).__name__}), using in-memory channel layer for development")
+    print("[WARNING] In-memory channels don't support multiple workers - only for local development!")
 
 # REST Framework
 REST_FRAMEWORK = {

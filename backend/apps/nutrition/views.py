@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import timedelta
+from asgiref.sync import async_to_sync
 
 from .models import NutritionEntry, NutritionGoal, MealPlan
 from .serializers import (
@@ -12,23 +13,24 @@ from .serializers import (
 )
 from apps.ai_agents.services import AIOrchestrator
 
+
 class NutritionEntryViewSet(viewsets.ModelViewSet):
     """Nutrition tracking and analysis"""
     serializer_class = NutritionEntrySerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
         return NutritionEntry.objects.filter(user=self.request.user)
-    
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-    
+
     @action(detail=False, methods=['post'])
     def ai_log_meal(self, request):
         """Log meal using natural language"""
         text = request.data.get('text', '')
         meal_type = request.data.get('meal_type', 'snack')
-        
+
         orchestrator = AIOrchestrator()
         context = {
             'current_stats': {
@@ -40,14 +42,12 @@ class NutritionEntryViewSet(viewsets.ModelViewSet):
                 'daily_protein': request.user.daily_protein_goal
             }
         }
-        
+
         # Process with AI
-        import asyncio
-        loop = asyncio.new_event_loop()
-        result = loop.run_until_complete(
-            orchestrator.nutrition_coach.analyze_nutrition(text, context)
+        result = async_to_sync(orchestrator.nutrition_coach.analyze_nutrition)(
+            text, context
         )
-        
+
         if result:
             # Create nutrition entry
             entry = NutritionEntry.objects.create(
@@ -60,30 +60,30 @@ class NutritionEntryViewSet(viewsets.ModelViewSet):
                 fat=result['total_nutrition']['fat'],
                 ai_analyzed=True
             )
-            
+
             return Response({
                 'success': True,
                 'entry': NutritionEntrySerializer(entry).data,
                 'analysis': result
             })
-        
+
         return Response({
             'success': False,
             'message': 'Could not analyze meal'
         }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     @action(detail=False, methods=['get'])
     def today_summary(self, request):
         """Get today's nutrition summary"""
         today_entries = self.get_queryset().filter(
             created_at__date=timezone.now().date()
         )
-        
+
         total_calories = sum(e.calories for e in today_entries)
         total_protein = sum(e.protein for e in today_entries)
         total_carbs = sum(e.carbs for e in today_entries)
         total_fat = sum(e.fat for e in today_entries)
-        
+
         return Response({
             'date': timezone.now().date(),
             'totals': {
@@ -106,7 +106,7 @@ class NutritionEntryViewSet(viewsets.ModelViewSet):
             },
             'entries': NutritionEntrySerializer(today_entries, many=True).data
         })
-    
+
     @action(detail=False, methods=['get'])
     def weekly_report(self, request):
         """Get weekly nutrition report"""
@@ -114,7 +114,7 @@ class NutritionEntryViewSet(viewsets.ModelViewSet):
         week_entries = self.get_queryset().filter(
             created_at__gte=week_ago
         )
-        
+
         # Calculate daily averages
         days_data = {}
         for entry in week_entries:
@@ -128,15 +128,13 @@ class NutritionEntryViewSet(viewsets.ModelViewSet):
             days_data[date]['protein'] += entry.protein
             days_data[date]['carbs'] += entry.carbs
             days_data[date]['fat'] += entry.fat
-        
+
         # Generate insights
         orchestrator = AIOrchestrator()
-        import asyncio
-        loop = asyncio.new_event_loop()
-        insights = loop.run_until_complete(
-            orchestrator.generate_nutrition_insights(request.user.id)
+        insights = async_to_sync(orchestrator.generate_nutrition_insights)(
+            request.user.id
         )
-        
+
         return Response({
             'period': {
                 'start': week_ago.date(),
@@ -151,17 +149,17 @@ class NutritionEntryViewSet(viewsets.ModelViewSet):
             },
             'insights': insights
         })
-    
+
     @action(detail=False, methods=['post'])
     def get_coaching(self, request):
         """Get AI nutrition coaching advice"""
         orchestrator = AIOrchestrator()
-        
+
         # Gather context
         today_entries = self.get_queryset().filter(
             created_at__date=timezone.now().date()
         )
-        
+
         context = {
             'current_stats': {
                 'calories_today': sum(e.calories for e in today_entries),
@@ -184,22 +182,20 @@ class NutritionEntryViewSet(viewsets.ModelViewSet):
                 for e in today_entries
             ]
         }
-        
-        import asyncio
-        loop = asyncio.new_event_loop()
-        advice = loop.run_until_complete(
-            orchestrator.nutrition_coach.generate_advice(context)
+
+        advice = async_to_sync(orchestrator.nutrition_coach.generate_advice)(
+            context
         )
-        
+
         return Response(advice)
-    
+
     def _get_calories_today(self, user):
         today_entries = NutritionEntry.objects.filter(
             user=user,
             created_at__date=timezone.now().date()
         )
         return sum(e.calories for e in today_entries)
-    
+
     def _get_macros_today(self, user):
         today_entries = NutritionEntry.objects.filter(
             user=user,

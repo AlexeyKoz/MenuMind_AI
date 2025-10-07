@@ -15,6 +15,7 @@ msgpack==1.0.8
 # Database
 psycopg2==2.9.10
 redis==5.0.8
+django-redis==5.4.0  # Redis cache backend
 
 # HTTP & API
 django-cors-headers==4.4.0

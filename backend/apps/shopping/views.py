@@ -3,10 +3,20 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q
+from django.utils import timezone
 from asgiref.sync import async_to_sync
 from decimal import Decimal
 from datetime import datetime
 import uuid
+import sys
+
+# Fix for Windows console Unicode/emoji encoding issues
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(
+        sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(
+        sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 try:
     from channels.layers import get_channel_layer
@@ -239,6 +249,14 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         if unit_lower in ['cup', 'cups']:
             return quantity * 236.588
 
+        # Tablespoons to ml
+        if unit_lower in ['tbsp', 'tablespoon', 'tablespoons']:
+            return quantity * 14.787
+
+        # Teaspoons to ml
+        if unit_lower in ['tsp', 'teaspoon', 'teaspoons']:
+            return quantity * 4.929
+
         # Pints to ml
         if unit_lower in ['pint', 'pints']:
             return quantity * 473.176
@@ -253,6 +271,121 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
         # Default
         return quantity
+
+    def _validate_and_fix_ingredient(self, ingredient: dict, ingredient_name: str) -> tuple:
+        """
+        Validate ingredient measurement and apply intelligent fallbacks if needed.
+        Returns: (quantity, unit, counter_type)
+        """
+        quantity = ingredient.get('amount', 1.0)
+        unit = ingredient.get('unit', 'unit')
+
+        # Convert to float to avoid Decimal issues
+        try:
+            quantity = float(quantity) if quantity else 1.0
+        except (ValueError, TypeError):
+            print(
+                f"⚠️ [VALIDATION] Invalid quantity '{quantity}' for {ingredient_name}, defaulting to 1.0")
+            quantity = 1.0
+
+        # Ensure unit is a string
+        if not unit or not isinstance(unit, str):
+            unit = 'unit'
+
+        unit_lower = unit.lower().strip()
+        name_lower = ingredient_name.lower()
+
+        # Define unit categories (more comprehensive)
+        weight_units = [
+            'g', 'gram', 'grams', 'gr',
+            'kg', 'kilogram', 'kilograms', 'kilo',
+            'oz', 'ounce', 'ounces',
+            'lb', 'lbs', 'pound', 'pounds'
+        ]
+        liquid_units = [
+            'ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres',
+            'l', 'liter', 'liters', 'litre', 'litres',
+            'fl oz', 'fluid ounce', 'fluid ounces', 'floz',
+            'cup', 'cups',
+            'tbsp', 'tablespoon', 'tablespoons',
+            'tsp', 'teaspoon', 'teaspoons',
+            'pint', 'pints', 'quart', 'quarts',
+            'gallon', 'gallons'
+        ]
+        count_units = [
+            'piece', 'pieces', 'unit', 'units', 'item', 'items',
+            'whole', 'clove', 'cloves', 'leaf', 'leaves'
+        ]
+
+        # Check if unit is recognized
+        if unit_lower in weight_units:
+            counter_type = 'weight'
+            print(
+                f"✅ [VALIDATION] {ingredient_name}: {quantity} {unit} -> WEIGHT counter")
+        elif unit_lower in liquid_units:
+            counter_type = 'liquid'
+            print(
+                f"✅ [VALIDATION] {ingredient_name}: {quantity} {unit} -> LIQUID counter")
+        elif unit_lower in count_units:
+            counter_type = 'quantity'  # Use 'quantity' to match existing code
+            print(
+                f"✅ [VALIDATION] {ingredient_name}: {quantity} {unit} -> QUANTITY counter")
+        else:
+            # Unit not recognized - apply intelligent fallback
+            print(
+                f"⚠️ [VALIDATION] Unknown unit '{unit}' for {ingredient_name}, inferring from ingredient type...")
+
+            # Countable items (eggs, fruits, vegetables by piece)
+            countable_keywords = ['egg', 'apple', 'tomato', 'onion', 'banana', 'potato',
+                                  'lemon', 'lime', 'orange', 'clove', 'bay leaf', 'leaf',
+                                  'avocado', 'garlic head', 'head', 'can', 'jar', 'pack',
+                                  'bunch', 'stalk', 'sprig']
+            if any(keyword in name_lower for keyword in countable_keywords):
+                unit = 'pieces'
+                counter_type = 'quantity'  # Use 'quantity' to match existing code
+                print(
+                    f"🔧 [INFERRED] {ingredient_name} -> QUANTITY COUNTER (pieces)")
+
+            # Liquids (should use liquid counter with ml)
+            elif any(keyword in name_lower for keyword in [
+                'water', 'milk', 'oil', 'broth', 'stock', 'juice', 'wine',
+                'cream', 'sauce', 'vinegar', 'soy sauce', 'liquid', 'extract',
+                'coconut milk', 'olive oil', 'vegetable oil'
+            ]):
+                # If quantity is very small (<50), likely teaspoons/tablespoons, convert to ml
+                if quantity < 50:
+                    original_qty = quantity
+                    quantity = quantity * 15  # Approximate tbsp to ml
+                    print(
+                        f"🔧 [ESTIMATED] {ingredient_name}: {original_qty} (assumed tbsp) -> {quantity}ml")
+                unit = 'ml'
+                counter_type = 'liquid'
+                print(f"🔧 [INFERRED] {ingredient_name} -> LIQUID COUNTER (ml)")
+
+            # Spices and herbs (small weights - use weight counter with grams)
+            elif any(keyword in name_lower for keyword in [
+                'salt', 'pepper', 'cinnamon', 'cumin', 'paprika', 'oregano',
+                'basil', 'thyme', 'parsley', 'vanilla', 'spice', 'herb',
+                'garlic powder', 'onion powder', 'ginger', 'nutmeg'
+            ]):
+                # If quantity is very small (<5), likely teaspoons, convert to grams
+                if quantity < 5:
+                    original_qty = quantity
+                    quantity = quantity * 5  # Approximate tsp to grams
+                    print(
+                        f"🔧 [ESTIMATED] {ingredient_name}: {original_qty} (assumed tsp) -> {quantity}g")
+                unit = 'g'
+                counter_type = 'weight'
+                print(f"🔧 [INFERRED] {ingredient_name} -> WEIGHT COUNTER (g)")
+
+            # Solid ingredients (default to weight counter with grams)
+            else:
+                unit = 'g'
+                counter_type = 'weight'
+                print(
+                    f"🔧 [INFERRED] {ingredient_name} -> WEIGHT COUNTER (g) [default for solids]")
+
+        return quantity, unit, counter_type
 
     def _convert_to_user_preference(self, quantity, unit, weight_pref, liquid_pref):
         """Convert recipe units to user's preferred measurement system"""
@@ -392,16 +525,12 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
         # Run recipe agent to find recipe
         agent = RecipeAgentService()
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
 
         try:
             print(f"[RECIPE AGENT] Searching for: {query}")
-            success, recipe_data, message = loop.run_until_complete(
-                agent.find_and_convert_recipe(query, user_preferences)
+            success, recipe_data, message = async_to_sync(agent.find_and_convert_recipe)(
+                query, request.user, user_preferences
             )
-            loop.close()
 
             if not success:
                 print(f"[ERROR] Recipe agent failed: {message}")
@@ -410,46 +539,19 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     'message': message or 'Could not find recipe'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            print(
-                f"[SUCCESS] Recipe found: {recipe_data.get('meta', {}).get('name')}")
+            # ✅ Extract recipe objects from the returned data
+            # The service returns: {'canonical_recipe': {...}, 'user_recipe': {...}, 'is_new': bool}
+            user_recipe_data = recipe_data.get('user_recipe', {})
+            canonical_recipe_data = recipe_data.get('canonical_recipe', {})
 
-            # Check for duplicates and handle versioning
-            existing_recipes = RecipeDeduplicationService.find_duplicate_recipes(
-                recipe_data)
+            # Get the actual model objects by ID
+            from apps.recipes.models import Recipe, CanonicalRecipe
 
-            if existing_recipes:
-                existing_recipe = existing_recipes.first()
-                print(f"[REUSE] Found existing recipe: {existing_recipe.name}")
-                recipe = existing_recipe
-                created = False
-            else:
-                # Create new recipe
-                print(f"[CREATE] Creating new recipe in database")
-                recipe = Recipe(
-                    name=recipe_data['meta']['name'],
-                    description=recipe_data['meta'].get('description', ''),
-                    author=recipe_data['meta'].get('author', ''),
-                    source_url=recipe_data['meta'].get('source_url', ''),
-                    ingredients=recipe_data.get('ingredients', []),
-                    steps=recipe_data.get('steps', []),
-                    prep_time_minutes=recipe_data['meta'].get(
-                        'prep_time_minutes'),
-                    cook_time_minutes=recipe_data['meta'].get(
-                        'cook_time_minutes'),
-                    total_time_minutes=recipe_data['meta'].get(
-                        'total_time_minutes'),
-                    servings=recipe_data['meta'].get(
-                        'servings', {}).get('amount', 4),
-                    difficulty=recipe_data['meta'].get(
-                        'difficulty', 'intermediate'),
-                    cuisine=recipe_data['meta'].get('keywords', [''])[
-                        0] if recipe_data['meta'].get('keywords') else '',
-                    diet_labels=recipe_data['meta'].get('diet_labels', []),
-                    created_by=request.user
-                )
-                recipe.save()
-                created = True
-                print(f"[OK] Recipe saved to database: {recipe.id}")
+            recipe = Recipe.objects.get(id=user_recipe_data['id'])
+            canonical_recipe = recipe.canonical_recipe
+
+            print(f"[SUCCESS] Using recipe: {canonical_recipe.name}")
+            print(f"[OK] User fork ID: {recipe.id}")
 
             # Add ingredients to shopping list with duplicate detection and unit conversion
             items_created = []
@@ -466,59 +568,48 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             print(
                 f"[USER PREFS] Weight: {user_weight_preference}, Liquid: {user_liquid_preference}")
 
-            for ingredient in recipe.ingredients:
+            # Track AI messages (these are NOT shopping items)
+            ai_messages = []
+
+            # Use canonical recipe's base ingredients
+            for ingredient in canonical_recipe.base_ingredients:
                 ingredient_name = ingredient.get('name', '')
                 if not ingredient_name:
                     continue
 
-                # Extract quantity and unit
-                quantity = 1.0
-                unit = 'unit'
+                # FILTER OUT AI MESSAGES (text that's not an actual ingredient)
+                # Detect long text that's clearly a message, not an ingredient
+                if len(ingredient_name) > 100 or any(phrase in ingredient_name.lower() for phrase in [
+                    'there are no', 'however,', 'i can provide', 'the text appears',
+                    'wikipedia', 'article about', 'i cannot', 'unfortunately',
+                    'please note', 'here are the', 'standard recipe'
+                ]):
+                    print(
+                        f"📝 [AI MESSAGE] Detected AI message, not adding as item: {ingredient_name[:100]}...")
+                    ai_messages.append({
+                        'text': ingredient_name,
+                        'type': 'info',
+                        'timestamp': timezone.now().isoformat()
+                    })
+                    continue  # Skip this "ingredient" - it's actually a message
 
-                if 'amount' in ingredient:
-                    # Convert to float to avoid Decimal issues
-                    quantity = float(
-                        ingredient['amount']) if ingredient['amount'] else 1.0
+                # STEP 1: Validate and fix ingredient measurements (intelligent fallbacks)
+                # This ensures EVERY ingredient gets proper weight/liquid/count classification
+                quantity, unit, counter_type = self._validate_and_fix_ingredient(
+                    ingredient, ingredient_name
+                )
 
-                if 'unit' in ingredient:
-                    unit = ingredient['unit'] or 'unit'
+                print(
+                    f"✅ [VALIDATED] {ingredient_name}: {quantity} {unit} ({counter_type})")
 
-                # Convert units based on user preferences
+                # STEP 2: Convert units based on user preferences
+                # This preserves the counter type while converting to user's preferred units
                 quantity, unit = self._convert_to_user_preference(
                     quantity, unit, user_weight_preference, user_liquid_preference
                 )
 
                 print(
-                    f"[CONVERSION] {ingredient_name}: {ingredient.get('amount')} {ingredient.get('unit')} -> {quantity} {unit}")
-
-                # Determine which counter to use based on unit type
-                unit_lower = unit.lower()
-
-                # Define unit categories
-                weight_units = ['g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms',
-                                'oz', 'ounce', 'ounces', 'lb', 'lbs', 'pound', 'pounds']
-                liquid_units = ['ml', 'milliliter', 'milliliters', 'l', 'liter', 'liters',
-                                'litre', 'litres', 'fl oz', 'fluid ounce', 'fluid ounces',
-                                'cup', 'cups', 'pint', 'pints', 'quart', 'quarts',
-                                'gallon', 'gallons']
-                count_units = ['piece', 'pieces', 'unit', 'units', 'item', 'items',
-                               'tbsp', 'tablespoon', 'tablespoons', 'tsp', 'teaspoon',
-                               'teaspoons', 'clove', 'cloves', 'slice', 'slices',
-                               'pinch', 'pinches', 'dash', 'dashes', 'can', 'cans',
-                               'jar', 'jars', 'pack', 'packs', 'package', 'packages',
-                               'bunch', 'bunches', 'head', 'heads', 'stalk', 'stalks',
-                               'leaf', 'leaves', 'sprig', 'sprigs', 'as needed', 'to taste']
-
-                # Determine counter type
-                if unit_lower in weight_units:
-                    counter_type = 'weight'
-                elif unit_lower in liquid_units:
-                    counter_type = 'liquid'
-                else:
-                    counter_type = 'quantity'
-
-                print(
-                    f"[COUNTER] {ingredient_name}: {counter_type} counter ({quantity} {unit})")
+                    f"[USER PREF] {ingredient_name}: {quantity} {unit} (will store in base units for {counter_type})")
 
                 # Normalize ingredient name for comparison
                 normalized_name = ingredient_name.lower().strip()
@@ -674,15 +765,19 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     'id': str(recipe.id),
                     'name': recipe.name,
                     'description': recipe.description,
-                    'source_url': recipe.source_url,
-                    'servings': recipe.servings,
-                    'created': created
+                    'source_url': canonical_recipe.ai_source_url or '',
+                    'servings': canonical_recipe.servings,
+                    'created': recipe_data.get('is_new', False),
+                    'canonical_id': str(canonical_recipe.id),
+                    'canonical_name': canonical_recipe.name,
+                    'user_query': query  # The original search query
                 },
                 'items_added': len(items_created),
                 'items_updated': len(items_updated),
                 'total_items': total_items,
                 'new_items': [ShoppingItemSerializer(i).data for i in items_created],
                 'updated_items': [ShoppingItemSerializer(i).data for i in items_updated],
+                'ai_messages': ai_messages,  # AI messages separated from shopping items
                 'message': message
             })
 
@@ -704,18 +799,11 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         from config.external_services import MockStoreServices
         services = MockStoreServices()
 
-        import asyncio
-        loop = asyncio.new_event_loop()
-
         if store_type == 'wolt':
-            result = loop.run_until_complete(
-                services.wolt_order_simulation(items)
-            )
+            result = async_to_sync(services.wolt_order_simulation)(items)
         elif store_type == 'shufersal':
             item_names = [item['name'] for item in items]
-            result = loop.run_until_complete(
-                services.shufersal_price_check(item_names)
-            )
+            result = async_to_sync(services.shufersal_price_check)(item_names)
         else:
             return Response(
                 {'error': 'Invalid store type'},
@@ -1564,7 +1652,6 @@ class ShoppingItemViewSet(viewsets.ModelViewSet):
             # Send WebSocket notification to all connected users
             try:
                 from channels.layers import get_channel_layer
-                from asgiref.sync import async_to_sync
 
                 channel_layer = get_channel_layer()
                 if channel_layer:

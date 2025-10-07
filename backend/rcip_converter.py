@@ -110,13 +110,13 @@ class RCIPConverter:
         return ingredients
 
     def _parse_ingredient_line(self, line: str) -> Optional[Dict]:
-        """Parse a single ingredient line"""
+        """Parse a single ingredient line with improved unit detection"""
         # Pattern: number/fraction unit? name
         # Examples: "200g flour", "2 eggs", "1 1/2 cups sugar"
 
         # Try to match quantity patterns
         patterns = [
-            # "200g flour", "2kg sugar"
+            # "200g flour", "2kg sugar", "500ml water"
             r'^(\d+(?:\.\d+)?)\s*([a-z]+)\s+(.+)$',
             # "2 eggs", "3 tomatoes"
             r'^(\d+(?:\.\d+)?)\s+(.+)$',
@@ -132,19 +132,24 @@ class RCIPConverter:
                 groups = match.groups()
 
                 if len(groups) == 3:  # amount, unit, name
+                    unit = self._normalize_unit(groups[1].lower())
                     return {
                         "name": groups[2].strip(),
                         "amount": self._parse_amount(groups[0]),
-                        "unit": groups[1].lower(),
+                        "unit": unit,
                         "category": self._guess_category(groups[2])
                     }
                 elif len(groups) == 2:  # amount, name (no unit)
                     try:
                         amount = float(groups[0])
+                        # Intelligent unit detection based on ingredient name
+                        ingredient_name = groups[1].strip().lower()
+                        unit = self._infer_unit_from_ingredient(
+                            ingredient_name, amount)
                         return {
                             "name": groups[1].strip(),
                             "amount": amount,
-                            "unit": "pieces",
+                            "unit": unit,
                             "category": self._guess_category(groups[1])
                         }
                     except ValueError:
@@ -170,6 +175,59 @@ class RCIPConverter:
             "unit": "as needed",
             "category": "other"
         }
+
+    def _normalize_unit(self, unit: str) -> str:
+        """Normalize unit variations to standard forms"""
+        unit_mapping = {
+            # Weight units
+            'gram': 'g', 'grams': 'g', 'gr': 'g',
+            'kilogram': 'kg', 'kilograms': 'kg', 'kilo': 'kg',
+            'ounce': 'oz', 'ounces': 'oz',
+            'pound': 'lb', 'pounds': 'lb', 'lbs': 'lb',
+            # Liquid units
+            'milliliter': 'ml', 'milliliters': 'ml', 'millilitre': 'ml', 'millilitres': 'ml',
+            'liter': 'l', 'liters': 'l', 'litre': 'l', 'litres': 'l',
+            'cup': 'cup', 'cups': 'cup',
+            'tablespoon': 'tbsp', 'tablespoons': 'tbsp', 'tbsp': 'tbsp',
+            'teaspoon': 'tsp', 'teaspoons': 'tsp', 'tsp': 'tsp',
+            # Volume
+            'floz': 'fl oz', 'fl.oz': 'fl oz',
+            # Count
+            'piece': 'pieces', 'pcs': 'pieces', 'pc': 'pieces'
+        }
+
+        return unit_mapping.get(unit.lower(), unit)
+
+    def _infer_unit_from_ingredient(self, ingredient_name: str, amount: float) -> str:
+        """Intelligently infer unit based on ingredient type and amount"""
+        name_lower = ingredient_name.lower()
+
+        # Countable items (eggs, tomatoes, apples, etc.)
+        countable_keywords = ['egg', 'apple', 'tomato', 'onion', 'banana', 'potato',
+                              'lemon', 'lime', 'orange', 'clove', 'bay leaf', 'leaf']
+        if any(keyword in name_lower for keyword in countable_keywords):
+            return 'pieces'
+
+        # Liquids (should use ml)
+        liquid_keywords = ['water', 'milk', 'oil', 'broth', 'stock', 'juice', 'wine',
+                           'cream', 'sauce', 'vinegar', 'soy sauce']
+        if any(keyword in name_lower for keyword in liquid_keywords):
+            return 'ml'
+
+        # Spices and herbs (typically small amounts in grams)
+        spice_keywords = ['salt', 'pepper', 'cinnamon', 'cumin', 'paprika',
+                          'oregano', 'basil', 'thyme', 'parsley', 'vanilla']
+        if any(keyword in name_lower for keyword in spice_keywords):
+            return 'g'
+
+        # Meat, flour, sugar, vegetables (typically use grams)
+        solid_keywords = ['flour', 'sugar', 'rice', 'pasta', 'meat', 'chicken',
+                          'beef', 'pork', 'fish', 'cheese', 'butter']
+        if any(keyword in name_lower for keyword in solid_keywords):
+            return 'g'
+
+        # Default: if amount is large (>10), likely grams, if small likely pieces
+        return 'g' if amount > 10 else 'pieces'
 
     def _parse_amount(self, amount_str: str) -> float:
         """Parse amount string to float"""
@@ -303,6 +361,3 @@ class RecipeAnalyzer:
             return 'intermediate'
         else:
             return 'advanced'
-
-
-
