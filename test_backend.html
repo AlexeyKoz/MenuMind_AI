@@ -4,11 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MenuMind AI - Backend Tester</title>
+    <title>MenuMind AI - Backend Tester (Updated 2025)</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
             background-color: #f5f5f5;
@@ -139,7 +139,8 @@
         }
 
         .input-group input,
-        .input-group textarea {
+        .input-group textarea,
+        .input-group select {
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
@@ -203,13 +204,33 @@
             margin-bottom: 10px;
             font-size: 11px;
         }
+
+        .new-feature {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 10px;
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+
+        .new-badge {
+            background-color: #28a745;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
     </style>
 </head>
 
 <body>
     <div class="header">
         <h1>🥗🤖 MenuMind AI - Backend Tester</h1>
-        <p>Comprehensive testing for Shopping Lists, Collaboration, AI Recipe Agent & RCIP APIs</p>
+        <p>Comprehensive testing for Shopping Lists, Recipes, Archive, AI Agents & RCIP APIs</p>
+        <p style="font-size: 12px; margin-top: 10px;">✨ Updated with Recipe Archive, Discover Page, and Canonical
+            Recipes features</p>
     </div>
 
     <div class="status-card">
@@ -277,336 +298,130 @@
     </div>
 
     <div class="grid">
-        <!-- Core Endpoints -->
+        <!-- Canonical Recipes (Discover Page) - NEW -->
         <div class="test-section">
             <div class="section-title">
-                <h3>🔧 Core Endpoints</h3>
+                <h3>🌐 Canonical Recipes (Discover)<span class="new-badge">NEW</span></h3>
             </div>
-            <div class="endpoint-info">Basic server health and API discovery endpoints</div>
-            <button class="button" onclick="testEndpoint('/health/')">
-                <span class="method-badge method-get">GET</span>Health Check
+            <div class="new-feature">
+                ✨ NEW: Browse, like, rate canonical recipes on the Discover page with sorting options
+            </div>
+            <div class="endpoint-info">Discover and interact with community recipes</div>
+
+            <button class="button" onclick="testEndpoint('/api/recipes/canonical/')">
+                <span class="method-badge method-get">GET</span>All Canonical Recipes
             </button>
-            <button class="button" onclick="testEndpoint('/')">
-                <span class="method-badge method-get">GET</span>API Root
+
+            <div class="input-group">
+                <label>Sort By:</label>
+                <select id="canonicalSort">
+                    <option value="recent">Most Recent</option>
+                    <option value="popular">Most Popular</option>
+                    <option value="top_rated">Top Rated</option>
+                    <option value="most_cooked">Most Cooked</option>
+                </select>
+            </div>
+            <button class="button" onclick="getCanonicalRecipesSorted()">
+                <span class="method-badge method-get">GET</span>Get Sorted Recipes
             </button>
-            <button class="button" onclick="testEndpoint('/admin/')">
-                <span class="method-badge method-get">GET</span>Admin Panel
+
+            <div class="input-group">
+                <label>Search Query:</label>
+                <input type="text" id="canonicalSearch" placeholder="pasta, chicken, etc." />
+            </div>
+            <button class="button" onclick="searchCanonicalRecipes()">
+                <span class="method-badge method-get">GET</span>Search Recipes
             </button>
-            <button class="button" onclick="testEndpoint('/api/')">
-                <span class="method-badge method-get">GET</span>API Discovery
+
+            <div class="input-group">
+                <label>Canonical Recipe ID:</label>
+                <input type="text" id="canonicalRecipeId" placeholder="Canonical recipe UUID" />
+            </div>
+            <button class="button" onclick="getCanonicalRecipeDetail()">
+                <span class="method-badge method-get">GET</span>Get Recipe Detail
             </button>
-            <div id="coreResult" class="result" style="display:none;"></div>
+            <button class="button post" onclick="likeCanonicalRecipe()">
+                <span class="method-badge method-post">POST</span>❤️ Like Recipe
+            </button>
+            <button class="button post" onclick="rateCanonicalRecipe()">
+                <span class="method-badge method-post">POST</span>⭐ Rate Recipe
+            </button>
+
+            <div class="input-group">
+                <label>Rating (1-5):</label>
+                <input type="number" id="canonicalRating" min="1" max="5" value="5" />
+            </div>
+
+            <div id="canonicalResult" class="result" style="display:none;"></div>
         </div>
 
-        <!-- Shopping Lists CRUD -->
+        <!-- My Recipes (My Recipes Page) -->
         <div class="test-section">
             <div class="section-title">
-                <h3>📋 Shopping Lists CRUD</h3>
+                <h3>📚 My Recipes<span class="new-badge">UPDATED</span></h3>
             </div>
-            <div class="endpoint-info">Basic shopping list operations: create, read, update, delete</div>
-            <button class="button" onclick="testEndpoint('/api/shopping/')">
-                <span class="method-badge method-get">GET</span>Shopping API Root
+            <div class="new-feature">
+                ✨ UPDATED: Save, archive, mark as cooked, and manage your personal recipe collection
+            </div>
+            <div class="endpoint-info">User's personal recipe collection</div>
+
+            <button class="button" onclick="testEndpoint('/api/recipes/recipes/my_recipes/')">
+                <span class="method-badge method-get">GET</span>My Saved Recipes
             </button>
-            <button class="button" onclick="testEndpoint('/api/shopping/lists/')">
-                <span class="method-badge method-get">GET</span>All Lists
-            </button>
+
             <div class="input-group">
-                <label>List ID for Detail:</label>
-                <input type="text" id="listId" placeholder="e.g., 123e4567-e89b-12d3-a456-426614174000" />
+                <label>Recipe ID for actions:</label>
+                <input type="text" id="myRecipeId" placeholder="Recipe UUID" />
             </div>
-            <button class="button" onclick="testListDetail()">
-                <span class="method-badge method-get">GET</span>List Detail
+
+            <button class="button post" onclick="markMyRecipeCooked()">
+                <span class="method-badge method-post">POST</span>🍳 Mark as Cooked (Toggle)
             </button>
-            <div class="input-group">
-                <label>New List Name:</label>
-                <input type="text" id="newListName" placeholder="My New Shopping List" />
-            </div>
-            <button class="button post" onclick="createList()">
-                <span class="method-badge method-post">POST</span>Create List
+            <button class="button post" onclick="archiveMyRecipe()">
+                <span class="method-badge method-post">POST</span>🗃️ Archive Recipe
             </button>
-            <div id="listsResult" class="result" style="display:none;"></div>
+
+            <div id="myRecipesResult" class="result" style="display:none;"></div>
         </div>
 
-        <!-- List Items Management -->
+        <!-- Recipe Archive - NEW -->
         <div class="test-section">
             <div class="section-title">
-                <h3>🛒 List Items</h3>
+                <h3>🗃️ Recipe Archive<span class="new-badge">NEW</span></h3>
             </div>
-            <div class="endpoint-info">Add, remove, and manage items within shopping lists</div>
-            <div class="input-group">
-                <label>List ID:</label>
-                <input type="text" id="itemListId" placeholder="List ID for item operations" />
+            <div class="new-feature">
+                ✨ NEW: Manage archived recipes - restore or permanently delete
             </div>
-            <div class="input-group">
-                <label>Item Name:</label>
-                <input type="text" id="itemName" placeholder="Milk, Bread, etc." />
-            </div>
-            <button class="button post" onclick="addItem()">
-                <span class="method-badge method-post">POST</span>Add Item
-            </button>
-            <div class="input-group">
-                <label>AI Items Request:</label>
-                <textarea id="aiItemsInput" placeholder="Add ingredients for pasta dinner"></textarea>
-            </div>
-            <button class="button post" onclick="addAIItems()">
-                <span class="method-badge method-post">POST</span>AI Add Items
-            </button>
-            <button class="button" onclick="testEndpoint('/api/shopping/items/')">
-                <span class="method-badge method-get">GET</span>All Items
-            </button>
-            <div id="itemsResult" class="result" style="display:none;"></div>
-        </div>
+            <div class="endpoint-info">Archive, restore, and permanently delete recipes</div>
 
-        <!-- Collaboration Features -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>👥 Collaboration</h3>
-            </div>
-            <div class="endpoint-info">Manage collaborators, permissions, and real-time sharing</div>
-            <div class="input-group">
-                <label>List ID:</label>
-                <input type="text" id="collabListId" placeholder="List ID for collaboration" />
-            </div>
-            <button class="button" onclick="getCollaborators()">
-                <span class="method-badge method-get">GET</span>Get Collaborators
+            <button class="button" onclick="testEndpoint('/api/recipes/recipes/archived_recipes/')">
+                <span class="method-badge method-get">GET</span>Archived Recipes
             </button>
-            <div class="input-group">
-                <label>Friend Name:</label>
-                <input type="text" id="friendName" placeholder="Friend's name" />
-            </div>
-            <div class="input-group">
-                <label>Collaboration Key:</label>
-                <input type="text" id="collabKey" placeholder="Friend's collaboration key" />
-            </div>
-            <button class="button post" onclick="addCollaborator()">
-                <span class="method-badge method-post">POST</span>Add Collaborator
-            </button>
-            <button class="button post" onclick="leaveList()">
-                <span class="method-badge method-post">POST</span>Leave List
-            </button>
-            <div class="input-group">
-                <label>User ID for permissions:</label>
-                <input type="text" id="userId" placeholder="User ID to update permissions" />
-            </div>
-            <button class="button post" onclick="updatePermissions()">
-                <span class="method-badge method-post">POST</span>Update Permissions
-            </button>
-            <div id="collabResult" class="result" style="display:none;"></div>
-        </div>
 
-        <!-- Archive & Deletion -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>🗑️ Archive & Deletion</h3>
-            </div>
-            <div class="endpoint-info">Soft delete, archive, restore, and permanent deletion with ownership transfer
-            </div>
-            <button class="button" onclick="testEndpoint('/api/shopping/lists/archived/')">
-                <span class="method-badge method-get">GET</span>Archived Lists
-            </button>
             <div class="input-group">
-                <label>List ID for deletion/restore:</label>
-                <input type="text" id="deleteListId" placeholder="List ID" />
+                <label>Recipe ID for archive operations:</label>
+                <input type="text" id="archiveRecipeId" placeholder="Recipe UUID" />
             </div>
-            <button class="button delete" onclick="softDeleteList()">
-                <span class="method-badge method-delete">DELETE</span>Soft Delete (Archive)
-            </button>
-            <button class="button post" onclick="restoreList()">
-                <span class="method-badge method-post">POST</span>Restore from Archive
-            </button>
-            <button class="button delete" onclick="permanentDeleteList()">
-                <span class="method-badge method-delete">DELETE</span>Permanent Delete
-            </button>
-            <div id="archiveResult" class="result" style="display:none;"></div>
-        </div>
 
-        <!-- Inventory Management -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>📦 Inventory</h3>
-            </div>
-            <div class="endpoint-info">Track quantities, weights, volumes, and expiration dates</div>
-            <button class="button" onclick="testEndpoint('/api/shopping/inventory/')">
-                <span class="method-badge method-get">GET</span>All Inventory
+            <button class="button post" onclick="restoreRecipe()">
+                <span class="method-badge method-post">POST</span>♻️ Restore Recipe
             </button>
-            <button class="button" onclick="testEndpoint('/api/shopping/inventory/expiring_soon/')">
-                <span class="method-badge method-get">GET</span>Expiring Soon
+            <button class="button delete" onclick="permanentDeleteRecipe()">
+                <span class="method-badge method-delete">DELETE</span>🗑️ Permanently Delete
             </button>
-            <button class="button" onclick="testEndpoint('/api/shopping/inventory/low_stock/')">
-                <span class="method-badge method-get">GET</span>Low Stock
-            </button>
-            <div class="input-group">
-                <label>Item ID for quantity update:</label>
-                <input type="text" id="inventoryItemId" placeholder="Item ID" />
-            </div>
-            <div class="input-group">
-                <label>Weight Quantity:</label>
-                <input type="number" id="weightQuantity" placeholder="1.5" step="0.1" />
-            </div>
-            <button class="button patch" onclick="updateWeight()">
-                <span class="method-badge method-patch">PATCH</span>Update Weight
-            </button>
-            <div class="input-group">
-                <label>Liquid Quantity:</label>
-                <input type="number" id="liquidQuantity" placeholder="2.0" step="0.1" />
-            </div>
-            <button class="button patch" onclick="updateLiquid()">
-                <span class="method-badge method-patch">PATCH</span>Update Liquid
-            </button>
-            <div id="inventoryResult" class="result" style="display:none;"></div>
-        </div>
 
-        <!-- Store Integration -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>🏪 Store Integration</h3>
-            </div>
-            <div class="endpoint-info">Mock store ordering and external integrations</div>
-            <div class="input-group">
-                <label>Store Type:</label>
-                <input type="text" id="storeType" placeholder="wolt, glovo, etc." />
-            </div>
-            <div class="input-group">
-                <label>Items (JSON):</label>
-                <textarea id="storeItems" placeholder='["item1", "item2"]'></textarea>
-            </div>
-            <button class="button post" onclick="mockStoreOrder()">
-                <span class="method-badge method-post">POST</span>Mock Store Order
-            </button>
-            <div id="storeResult" class="result" style="display:none;"></div>
-        </div>
-
-        <!-- User Profile & Settings -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>👤 User Profile & Settings</h3>
-            </div>
-            <div class="endpoint-info">User profile, settings, collaboration keys, and partner connections</div>
-            <button class="button" onclick="testEndpoint('/api/users/profile/')">
-                <span class="method-badge method-get">GET</span>Profile Details
-            </button>
-            <button class="button" onclick="testEndpoint('/api/users/profile/my_collaboration_key/')">
-                <span class="method-badge method-get">GET</span>My Collaboration Key
-            </button>
-            <button class="button post" onclick="generateCollaborationKey()">
-                <span class="method-badge method-post">POST</span>Generate New Key
-            </button>
-            <button class="button" onclick="testEndpoint('/api/users/profile/nutrition_goals/')">
-                <span class="method-badge method-get">GET</span>Nutrition Goals
-            </button>
-            <button class="button" onclick="testEndpoint('/api/users/profile/user_settings/')">
-                <span class="method-badge method-get">GET</span>User Settings
-            </button>
-            <div class="input-group">
-                <label>Personal Color (hex):</label>
-                <input type="color" id="personalColor" value="#4F46E5" />
-            </div>
-            <button class="button post" onclick="updatePersonalColor()">
-                <span class="method-badge method-post">POST</span>Update Color
-            </button>
-            <div class="input-group">
-                <label>Couple Code:</label>
-                <input type="text" id="coupleCode" placeholder="6-digit code" />
-            </div>
-            <button class="button post" onclick="connectPartner()">
-                <span class="method-badge method-post">POST</span>Connect Partner
-            </button>
-            <button class="button post" onclick="generateCoupleCode()">
-                <span class="method-badge method-post">POST</span>Generate Couple Code
-            </button>
-            <div id="profileResult" class="result" style="display:none;"></div>
-        </div>
-
-        <!-- Item Management -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>📦 Item Management</h3>
-            </div>
-            <div class="endpoint-info">Individual item operations: toggle, delete, update details</div>
-            <div class="input-group">
-                <label>Item ID:</label>
-                <input type="text" id="singleItemId" placeholder="Item ID for operations" />
-            </div>
-            <button class="button post" onclick="toggleItemComplete()">
-                <span class="method-badge method-post">POST</span>Toggle Complete
-            </button>
-            <button class="button delete" onclick="deleteItem()">
-                <span class="method-badge method-delete">DELETE</span>Delete Item
-            </button>
-            <div class="input-group">
-                <label>New Quantity:</label>
-                <input type="number" id="newQuantity" placeholder="1" step="0.1" />
-            </div>
-            <button class="button patch" onclick="updateQuantity()">
-                <span class="method-badge method-patch">PATCH</span>Update Quantity
-            </button>
-            <div id="itemManagementResult" class="result" style="display:none;"></div>
-        </div>
-
-        <!-- User Registration -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>📝 User Registration</h3>
-            </div>
-            <div class="endpoint-info">Test user registration and account creation</div>
-            <div class="input-group">
-                <label>Username:</label>
-                <input type="text" id="regUsername" placeholder="newuser123" />
-            </div>
-            <div class="input-group">
-                <label>Email:</label>
-                <input type="email" id="regEmail" placeholder="user@example.com" />
-            </div>
-            <div class="input-group">
-                <label>Password:</label>
-                <input type="password" id="regPassword" placeholder="password123" />
-            </div>
-            <div class="input-group">
-                <label>First Name:</label>
-                <input type="text" id="regFirstName" placeholder="John" />
-            </div>
-            <div class="input-group">
-                <label>Last Name:</label>
-                <input type="text" id="regLastName" placeholder="Doe" />
-            </div>
-            <button class="button post" onclick="registerUser()">
-                <span class="method-badge method-post">POST</span>Register User
-            </button>
-            <div id="registrationResult" class="result" style="display:none;"></div>
-        </div>
-
-        <!-- WebSocket Testing -->
-        <div class="test-section">
-            <div class="section-title">
-                <h3>⚡ WebSocket Testing</h3>
-            </div>
-            <div class="endpoint-info">Test real-time WebSocket connections and messaging</div>
-            <div id="wsStatus" style="margin-bottom: 10px;">
-                <strong>Status:</strong> <span id="wsStatusText">Disconnected</span>
-            </div>
-            <div class="input-group">
-                <label>List ID for WebSocket:</label>
-                <input type="text" id="wsListId" placeholder="List ID for real-time connection" />
-            </div>
-            <button class="button" onclick="connectWebSocket()" id="wsConnectBtn">🔌 Connect WebSocket</button>
-            <button class="button delete" onclick="disconnectWebSocket()" id="wsDisconnectBtn" disabled>🔌
-                Disconnect</button>
-            <div class="input-group">
-                <label>Test Message:</label>
-                <textarea id="wsMessage" placeholder='{"type": "ping", "data": "test"}'></textarea>
-            </div>
-            <button class="button post" onclick="sendWebSocketMessage()" disabled id="wsSendBtn">📤 Send
-                Message</button>
-            <div id="wsResult" class="result" style="display:none;"></div>
+            <div id="archiveRecipesResult" class="result" style="display:none;"></div>
         </div>
 
         <!-- AI Recipe Agent & RCIP -->
         <div class="test-section">
             <div class="section-title">
-                <h3>🤖🍳 AI Recipe Agent & RCIP</h3>
+                <h3>🤖🍳 AI Recipe Agent<span class="new-badge">UPDATED</span></h3>
             </div>
-            <div class="endpoint-info">AI-powered recipe search, scraping, RCIP conversion, and ingredient extraction
+            <div class="new-feature">
+                ✨ UPDATED: AI Search now auto-saves recipes to My Recipes
             </div>
+            <div class="endpoint-info">AI-powered recipe search, scraping, RCIP conversion</div>
 
             <div class="auth-note">⚠️ Requires GROQ_API_KEY in backend/.env</div>
 
@@ -622,34 +437,13 @@
             <button class="button post" onclick="findRecipeAI()">
                 <span class="method-badge method-post">POST</span>🔍 Find Recipe (AI Agent)
             </button>
-            <button class="button" onclick="testEndpoint('/api/recipes/')">
-                <span class="method-badge method-get">GET</span>All Recipes
-            </button>
-            <button class="button" onclick="testEndpoint('/api/recipes/my_recipes/')">
-                <span class="method-badge method-get">GET</span>My Saved Recipes
-            </button>
 
-            <!-- Recipe Details & Versions -->
+            <!-- AI Generate from Inventory -->
             <div class="input-group" style="margin-top: 15px;">
-                <label>Recipe ID for operations:</label>
-                <input type="text" id="recipeId" placeholder="Recipe UUID" />
+                <label>AI Generate from Inventory:</label>
             </div>
-            <button class="button" onclick="getRecipeDetail()">
-                <span class="method-badge method-get">GET</span>Recipe Detail
-            </button>
-            <button class="button" onclick="getRecipeVersions()">
-                <span class="method-badge method-get">GET</span>Recipe Versions
-            </button>
-
-            <!-- Recipe Actions -->
-            <button class="button post" onclick="saveRecipe()">
-                <span class="method-badge method-post">POST</span>💾 Save Recipe
-            </button>
-            <button class="button post" onclick="unsaveRecipe()">
-                <span class="method-badge method-post">POST</span>🗑️ Unsave Recipe
-            </button>
-            <button class="button post" onclick="markRecipeCooked()">
-                <span class="method-badge method-post">POST</span>👨‍🍳 Mark as Cooked
+            <button class="button post" onclick="generateRecipesFromInventory()">
+                <span class="method-badge method-post">POST</span>✨ Generate Recipes from Inventory
             </button>
 
             <!-- RCIP Validation -->
@@ -665,42 +459,120 @@
             <div id="recipeResult" class="result" style="display:none;"></div>
         </div>
 
-        <!-- Other APIs -->
+        <!-- Shopping Lists -->
         <div class="test-section">
             <div class="section-title">
-                <h3>🌐 Other APIs</h3>
+                <h3>📋 Shopping Lists</h3>
             </div>
-            <div class="endpoint-info">Nutrition, AI, and additional endpoints</div>
-            <button class="button" onclick="testEndpoint('/api/nutrition/')">
-                <span class="method-badge method-get">GET</span>Nutrition API
+            <div class="endpoint-info">Basic shopping list operations</div>
+            <button class="button" onclick="testEndpoint('/api/shopping/lists/')">
+                <span class="method-badge method-get">GET</span>All Lists
             </button>
-            <button class="button" onclick="testEndpoint('/api/ai/')">
-                <span class="method-badge method-get">GET</span>AI API
+            <div class="input-group">
+                <label>List ID:</label>
+                <input type="text" id="listId" placeholder="List UUID" />
+            </div>
+            <button class="button" onclick="testListDetail()">
+                <span class="method-badge method-get">GET</span>List Detail
             </button>
-            <button class="button" onclick="testEndpoint('/api/users/')">
-                <span class="method-badge method-get">GET</span>Users API
+            <div class="input-group">
+                <label>New List Name:</label>
+                <input type="text" id="newListName" placeholder="My Shopping List" />
+            </div>
+            <button class="button post" onclick="createList()">
+                <span class="method-badge method-post">POST</span>Create List
             </button>
-            <div id="otherResult" class="result" style="display:none;"></div>
+            <div id="listsResult" class="result" style="display:none;"></div>
         </div>
 
-        <!-- Debug Tools -->
+        <!-- Shopping List Archive -->
         <div class="test-section">
             <div class="section-title">
-                <h3>🔍 Debug Tools</h3>
+                <h3>🗑️ Shopping List Archive</h3>
             </div>
-            <div class="endpoint-info">CORS testing, batch testing, and diagnostics</div>
-            <button class="button" onclick="testCORS()">🌐 Test CORS</button>
-            <button class="button" onclick="testAllEndpoints()">🧪 Test All Endpoints</button>
-            <button class="button" onclick="performanceTest()">⚡ Performance Test</button>
-            <button class="button" onclick="testAuthentication()">🔐 Test Auth Flow</button>
-            <button class="button" onclick="clearResults()">🧹 Clear All Results</button>
-            <button class="button" onclick="exportResults()">📁 Export Results</button>
+            <div class="endpoint-info">Soft delete, restore, and permanent deletion</div>
+            <button class="button" onclick="testEndpoint('/api/shopping/lists/archived/')">
+                <span class="method-badge method-get">GET</span>Archived Lists
+            </button>
             <div class="input-group">
-                <label>Auto-refresh interval (seconds):</label>
-                <input type="number" id="refreshInterval" value="30" min="5" max="300" />
-                <button class="button" onclick="toggleAutoRefresh()" id="autoRefreshBtn">🔄 Enable Auto-refresh</button>
+                <label>List ID:</label>
+                <input type="text" id="deleteListId" placeholder="List ID" />
             </div>
-            <div id="debugResult" class="result" style="display:none;"></div>
+            <button class="button delete" onclick="softDeleteList()">
+                <span class="method-badge method-delete">DELETE</span>Archive List
+            </button>
+            <button class="button post" onclick="restoreList()">
+                <span class="method-badge method-post">POST</span>Restore List
+            </button>
+            <button class="button delete" onclick="permanentDeleteList()">
+                <span class="method-badge method-delete">DELETE</span>Permanent Delete
+            </button>
+            <div id="archiveResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- List Items -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>🛒 List Items</h3>
+            </div>
+            <div class="endpoint-info">Add and manage items in lists</div>
+            <div class="input-group">
+                <label>List ID:</label>
+                <input type="text" id="itemListId" placeholder="List ID" />
+            </div>
+            <div class="input-group">
+                <label>Item Name:</label>
+                <input type="text" id="itemName" placeholder="Milk, Bread, etc." />
+            </div>
+            <button class="button post" onclick="addItem()">
+                <span class="method-badge method-post">POST</span>Add Item
+            </button>
+            <div id="itemsResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- Collaboration -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>👥 Collaboration</h3>
+            </div>
+            <div class="endpoint-info">Manage collaborators and permissions</div>
+            <div class="input-group">
+                <label>List ID:</label>
+                <input type="text" id="collabListId" placeholder="List ID" />
+            </div>
+            <button class="button" onclick="getCollaborators()">
+                <span class="method-badge method-get">GET</span>Get Collaborators
+            </button>
+            <div class="input-group">
+                <label>Friend Name:</label>
+                <input type="text" id="friendName" placeholder="Friend's name" />
+            </div>
+            <div class="input-group">
+                <label>Collaboration Key:</label>
+                <input type="text" id="collabKey" placeholder="Collaboration key" />
+            </div>
+            <button class="button post" onclick="addCollaborator()">
+                <span class="method-badge method-post">POST</span>Add Collaborator
+            </button>
+            <div id="collabResult" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- User Profile -->
+        <div class="test-section">
+            <div class="section-title">
+                <h3>👤 User Profile</h3>
+            </div>
+            <div class="endpoint-info">User settings and collaboration keys</div>
+            <button class="button" onclick="testEndpoint('/api/users/profile/')">
+                <span class="method-badge method-get">GET</span>Profile
+            </button>
+            <button class="button" onclick="testEndpoint('/api/users/profile/my_collaboration_key/')">
+                <span class="method-badge method-get">GET</span>My Collaboration Key
+            </button>
+            <button class="button post" onclick="generateCollaborationKey()">
+                <span class="method-badge method-post">POST</span>Generate New Key
+            </button>
+            <div id="profileResult" class="result" style="display:none;"></div>
         </div>
 
         <!-- Quick Actions -->
@@ -708,17 +580,22 @@
             <div class="section-title">
                 <h3>⚡ Quick Actions</h3>
             </div>
-            <div class="endpoint-info">Common test scenarios and workflows</div>
-            <button class="button post" onclick="createTestWorkflow()">🚀 Create Test Workflow</button>
-            <button class="button" onclick="testCollaborationFlow()">👥 Test Collaboration Flow</button>
-            <button class="button delete" onclick="testDeletionFlow()">🗑️ Test Deletion Flow</button>
-            <button class="button" onclick="testWebSocketFlow()">⚡ Test WebSocket Flow</button>
-            <button class="button post" onclick="testRecipeAIWorkflow()">🤖🍳 Test Recipe AI Workflow</button>
-            <div class="input-group">
-                <label>Stress Test Requests:</label>
-                <input type="number" id="stressTestCount" value="10" min="1" max="100" />
-                <button class="button" onclick="runStressTest()">💪 Run Stress Test</button>
-            </div>
+            <div class="endpoint-info">Common test workflows</div>
+            <button class="button post" onclick="testCompleteRecipeWorkflow()">
+                🚀 Complete Recipe Workflow
+            </button>
+            <button class="button post" onclick="testDiscoverPageWorkflow()">
+                🌐 Test Discover Page Flow
+            </button>
+            <button class="button post" onclick="testArchiveWorkflow()">
+                🗃️ Test Archive Flow
+            </button>
+            <button class="button" onclick="testAllEndpoints()">
+                🧪 Test All Endpoints
+            </button>
+            <button class="button" onclick="clearResults()">
+                🧹 Clear All Results
+            </button>
             <div id="quickActionsResult" class="result" style="display:none;"></div>
         </div>
     </div>
@@ -744,10 +621,7 @@
             const debugEl = document.getElementById('debugInfo');
 
             try {
-                console.log('Checking server status...');
                 const response = await fetch(baseUrl);
-
-                console.log('Server response:', response);
                 debugEl.innerHTML = '<small>Status: ' + response.status + ', OK: ' + response.ok + '</small>';
 
                 if (response.ok) {
@@ -758,7 +632,6 @@
                     statusEl.className = 'status offline';
                 }
             } catch (error) {
-                console.error('Server check failed:', error);
                 statusEl.textContent = 'Offline';
                 statusEl.className = 'status offline';
                 debugEl.innerHTML = '<small>Error: ' + error.message + '</small>';
@@ -769,12 +642,10 @@
             const healthEl = document.getElementById('healthStatus');
 
             try {
-                console.log('Checking health status...');
                 const response = await fetch(baseUrl + '/health/');
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('Health data:', data);
                     healthEl.textContent = 'Healthy';
                     healthEl.className = 'status online';
                 } else {
@@ -782,7 +653,6 @@
                     healthEl.className = 'status offline';
                 }
             } catch (error) {
-                console.error('Health check failed:', error);
                 healthEl.textContent = 'Error';
                 healthEl.className = 'status offline';
             }
@@ -790,9 +660,7 @@
 
         async function makeRequest(url, options = {}) {
             const fullUrl = url.startsWith('http') ? url : baseUrl + url;
-            console.log('Making request:', fullUrl, options);
 
-            // Add authentication header if active token exists
             const headers = {
                 'Content-Type': 'application/json',
                 ...options.headers
@@ -800,7 +668,6 @@
 
             if (activeToken) {
                 headers['Authorization'] = `Bearer ${activeToken}`;
-                console.log('🔐 Using authentication token');
             }
 
             try {
@@ -833,7 +700,6 @@
                 return result;
 
             } catch (error) {
-                console.error('Request failed:', error);
                 const result = {
                     url: fullUrl,
                     method: options.method || 'GET',
@@ -849,6 +715,7 @@
         async function testEndpoint(endpoint) {
             const result = await makeRequest(endpoint);
             displayResult('coreResult', result);
+            return result;
         }
 
         // Authentication Functions
@@ -866,7 +733,6 @@
                     userTokens[userKey] = result.data.access;
                     document.getElementById(`${userKey}AccessToken`).value = result.data.access;
 
-                    // Auto-select this token if no token is currently active
                     if (!activeToken) {
                         document.getElementById('activeTokenSelect').value = userKey;
                         setActiveToken();
@@ -874,8 +740,7 @@
 
                     displayResult('authResult', {
                         ...result,
-                        message: `Successfully logged in ${username}`,
-                        userInfo: result.data.user
+                        message: `Successfully logged in ${username}`
                     });
                 } else {
                     displayResult('authResult', {
@@ -885,29 +750,15 @@
                 }
             } catch (error) {
                 displayResult('authResult', {
-                    error: `Login failed for ${username}: ${error.message}`,
+                    error: `Login failed: ${error.message}`,
                     ok: false
                 });
             }
         }
 
         async function loginBothUsers() {
-            try {
-                await loginUser('testuser1', 'password123', 'user1');
-                await loginUser('testuser2', 'password123', 'user2');
-
-                displayResult('authResult', {
-                    message: 'Both users logged in successfully',
-                    user1Token: userTokens.user1 ? 'Retrieved' : 'Failed',
-                    user2Token: userTokens.user2 ? 'Retrieved' : 'Failed',
-                    ok: true
-                });
-            } catch (error) {
-                displayResult('authResult', {
-                    error: `Batch login failed: ${error.message}`,
-                    ok: false
-                });
-            }
+            await loginUser('testuser1', 'password123', 'user1');
+            await loginUser('testuser2', 'password123', 'user2');
         }
 
         function setActiveToken() {
@@ -930,24 +781,17 @@
                     statusSpan.style.color = '#dc3545';
                 }
             }
-
-            console.log('Active token set:', activeToken ? 'Token active' : 'No token');
         }
 
         function clearTokens() {
             userTokens.user1 = null;
             userTokens.user2 = null;
             activeToken = null;
-
             document.getElementById('user1AccessToken').value = '';
             document.getElementById('user2AccessToken').value = '';
             document.getElementById('activeTokenSelect').value = '';
             document.getElementById('activeTokenStatus').textContent = '';
-
-            displayResult('authResult', {
-                message: 'All tokens cleared',
-                ok: true
-            });
+            displayResult('authResult', { message: 'All tokens cleared', ok: true });
         }
 
         async function copyTokenToClipboard(userKey) {
@@ -960,19 +804,193 @@
                         ok: true
                     });
                 } catch (error) {
-                    // Fallback for older browsers
                     const textarea = document.getElementById(`${userKey}AccessToken`);
                     textarea.select();
                     document.execCommand('copy');
-                    displayResult('authResult', {
-                        message: `${userKey} token copied to clipboard (fallback method)`,
-                        ok: true
-                    });
                 }
-            } else {
-                displayResult('authResult', {
-                    error: `${userKey} is not logged in`,
-                    ok: false
+            }
+        }
+
+        // ========== NEW: Canonical Recipes Functions ==========
+        async function getCanonicalRecipesSorted() {
+            const sort = document.getElementById('canonicalSort').value;
+            const result = await makeRequest(`/api/recipes/canonical/?sort=${sort}`);
+            displayResult('canonicalResult', result);
+        }
+
+        async function searchCanonicalRecipes() {
+            const search = document.getElementById('canonicalSearch').value;
+            if (!search) {
+                alert('Please enter a search query');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/canonical/?search=${encodeURIComponent(search)}`);
+            displayResult('canonicalResult', result);
+        }
+
+        async function getCanonicalRecipeDetail() {
+            const id = document.getElementById('canonicalRecipeId').value;
+            if (!id) {
+                alert('Please enter a Canonical Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/canonical/${id}/`);
+            displayResult('canonicalResult', result);
+        }
+
+        async function likeCanonicalRecipe() {
+            const id = document.getElementById('canonicalRecipeId').value;
+            if (!id) {
+                alert('Please enter a Canonical Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/canonical/${id}/like/`, {
+                method: 'POST'
+            });
+            displayResult('canonicalResult', result);
+        }
+
+        async function rateCanonicalRecipe() {
+            const id = document.getElementById('canonicalRecipeId').value;
+            const rating = document.getElementById('canonicalRating').value;
+            if (!id || !rating) {
+                alert('Please enter a Canonical Recipe ID and rating');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/canonical/${id}/rate/`, {
+                method: 'POST',
+                body: JSON.stringify({ rating: parseInt(rating) })
+            });
+            displayResult('canonicalResult', result);
+        }
+
+        // ========== NEW: My Recipes Functions ==========
+        async function markMyRecipeCooked() {
+            const id = document.getElementById('myRecipeId').value;
+            if (!id) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/recipes/${id}/mark_cooked/`, {
+                method: 'POST'
+            });
+            displayResult('myRecipesResult', result);
+        }
+
+        async function archiveMyRecipe() {
+            const id = document.getElementById('myRecipeId').value;
+            if (!id) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/recipes/${id}/unsave_recipe/`, {
+                method: 'POST'
+            });
+            displayResult('myRecipesResult', result);
+        }
+
+        // ========== NEW: Recipe Archive Functions ==========
+        async function restoreRecipe() {
+            const id = document.getElementById('archiveRecipeId').value;
+            if (!id) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/recipes/${id}/restore_recipe/`, {
+                method: 'POST'
+            });
+            displayResult('archiveRecipesResult', result);
+        }
+
+        async function permanentDeleteRecipe() {
+            const id = document.getElementById('archiveRecipeId').value;
+            if (!id) {
+                alert('Please enter a Recipe ID');
+                return;
+            }
+            if (!confirm('Are you sure you want to permanently delete this recipe?')) {
+                return;
+            }
+            const result = await makeRequest(`/api/recipes/recipes/${id}/permanently_delete_recipe/`, {
+                method: 'DELETE'
+            });
+            displayResult('archiveRecipesResult', result);
+        }
+
+        // ========== AI Recipe Functions ==========
+        async function findRecipeAI() {
+            const query = document.getElementById('recipeQuery').value;
+            const listId = document.getElementById('recipeListId').value;
+
+            if (!query) {
+                alert('Please enter a recipe query');
+                return;
+            }
+
+            displayResult('recipeResult', {
+                message: 'Finding recipe with AI... This may take 10-30 seconds',
+                status: 'loading'
+            });
+
+            const payload = { query: query };
+            if (listId) {
+                payload.shopping_list_id = listId;
+                payload.add_to_list = true;
+            }
+
+            const result = await makeRequest('/api/recipes/recipes/find_recipe/', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            displayResult('recipeResult', result);
+        }
+
+        async function generateRecipesFromInventory() {
+            displayResult('recipeResult', {
+                message: 'Generating recipes from inventory... This may take 20-40 seconds',
+                status: 'loading'
+            });
+
+            const result = await makeRequest('/api/ai/recipes/', {
+                method: 'POST'
+            });
+
+            displayResult('recipeResult', result);
+        }
+
+        async function validateRCIP() {
+            const rcipJson = document.getElementById('rcipJson').value;
+            if (!rcipJson) {
+                alert('Please enter RCIP JSON');
+                return;
+            }
+
+            try {
+                const rcipData = JSON.parse(rcipJson);
+                const requiredFields = ['rcip_version', 'name', 'ingredients', 'steps'];
+                const missingFields = requiredFields.filter(field => !rcipData[field]);
+
+                if (missingFields.length > 0) {
+                    displayResult('recipeResult', {
+                        ok: false,
+                        error: 'RCIP validation failed',
+                        missingFields: missingFields
+                    });
+                    return;
+                }
+
+                displayResult('recipeResult', {
+                    ok: true,
+                    message: '✅ RCIP format is valid!',
+                    rcipData: rcipData
+                });
+
+            } catch (error) {
+                displayResult('recipeResult', {
+                    ok: false,
+                    error: 'Invalid JSON format',
+                    message: error.message
                 });
             }
         }
@@ -1001,106 +1019,14 @@
             displayResult('listsResult', result);
         }
 
-        // Items Functions
-        async function addItem() {
-            const listId = document.getElementById('itemListId').value;
-            const itemName = document.getElementById('itemName').value;
-            if (!listId || !itemName) {
-                alert('Please enter both List ID and Item Name');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/add_item/`, {
-                method: 'POST',
-                body: JSON.stringify({ name: itemName })
-            });
-            displayResult('itemsResult', result);
-        }
-
-        async function addAIItems() {
-            const listId = document.getElementById('itemListId').value;
-            const aiInput = document.getElementById('aiItemsInput').value;
-            if (!listId || !aiInput) {
-                alert('Please enter both List ID and AI request');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/ai_add_items/`, {
-                method: 'POST',
-                body: JSON.stringify({ ai_input: aiInput })
-            });
-            displayResult('itemsResult', result);
-        }
-
-        // Collaboration Functions
-        async function getCollaborators() {
-            const listId = document.getElementById('collabListId').value;
-            if (!listId) {
-                alert('Please enter a List ID');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/collaborators/`);
-            displayResult('collabResult', result);
-        }
-
-        async function addCollaborator() {
-            const listId = document.getElementById('collabListId').value;
-            const friendName = document.getElementById('friendName').value;
-            const collabKey = document.getElementById('collabKey').value;
-            if (!listId || !friendName || !collabKey) {
-                alert('Please enter List ID, Friend Name, and Collaboration Key');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/add_collaborator/`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    friend_name: friendName,
-                    collaboration_key: collabKey,
-                    can_edit: true,
-                    can_add_items: true,
-                    can_invite_others: false
-                })
-            });
-            displayResult('collabResult', result);
-        }
-
-        async function leaveList() {
-            const listId = document.getElementById('collabListId').value;
-            if (!listId) {
-                alert('Please enter a List ID');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/leave_list/`, {
-                method: 'POST'
-            });
-            displayResult('collabResult', result);
-        }
-
-        async function updatePermissions() {
-            const listId = document.getElementById('collabListId').value;
-            const userId = document.getElementById('userId').value;
-            if (!listId || !userId) {
-                alert('Please enter both List ID and User ID');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/update_collaborator_permissions/`, {
-                method: 'POST',
-                body: JSON.stringify({
-                    user_id: userId,
-                    can_edit: true,
-                    can_add_items: true,
-                    can_invite_others: false
-                })
-            });
-            displayResult('collabResult', result);
-        }
-
-        // Archive & Deletion Functions
+        // Archive Functions
         async function softDeleteList() {
             const listId = document.getElementById('deleteListId').value;
             if (!listId) {
                 alert('Please enter a List ID');
                 return;
             }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/soft-delete/`, {
+            const result = await makeRequest(`/api/shopping/lists/${listId}/delete/`, {
                 method: 'DELETE'
             });
             displayResult('archiveResult', result);
@@ -1124,62 +1050,58 @@
                 alert('Please enter a List ID');
                 return;
             }
-            const result = await makeRequest(`/api/shopping/lists/${listId}/permanent-delete/`, {
+            if (!confirm('Permanently delete this list?')) {
+                return;
+            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/permanent_delete/`, {
                 method: 'DELETE'
             });
             displayResult('archiveResult', result);
         }
 
-        // Inventory Functions
-        async function updateWeight() {
-            const itemId = document.getElementById('inventoryItemId').value;
-            const weight = document.getElementById('weightQuantity').value;
-            if (!itemId || !weight) {
-                alert('Please enter both Item ID and Weight');
+        // Items Functions
+        async function addItem() {
+            const listId = document.getElementById('itemListId').value;
+            const itemName = document.getElementById('itemName').value;
+            if (!listId || !itemName) {
+                alert('Please enter both List ID and Item Name');
                 return;
             }
-            const result = await makeRequest(`/api/shopping/items/${itemId}/update_weight_quantity/`, {
-                method: 'PATCH',
-                body: JSON.stringify({ weight_quantity: parseFloat(weight) })
+            const result = await makeRequest(`/api/shopping/lists/${listId}/add_item/`, {
+                method: 'POST',
+                body: JSON.stringify({ name: itemName })
             });
-            displayResult('inventoryResult', result);
+            displayResult('itemsResult', result);
         }
 
-        async function updateLiquid() {
-            const itemId = document.getElementById('inventoryItemId').value;
-            const liquid = document.getElementById('liquidQuantity').value;
-            if (!itemId || !liquid) {
-                alert('Please enter both Item ID and Liquid Quantity');
+        // Collaboration Functions
+        async function getCollaborators() {
+            const listId = document.getElementById('collabListId').value;
+            if (!listId) {
+                alert('Please enter a List ID');
                 return;
             }
-            const result = await makeRequest(`/api/shopping/items/${itemId}/update_liquid_quantity/`, {
-                method: 'PATCH',
-                body: JSON.stringify({ liquid_quantity: parseFloat(liquid) })
-            });
-            displayResult('inventoryResult', result);
+            const result = await makeRequest(`/api/shopping/lists/${listId}/collaborators/`);
+            displayResult('collabResult', result);
         }
 
-        // Store Functions
-        async function mockStoreOrder() {
-            const storeType = document.getElementById('storeType').value;
-            const storeItems = document.getElementById('storeItems').value;
-            if (!storeType || !storeItems) {
-                alert('Please enter Store Type and Items');
+        async function addCollaborator() {
+            const listId = document.getElementById('collabListId').value;
+            const friendName = document.getElementById('friendName').value;
+            const collabKey = document.getElementById('collabKey').value;
+            if (!listId || !friendName || !collabKey) {
+                alert('Please enter all fields');
                 return;
             }
-            try {
-                const items = JSON.parse(storeItems);
-                const result = await makeRequest('/api/shopping/lists/mock_store_order/', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        store_type: storeType,
-                        items: items
-                    })
-                });
-                displayResult('storeResult', result);
-            } catch (error) {
-                alert('Invalid JSON format for items');
-            }
+            const result = await makeRequest(`/api/shopping/lists/${listId}/add_collaborator/`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    friend_name: friendName,
+                    collaboration_key: collabKey,
+                    can_edit: true
+                })
+            });
+            displayResult('collabResult', result);
         }
 
         // User Profile Functions
@@ -1190,829 +1112,79 @@
             displayResult('profileResult', result);
         }
 
-        async function updatePersonalColor() {
-            const color = document.getElementById('personalColor').value;
-            const result = await makeRequest('/api/users/profile/update_personal_color/', {
-                method: 'POST',
-                body: JSON.stringify({ color: color })
-            });
-            displayResult('profileResult', result);
-        }
-
-        async function connectPartner() {
-            const coupleCode = document.getElementById('coupleCode').value;
-            if (!coupleCode) {
-                alert('Please enter a couple code');
-                return;
-            }
-            const result = await makeRequest('/api/users/profile/connect_partner/', {
-                method: 'POST',
-                body: JSON.stringify({ couple_code: coupleCode })
-            });
-            displayResult('profileResult', result);
-        }
-
-        async function generateCoupleCode() {
-            const result = await makeRequest('/api/users/profile/generate_couple_code/', {
-                method: 'POST'
-            });
-            displayResult('profileResult', result);
-        }
-
-        // Item Management Functions
-        async function toggleItemComplete() {
-            const itemId = document.getElementById('singleItemId').value;
-            if (!itemId) {
-                alert('Please enter an Item ID');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/items/${itemId}/toggle_complete/`, {
-                method: 'POST'
-            });
-            displayResult('itemManagementResult', result);
-        }
-
-        async function deleteItem() {
-            const itemId = document.getElementById('singleItemId').value;
-            if (!itemId) {
-                alert('Please enter an Item ID');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/items/${itemId}/`, {
-                method: 'DELETE'
-            });
-            displayResult('itemManagementResult', result);
-        }
-
-        async function updateQuantity() {
-            const itemId = document.getElementById('singleItemId').value;
-            const quantity = document.getElementById('newQuantity').value;
-            if (!itemId || !quantity) {
-                alert('Please enter both Item ID and New Quantity');
-                return;
-            }
-            const result = await makeRequest(`/api/shopping/items/${itemId}/`, {
-                method: 'PATCH',
-                body: JSON.stringify({ quantity: parseFloat(quantity) })
-            });
-            displayResult('itemManagementResult', result);
-        }
-
-        // User Registration Function
-        async function registerUser() {
-            const username = document.getElementById('regUsername').value;
-            const email = document.getElementById('regEmail').value;
-            const password = document.getElementById('regPassword').value;
-            const firstName = document.getElementById('regFirstName').value;
-            const lastName = document.getElementById('regLastName').value;
-
-            if (!username || !email || !password) {
-                alert('Please fill in username, email, and password');
-                return;
-            }
-
-            const result = await makeRequest('/api/users/register/', {
-                method: 'POST',
-                body: JSON.stringify({
-                    username: username,
-                    email: email,
-                    password: password,
-                    first_name: firstName,
-                    last_name: lastName
-                })
-            });
-            displayResult('registrationResult', result);
-        }
-
-        // AI Recipe Agent Functions
-        async function findRecipeAI() {
-            const query = document.getElementById('recipeQuery').value;
-            const listId = document.getElementById('recipeListId').value;
-
-            if (!query) {
-                alert('Please enter a recipe query');
-                return;
-            }
-
-            displayResult('recipeResult', {
-                message: 'Finding recipe with AI... This may take 10-30 seconds',
-                status: 'loading'
-            });
-
-            const payload = { query: query };
-            if (listId) {
-                payload.shopping_list_id = listId;
-                payload.add_to_list = true;
-            }
-
-            const result = await makeRequest('/api/recipes/find_recipe/', {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-
-            displayResult('recipeResult', result);
-        }
-
-        async function getRecipeDetail() {
-            const recipeId = document.getElementById('recipeId').value;
-            if (!recipeId) {
-                alert('Please enter a Recipe ID');
-                return;
-            }
-            const result = await makeRequest(`/api/recipes/${recipeId}/`);
-            displayResult('recipeResult', result);
-        }
-
-        async function getRecipeVersions() {
-            const recipeId = document.getElementById('recipeId').value;
-            if (!recipeId) {
-                alert('Please enter a Recipe ID');
-                return;
-            }
-            const result = await makeRequest(`/api/recipes/${recipeId}/versions/`);
-            displayResult('recipeResult', result);
-        }
-
-        async function saveRecipe() {
-            const recipeId = document.getElementById('recipeId').value;
-            if (!recipeId) {
-                alert('Please enter a Recipe ID');
-                return;
-            }
-            const result = await makeRequest(`/api/recipes/${recipeId}/save_recipe/`, {
-                method: 'POST'
-            });
-            displayResult('recipeResult', result);
-        }
-
-        async function unsaveRecipe() {
-            const recipeId = document.getElementById('recipeId').value;
-            if (!recipeId) {
-                alert('Please enter a Recipe ID');
-                return;
-            }
-            const result = await makeRequest(`/api/recipes/${recipeId}/unsave_recipe/`, {
-                method: 'POST'
-            });
-            displayResult('recipeResult', result);
-        }
-
-        async function markRecipeCooked() {
-            const recipeId = document.getElementById('recipeId').value;
-            if (!recipeId) {
-                alert('Please enter a Recipe ID');
-                return;
-            }
-            const result = await makeRequest(`/api/recipes/${recipeId}/mark_cooked/`, {
-                method: 'POST'
-            });
-            displayResult('recipeResult', result);
-        }
-
-        async function validateRCIP() {
-            const rcipJson = document.getElementById('rcipJson').value;
-            if (!rcipJson) {
-                alert('Please enter RCIP JSON to validate');
-                return;
-            }
-
-            try {
-                const rcipData = JSON.parse(rcipJson);
-
-                // Basic RCIP validation
-                const requiredFields = ['rcip_version', 'name', 'ingredients', 'steps'];
-                const missingFields = requiredFields.filter(field => !rcipData[field]);
-
-                if (missingFields.length > 0) {
-                    displayResult('recipeResult', {
-                        ok: false,
-                        error: 'RCIP validation failed',
-                        missingFields: missingFields,
-                        message: 'Required fields: rcip_version, name, ingredients (array), steps (array)'
-                    });
-                    return;
-                }
-
-                // Check ingredient format
-                if (!Array.isArray(rcipData.ingredients)) {
-                    displayResult('recipeResult', {
-                        ok: false,
-                        error: 'ingredients must be an array'
-                    });
-                    return;
-                }
-
-                // Check steps format
-                if (!Array.isArray(rcipData.steps)) {
-                    displayResult('recipeResult', {
-                        ok: false,
-                        error: 'steps must be an array'
-                    });
-                    return;
-                }
-
-                displayResult('recipeResult', {
-                    ok: true,
-                    message: '✅ RCIP format is valid!',
-                    rcipData: rcipData,
-                    stats: {
-                        version: rcipData.rcip_version,
-                        name: rcipData.name,
-                        ingredientCount: rcipData.ingredients.length,
-                        stepCount: rcipData.steps.length,
-                        hasServings: !!rcipData.servings,
-                        hasPrepTime: !!rcipData.prep_time,
-                        hasCookTime: !!rcipData.cook_time
-                    }
-                });
-
-            } catch (error) {
-                displayResult('recipeResult', {
-                    ok: false,
-                    error: 'Invalid JSON format',
-                    message: error.message
-                });
-            }
-        }
-
-        // WebSocket Functions
-        let testWebSocket = null;
-
-        async function connectWebSocket() {
-            const listId = document.getElementById('wsListId').value;
-            if (!listId) {
-                alert('Please enter a List ID');
-                return;
-            }
-
+        // ========== NEW: Quick Action Workflows ==========
+        async function testCompleteRecipeWorkflow() {
             if (!activeToken) {
-                alert('Please login first to test WebSocket connections');
-                return;
-            }
-
-            try {
-                const wsUrl = `ws://localhost:8000/ws/shopping/${listId}/?token=${activeToken}`;
-                testWebSocket = new WebSocket(wsUrl);
-
-                testWebSocket.onopen = function (event) {
-                    console.log('WebSocket connected');
-                    document.getElementById('wsStatusText').textContent = 'Connected';
-                    document.getElementById('wsStatusText').style.color = '#28a745';
-                    document.getElementById('wsConnectBtn').disabled = true;
-                    document.getElementById('wsDisconnectBtn').disabled = false;
-                    document.getElementById('wsSendBtn').disabled = false;
-
-                    displayResult('wsResult', {
-                        message: 'WebSocket connected successfully',
-                        url: wsUrl,
-                        timestamp: new Date().toISOString(),
-                        ok: true
-                    });
-                };
-
-                testWebSocket.onmessage = function (event) {
-                    console.log('WebSocket message received:', event.data);
-                    try {
-                        const data = JSON.parse(event.data);
-                        displayResult('wsResult', {
-                            message: 'WebSocket message received',
-                            data: data,
-                            timestamp: new Date().toISOString(),
-                            ok: true
-                        });
-                    } catch (e) {
-                        displayResult('wsResult', {
-                            message: 'WebSocket raw message received',
-                            data: event.data,
-                            timestamp: new Date().toISOString(),
-                            ok: true
-                        });
-                    }
-                };
-
-                testWebSocket.onclose = function (event) {
-                    console.log('WebSocket disconnected');
-                    document.getElementById('wsStatusText').textContent = 'Disconnected';
-                    document.getElementById('wsStatusText').style.color = '#dc3545';
-                    document.getElementById('wsConnectBtn').disabled = false;
-                    document.getElementById('wsDisconnectBtn').disabled = true;
-                    document.getElementById('wsSendBtn').disabled = true;
-
-                    displayResult('wsResult', {
-                        message: 'WebSocket disconnected',
-                        code: event.code,
-                        reason: event.reason,
-                        timestamp: new Date().toISOString(),
-                        ok: false
-                    });
-                };
-
-                testWebSocket.onerror = function (error) {
-                    console.error('WebSocket error:', error);
-                    displayResult('wsResult', {
-                        message: 'WebSocket error',
-                        error: error.toString(),
-                        timestamp: new Date().toISOString(),
-                        ok: false
-                    });
-                };
-
-            } catch (error) {
-                displayResult('wsResult', {
-                    error: 'Failed to connect WebSocket: ' + error.message,
+                displayResult('quickActionsResult', {
+                    error: 'Please login first',
                     ok: false
                 });
-            }
-        }
-
-        function disconnectWebSocket() {
-            if (testWebSocket) {
-                testWebSocket.close();
-                testWebSocket = null;
-            }
-        }
-
-        function sendWebSocketMessage() {
-            if (!testWebSocket || testWebSocket.readyState !== WebSocket.OPEN) {
-                alert('WebSocket is not connected');
                 return;
             }
 
-            const message = document.getElementById('wsMessage').value;
-            if (!message) {
-                alert('Please enter a message to send');
-                return;
-            }
-
-            try {
-                testWebSocket.send(message);
-                displayResult('wsResult', {
-                    message: 'Message sent successfully',
-                    sentData: message,
-                    timestamp: new Date().toISOString(),
-                    ok: true
-                });
-            } catch (error) {
-                displayResult('wsResult', {
-                    error: 'Failed to send message: ' + error.message,
-                    ok: false
-                });
-            }
-        }
-
-        // Debug Functions
-        async function testCORS() {
-            try {
-                const response = await fetch(baseUrl + '/health/', {
-                    method: 'OPTIONS',
-                    headers: {
-                        'Origin': window.location.origin,
-                        'Access-Control-Request-Method': 'GET'
-                    }
-                });
-
-                const corsHeaders = {};
-                response.headers.forEach((value, key) => {
-                    if (key.startsWith('access-control')) {
-                        corsHeaders[key] = value;
-                    }
-                });
-
-                displayResult('debugResult', {
-                    message: 'CORS preflight test',
-                    status: response.status,
-                    headers: corsHeaders
-                });
-
-            } catch (error) {
-                displayResult('debugResult', {
-                    message: 'CORS test failed',
-                    error: error.message
-                });
-            }
-        }
-
-        async function testAllEndpoints() {
-            const endpoints = [
-                { url: '/', method: 'GET', name: 'API Root' },
-                { url: '/health/', method: 'GET', name: 'Health Check' },
-                { url: '/api/', method: 'GET', name: 'API Discovery' },
-                { url: '/api/shopping/', method: 'GET', name: 'Shopping API' },
-                { url: '/api/shopping/lists/', method: 'GET', name: 'Shopping Lists' },
-                { url: '/api/shopping/lists/archived/', method: 'GET', name: 'Archived Lists' },
-                { url: '/api/shopping/items/', method: 'GET', name: 'Shopping Items' },
-                { url: '/api/shopping/inventory/', method: 'GET', name: 'Inventory' },
-                { url: '/api/shopping/inventory/expiring_soon/', method: 'GET', name: 'Expiring Items' },
-                { url: '/api/shopping/inventory/low_stock/', method: 'GET', name: 'Low Stock' },
-                { url: '/api/users/', method: 'GET', name: 'Users API' },
-                { url: '/api/users/profile/', method: 'GET', name: 'User Profile' },
-                { url: '/api/users/profile/my_collaboration_key/', method: 'GET', name: 'Collaboration Key' },
-                { url: '/api/recipes/', method: 'GET', name: 'Recipes API' },
-                { url: '/api/recipes/my_recipes/', method: 'GET', name: 'My Saved Recipes' },
-                { url: '/api/nutrition/', method: 'GET', name: 'Nutrition API' },
-                { url: '/api/ai/', method: 'GET', name: 'AI API' }
-            ];
-
-            const results = [];
+            const workflow = [];
             const startTime = Date.now();
 
-            for (const endpoint of endpoints) {
-                const result = await makeRequest(endpoint.url, { method: endpoint.method });
-                results.push({
-                    name: endpoint.name,
-                    url: endpoint.url,
-                    status: result.status,
-                    ok: result.ok,
-                    responseTime: result.responseTime || 'N/A'
-                });
-            }
-
-            const endTime = Date.now();
-            const totalTime = endTime - startTime;
-            const successCount = results.filter(r => r.ok).length;
-            const failCount = results.length - successCount;
-
-            displayResult('debugResult', {
-                message: 'Comprehensive endpoint test completed',
-                totalEndpoints: endpoints.length,
-                successCount: successCount,
-                failCount: failCount,
-                totalTime: `${totalTime}ms`,
-                averageTime: `${Math.round(totalTime / endpoints.length)}ms`,
-                results: results
-            });
-        }
-
-        // Enhanced Debug Functions
-        async function performanceTest() {
-            const testEndpoint = '/health/';
-            const iterations = 10;
-            const results = [];
-
-            displayResult('debugResult', {
-                message: `Starting performance test: ${iterations} requests to ${testEndpoint}`,
+            displayResult('quickActionsResult', {
+                message: 'Starting Complete Recipe Workflow Test... (60-90 seconds)',
                 status: 'running'
             });
 
-            for (let i = 0; i < iterations; i++) {
-                const start = Date.now();
-                const result = await makeRequest(testEndpoint);
-                const end = Date.now();
-                results.push(end - start);
-            }
-
-            const avgTime = results.reduce((a, b) => a + b, 0) / results.length;
-            const minTime = Math.min(...results);
-            const maxTime = Math.max(...results);
-
-            displayResult('debugResult', {
-                message: 'Performance test completed',
-                endpoint: testEndpoint,
-                iterations: iterations,
-                averageTime: `${Math.round(avgTime)}ms`,
-                minTime: `${minTime}ms`,
-                maxTime: `${maxTime}ms`,
-                allTimes: results,
-                ok: true
-            });
-        }
-
-        async function testAuthentication() {
-            const testResults = [];
-
-            // Test 1: Login with valid credentials
-            testResults.push(await makeRequest('/api/users/auth/login/', {
-                method: 'POST',
-                body: JSON.stringify({
-                    username: 'testuser1',
-                    password: 'password123'
-                })
-            }));
-
-            // Test 2: Access protected endpoint without auth
-            const tempToken = activeToken;
-            activeToken = null;
-            testResults.push(await makeRequest('/api/users/profile/'));
-            activeToken = tempToken;
-
-            // Test 3: Access protected endpoint with auth
-            testResults.push(await makeRequest('/api/users/profile/'));
-
-            displayResult('debugResult', {
-                message: 'Authentication flow test completed',
-                tests: [
-                    { name: 'Login with valid credentials', result: testResults[0] },
-                    { name: 'Access protected endpoint without auth', result: testResults[1] },
-                    { name: 'Access protected endpoint with auth', result: testResults[2] }
-                ],
-                ok: true
-            });
-        }
-
-        // Auto-refresh functionality
-        let autoRefreshInterval = null;
-
-        function toggleAutoRefresh() {
-            const btn = document.getElementById('autoRefreshBtn');
-            const interval = parseInt(document.getElementById('refreshInterval').value) * 1000;
-
-            if (autoRefreshInterval) {
-                clearInterval(autoRefreshInterval);
-                autoRefreshInterval = null;
-                btn.textContent = '🔄 Enable Auto-refresh';
-                btn.style.backgroundColor = '#007bff';
-            } else {
-                autoRefreshInterval = setInterval(() => {
-                    checkServerStatus();
-                    checkHealthStatus();
-                }, interval);
-                btn.textContent = '⏹️ Disable Auto-refresh';
-                btn.style.backgroundColor = '#dc3545';
-            }
-        }
-
-        // Quick Action Functions
-        async function createTestWorkflow() {
-            const workflow = [];
-            const startTime = Date.now();
-
-            // Step 1: Create a list
+            // Step 1: Get canonical recipes
             workflow.push({
-                step: '1. Create shopping list',
-                result: await makeRequest('/api/shopping/lists/', {
-                    method: 'POST',
-                    body: JSON.stringify({ name: `Test List ${Date.now()}` })
-                })
+                step: '1. Get canonical recipes',
+                result: await makeRequest('/api/recipes/canonical/?sort=popular')
             });
 
-            const listId = workflow[0].result.data?.id;
-
-            if (listId) {
-                // Step 2: Add items
+            // Step 2: Get first recipe ID and like it
+            const firstRecipe = workflow[0].result.data?.results?.[0];
+            if (firstRecipe) {
                 workflow.push({
-                    step: '2. Add item to list',
-                    result: await makeRequest(`/api/shopping/lists/${listId}/add_item/`, {
-                        method: 'POST',
-                        body: JSON.stringify({ name: 'Test Item' })
+                    step: '2. Like canonical recipe (auto-saves to My Recipes)',
+                    result: await makeRequest(`/api/recipes/canonical/${firstRecipe.id}/like/`, {
+                        method: 'POST'
                     })
                 });
 
-                // Step 3: Get collaborators
+                // Step 3: Get my recipes
                 workflow.push({
-                    step: '3. Get collaborators',
-                    result: await makeRequest(`/api/shopping/lists/${listId}/collaborators/`)
+                    step: '3. Get my recipes',
+                    result: await makeRequest('/api/recipes/recipes/my_recipes/')
                 });
 
-                // Step 4: Soft delete
-                workflow.push({
-                    step: '4. Soft delete list',
-                    result: await makeRequest(`/api/shopping/lists/${listId}/soft-delete/`, {
-                        method: 'DELETE'
-                    })
-                });
-            }
+                // Get the user fork ID
+                const myRecipes = workflow[2].result.data?.recipes;
+                const userRecipe = myRecipes?.find(r => r.canonical_recipe === firstRecipe.id);
 
-            const endTime = Date.now();
-
-            displayResult('quickActionsResult', {
-                message: 'Test workflow completed',
-                totalTime: `${endTime - startTime}ms`,
-                steps: workflow,
-                listId: listId,
-                ok: true
-            });
-        }
-
-        async function testCollaborationFlow() {
-            if (!userTokens.user1 || !userTokens.user2) {
-                await loginBothUsers();
-            }
-
-            const workflow = [];
-
-            // Use user1 to create list
-            activeToken = userTokens.user1;
-            workflow.push({
-                step: 'User1: Create list',
-                result: await makeRequest('/api/shopping/lists/', {
-                    method: 'POST',
-                    body: JSON.stringify({ name: `Collaboration Test ${Date.now()}` })
-                })
-            });
-
-            // Get user2's collaboration key
-            activeToken = userTokens.user2;
-            workflow.push({
-                step: 'User2: Get collaboration key',
-                result: await makeRequest('/api/users/profile/my_collaboration_key/')
-            });
-
-            displayResult('quickActionsResult', {
-                message: 'Collaboration flow test completed',
-                workflow: workflow,
-                ok: true
-            });
-        }
-
-        async function testDeletionFlow() {
-            // Create a test list first
-            const createResult = await makeRequest('/api/shopping/lists/', {
-                method: 'POST',
-                body: JSON.stringify({ name: `Deletion Test ${Date.now()}` })
-            });
-
-            if (!createResult.ok) {
-                displayResult('quickActionsResult', {
-                    error: 'Failed to create test list for deletion flow',
-                    ok: false
-                });
-                return;
-            }
-
-            const listId = createResult.data.id;
-            const workflow = [];
-
-            // Step 1: Soft delete
-            workflow.push({
-                step: '1. Soft delete',
-                result: await makeRequest(`/api/shopping/lists/${listId}/soft-delete/`, {
-                    method: 'DELETE'
-                })
-            });
-
-            // Step 2: Check archived lists
-            workflow.push({
-                step: '2. Check archived lists',
-                result: await makeRequest('/api/shopping/lists/archived/')
-            });
-
-            // Step 3: Restore
-            workflow.push({
-                step: '3. Restore list',
-                result: await makeRequest(`/api/shopping/lists/${listId}/restore/`, {
-                    method: 'POST'
-                })
-            });
-
-            displayResult('quickActionsResult', {
-                message: 'Deletion flow test completed',
-                listId: listId,
-                workflow: workflow,
-                ok: true
-            });
-        }
-
-        async function testWebSocketFlow() {
-            if (!activeToken) {
-                displayResult('quickActionsResult', {
-                    error: 'Please login first to test WebSocket flow',
-                    ok: false
-                });
-                return;
-            }
-
-            // Create a test list first
-            const createResult = await makeRequest('/api/shopping/lists/', {
-                method: 'POST',
-                body: JSON.stringify({ name: `WebSocket Test ${Date.now()}` })
-            });
-
-            if (!createResult.ok) {
-                displayResult('quickActionsResult', {
-                    error: 'Failed to create test list for WebSocket flow',
-                    ok: false
-                });
-                return;
-            }
-
-            const listId = createResult.data.id;
-            document.getElementById('wsListId').value = listId;
-
-            displayResult('quickActionsResult', {
-                message: 'WebSocket test list created. Use the WebSocket Testing section above to connect.',
-                listId: listId,
-                instructions: 'Copy the list ID to the WebSocket section and click Connect WebSocket',
-                ok: true
-            });
-        }
-
-        async function runStressTest() {
-            const requestCount = parseInt(document.getElementById('stressTestCount').value);
-            const endpoint = '/health/';
-            const results = [];
-            const startTime = Date.now();
-
-            displayResult('quickActionsResult', {
-                message: `Starting stress test: ${requestCount} concurrent requests to ${endpoint}`,
-                status: 'running'
-            });
-
-            // Create promises for concurrent requests
-            const promises = [];
-            for (let i = 0; i < requestCount; i++) {
-                promises.push(makeRequest(endpoint));
-            }
-
-            try {
-                const responses = await Promise.all(promises);
-                const endTime = Date.now();
-                const successCount = responses.filter(r => r.ok).length;
-                const failCount = requestCount - successCount;
-
-                displayResult('quickActionsResult', {
-                    message: 'Stress test completed',
-                    requestCount: requestCount,
-                    successCount: successCount,
-                    failCount: failCount,
-                    totalTime: `${endTime - startTime}ms`,
-                    averageTime: `${Math.round((endTime - startTime) / requestCount)}ms`,
-                    ok: true
-                });
-            } catch (error) {
-                displayResult('quickActionsResult', {
-                    error: `Stress test failed: ${error.message}`,
-                    ok: false
-                });
-            }
-        }
-
-        async function testRecipeAIWorkflow() {
-            if (!activeToken) {
-                displayResult('quickActionsResult', {
-                    error: 'Please login first to test Recipe AI workflow',
-                    ok: false
-                });
-                return;
-            }
-
-            const workflow = [];
-            const startTime = Date.now();
-
-            displayResult('quickActionsResult', {
-                message: 'Starting Recipe AI Workflow Test... This may take 30-60 seconds',
-                status: 'running'
-            });
-
-            // Step 1: Create a shopping list
-            workflow.push({
-                step: '1. Create shopping list',
-                result: await makeRequest('/api/shopping/lists/', {
-                    method: 'POST',
-                    body: JSON.stringify({ name: `AI Recipe Test ${Date.now()}` })
-                })
-            });
-
-            const listId = workflow[0].result.data?.id;
-
-            if (listId) {
-                // Step 2: Find recipe with AI (adds ingredients to list)
-                workflow.push({
-                    step: '2. Find recipe with AI (pasta carbonara)',
-                    result: await makeRequest('/api/recipes/find_recipe/', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            query: 'pasta carbonara',
-                            shopping_list_id: listId,
-                            add_to_list: true
-                        })
-                    })
-                });
-
-                const recipeId = workflow[1].result.data?.recipe?.id;
-
-                // Step 3: Get list items
-                workflow.push({
-                    step: '3. Get shopping list items',
-                    result: await makeRequest(`/api/shopping/lists/${listId}/`)
-                });
-
-                if (recipeId) {
-                    // Step 4: Save recipe
+                if (userRecipe) {
+                    // Step 4: Mark as cooked
                     workflow.push({
-                        step: '4. Save recipe to my recipes',
-                        result: await makeRequest(`/api/recipes/${recipeId}/save_recipe/`, {
+                        step: '4. Mark as cooked',
+                        result: await makeRequest(`/api/recipes/recipes/${userRecipe.id}/mark_cooked/`, {
                             method: 'POST'
                         })
                     });
 
-                    // Step 5: Mark as cooked
+                    // Step 5: Archive recipe
                     workflow.push({
-                        step: '5. Mark recipe as cooked',
-                        result: await makeRequest(`/api/recipes/${recipeId}/mark_cooked/`, {
+                        step: '5. Archive recipe',
+                        result: await makeRequest(`/api/recipes/recipes/${userRecipe.id}/unsave_recipe/`, {
                             method: 'POST'
                         })
                     });
 
-                    // Step 6: Get my saved recipes
+                    // Step 6: Get archived recipes
                     workflow.push({
-                        step: '6. Get my saved recipes',
-                        result: await makeRequest('/api/recipes/my_recipes/')
+                        step: '6. Get archived recipes',
+                        result: await makeRequest('/api/recipes/recipes/archived_recipes/')
                     });
 
-                    // Step 7: Get recipe versions
+                    // Step 7: Restore recipe
                     workflow.push({
-                        step: '7. Get recipe versions',
-                        result: await makeRequest(`/api/recipes/${recipeId}/versions/`)
+                        step: '7. Restore recipe',
+                        result: await makeRequest(`/api/recipes/recipes/${userRecipe.id}/restore_recipe/`, {
+                            method: 'POST'
+                        })
                     });
                 }
             }
@@ -2020,30 +1192,112 @@
             const endTime = Date.now();
 
             displayResult('quickActionsResult', {
-                message: 'Recipe AI Workflow completed',
+                message: 'Complete Recipe Workflow finished',
                 totalTime: `${Math.round((endTime - startTime) / 1000)}s`,
-                listId: listId,
                 workflow: workflow,
                 summary: {
                     totalSteps: workflow.length,
-                    successSteps: workflow.filter(w => w.result.ok).length,
-                    failedSteps: workflow.filter(w => !w.result.ok).length
+                    successSteps: workflow.filter(w => w.result.ok).length
                 },
                 ok: true
             });
         }
 
-        function exportResults() {
-            const dataStr = JSON.stringify(allResults, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `menumine-api-test-results-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+        async function testDiscoverPageWorkflow() {
+            if (!activeToken) {
+                displayResult('quickActionsResult', {
+                    error: 'Please login first',
+                    ok: false
+                });
+                return;
+            }
+
+            const workflow = [];
+
+            // Test all sorting options
+            const sortOptions = ['popular', 'top_rated', 'most_cooked', 'recent'];
+            for (const sort of sortOptions) {
+                workflow.push({
+                    step: `Get recipes sorted by ${sort}`,
+                    result: await makeRequest(`/api/recipes/canonical/?sort=${sort}`)
+                });
+            }
+
+            // Search test
+            workflow.push({
+                step: 'Search for "pasta"',
+                result: await makeRequest('/api/recipes/canonical/?search=pasta')
+            });
+
+            displayResult('quickActionsResult', {
+                message: 'Discover Page Workflow completed',
+                workflow: workflow,
+                ok: true
+            });
+        }
+
+        async function testArchiveWorkflow() {
+            if (!activeToken) {
+                displayResult('quickActionsResult', {
+                    error: 'Please login first',
+                    ok: false
+                });
+                return;
+            }
+
+            const workflow = [];
+
+            // Get archived lists
+            workflow.push({
+                step: '1. Get archived shopping lists',
+                result: await makeRequest('/api/shopping/lists/archived/')
+            });
+
+            // Get archived recipes
+            workflow.push({
+                step: '2. Get archived recipes',
+                result: await makeRequest('/api/recipes/recipes/archived_recipes/')
+            });
+
+            displayResult('quickActionsResult', {
+                message: 'Archive Workflow completed',
+                workflow: workflow,
+                ok: true
+            });
+        }
+
+        async function testAllEndpoints() {
+            const endpoints = [
+                { url: '/health/', name: 'Health Check' },
+                { url: '/api/', name: 'API Root' },
+                { url: '/api/shopping/lists/', name: 'Shopping Lists' },
+                { url: '/api/recipes/canonical/', name: 'Canonical Recipes' },
+                { url: '/api/recipes/recipes/my_recipes/', name: 'My Recipes' },
+                { url: '/api/recipes/recipes/archived_recipes/', name: 'Archived Recipes' },
+                { url: '/api/shopping/lists/archived/', name: 'Archived Lists' },
+                { url: '/api/users/profile/', name: 'User Profile' }
+            ];
+
+            const results = [];
+            for (const endpoint of endpoints) {
+                const result = await makeRequest(endpoint.url);
+                results.push({
+                    name: endpoint.name,
+                    url: endpoint.url,
+                    status: result.status,
+                    ok: result.ok
+                });
+            }
+
+            const successCount = results.filter(r => r.ok).length;
+
+            displayResult('quickActionsResult', {
+                message: 'Comprehensive endpoint test completed',
+                totalEndpoints: endpoints.length,
+                successCount: successCount,
+                failCount: endpoints.length - successCount,
+                results: results
+            });
         }
 
         function displayResult(elementId, result) {
@@ -2058,7 +1312,6 @@
                 el.style.display = 'none';
                 el.textContent = '';
             });
-            Object.keys(allResults).forEach(key => delete allResults[key]);
         }
 
         // Auto-refresh every 30 seconds
