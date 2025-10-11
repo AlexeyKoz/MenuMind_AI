@@ -385,7 +385,7 @@ class ApiService {
 
     builderStep = (payload: {
         session_id: string;
-        step: 'basic_info' | 'ingredients' | 'steps' | 'finalize';
+        step: 'basic_info' | 'ingredients' | 'steps' | 'review' | 'finalize';
         data: any;
     }) =>
         this.request('/recipes/recipes/builder_step/', {

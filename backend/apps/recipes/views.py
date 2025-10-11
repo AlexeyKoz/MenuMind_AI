@@ -754,7 +754,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         POST /api/recipes/recipes/builder_step/
         {
             "session_id": "uuid",
-            "step": "basic_info|ingredients|steps|finalize",
+            "step": "basic_info|ingredients|steps|review|finalize",
             "data": {
                 // Step-specific data
             }
@@ -798,7 +798,30 @@ class RecipeViewSet(viewsets.ModelViewSet):
             }
         }
 
-        STEP 4 - Finalize:
+        STEP 4 - Review & Edit (First Call - Get compiled recipe):
+        {
+            "session_id": "...",
+            "step": "review",
+            "data": {}
+        }
+        Returns compiled recipe data for user to review/edit
+
+        STEP 4 - Review & Edit (Second Call - Save edits):
+        {
+            "session_id": "...",
+            "step": "review",
+            "data": {
+                "save_edits": true,
+                "edited_data": {
+                    "basic_info": {...},
+                    "ingredients": [{...}],
+                    "steps": [{...}],
+                    "estimated_times": {...}
+                }
+            }
+        }
+
+        STEP 5 - Finalize:
         {
             "session_id": "...",
             "step": "finalize",

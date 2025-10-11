@@ -1,14 +1,30 @@
 import React, { useState } from 'react';
+import { Edit2, X, Plus, Trash2 } from 'lucide-react';
 
 interface RecipeBuilderWizardProps {
     onStartBuilder: () => Promise<{ session_id: string }>;
     onBuilderStep: (payload: {
         session_id: string;
-        step: 'basic_info' | 'ingredients' | 'steps' | 'finalize';
+        step: 'basic_info' | 'ingredients' | 'steps' | 'review' | 'finalize';
         data: any;
     }) => Promise<any>;
     onComplete: (recipe: any) => void;
     onCancel: () => void;
+}
+
+interface StructuredIngredient {
+    name: string;
+    amount?: number;
+    unit?: string;
+    notes?: string;
+}
+
+interface StructuredStep {
+    order: number;
+    instruction: string;
+    time_minutes?: number;
+    temperature?: string;
+    tips?: string[];
 }
 
 /**
@@ -18,7 +34,8 @@ interface RecipeBuilderWizardProps {
  * 1. Basic Info (name, cuisine, servings, difficulty)
  * 2. Ingredients (AI structures quantities & units)
  * 3. Cooking Steps (AI converts description to structured steps)
- * 4. Finalize (publish or keep private)
+ * 4. Review & Edit (see and edit final recipe before saving)
+ * 5. Finalize (publish or keep private)
  */
 const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
     onStartBuilder,
@@ -48,6 +65,17 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
         description: '',
         tags: [] as string[]
     });
+
+    // Review step state - editable recipe data
+    const [reviewData, setReviewData] = useState<{
+        basic_info: any;
+        ingredients: StructuredIngredient[];
+        steps: StructuredStep[];
+        diet_labels: string[];
+        estimated_times: any;
+    } | null>(null);
+
+    const [editingBasicInfo, setEditingBasicInfo] = useState(false);
 
     // Initialize session
     React.useEffect(() => {
@@ -104,11 +132,36 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         }
                     });
                     if (result.success) {
-                        setCurrentStep(4);
+                        // After steps, fetch compiled recipe for review
+                        const reviewResult = await onBuilderStep({
+                            session_id: sessionId,
+                            step: 'review',
+                            data: {}
+                        });
+
+                        if (reviewResult.success && reviewResult.data) {
+                            setReviewData(reviewResult.data);
+                            setCurrentStep(4);
+                        }
                     }
                     break;
 
-                case 4: // Finalize
+                case 4: // Review & Edit
+                    // Save the edited review data back to session
+                    result = await onBuilderStep({
+                        session_id: sessionId,
+                        step: 'review',
+                        data: {
+                            save_edits: true,
+                            edited_data: reviewData
+                        }
+                    });
+                    if (result.success) {
+                        setCurrentStep(5);
+                    }
+                    break;
+
+                case 5: // Finalize
                     result = await onBuilderStep({
                         session_id: sessionId,
                         step: 'finalize',
@@ -144,15 +197,70 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
         setIngredients(updated);
     };
 
+    // Review step editing functions
+    const updateReviewIngredient = (index: number, field: keyof StructuredIngredient, value: any) => {
+        if (!reviewData) return;
+        const updated = [...reviewData.ingredients];
+        updated[index] = { ...updated[index], [field]: value };
+        setReviewData({ ...reviewData, ingredients: updated });
+    };
+
+    const addReviewIngredient = () => {
+        if (!reviewData) return;
+        setReviewData({
+            ...reviewData,
+            ingredients: [...reviewData.ingredients, { name: '', amount: 0, unit: '', notes: '' }]
+        });
+    };
+
+    const removeReviewIngredient = (index: number) => {
+        if (!reviewData) return;
+        setReviewData({
+            ...reviewData,
+            ingredients: reviewData.ingredients.filter((_, i) => i !== index)
+        });
+    };
+
+    const updateReviewStep = (index: number, field: keyof StructuredStep, value: any) => {
+        if (!reviewData) return;
+        const updated = [...reviewData.steps];
+        updated[index] = { ...updated[index], [field]: value };
+        setReviewData({ ...reviewData, steps: updated });
+    };
+
+    const addReviewStep = () => {
+        if (!reviewData) return;
+        setReviewData({
+            ...reviewData,
+            steps: [...reviewData.steps, { order: reviewData.steps.length + 1, instruction: '', time_minutes: 0 }]
+        });
+    };
+
+    const removeReviewStep = (index: number) => {
+        if (!reviewData) return;
+        const updated = reviewData.steps.filter((_, i) => i !== index);
+        // Reorder steps
+        updated.forEach((step, i) => step.order = i + 1);
+        setReviewData({ ...reviewData, steps: updated });
+    };
+
+    const updateBasicInfoField = (field: string, value: any) => {
+        if (!reviewData) return;
+        setReviewData({
+            ...reviewData,
+            basic_info: { ...reviewData.basic_info, [field]: value }
+        });
+    };
+
     return (
-        <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
             {/* Progress Bar */}
             <div className="mb-8">
                 <div className="flex justify-between mb-2">
-                    {['Basic Info', 'Ingredients', 'Steps', 'Finalize'].map((label, index) => (
+                    {['Basic Info', 'Ingredients', 'Steps', 'Review & Edit', 'Finalize'].map((label, index) => (
                         <div
                             key={label}
-                            className={`text-sm font-medium ${index + 1 === currentStep
+                            className={`text-xs sm:text-sm font-medium ${index + 1 === currentStep
                                 ? 'text-blue-600'
                                 : index + 1 < currentStep
                                     ? 'text-green-600'
@@ -166,7 +274,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                 <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                         className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${(currentStep / 4) * 100}%` }}
+                        style={{ width: `${(currentStep / 5) * 100}%` }}
                     />
                 </div>
             </div>
@@ -331,10 +439,246 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                     </div>
                 )}
 
-                {currentStep === 4 && (
+                {currentStep === 4 && reviewData && (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-2xl font-bold text-gray-900">
+                                Step 4: Review & Edit Your Recipe
+                            </h2>
+                            <div className="text-sm text-gray-600">
+                                ✏️ Click any field to edit
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p className="text-blue-800 text-sm">
+                                🎨 <strong>Review your recipe</strong> - AI has structured everything for you. Edit any field before finalizing!
+                            </p>
+                        </div>
+
+                        {/* Basic Info Section */}
+                        <div className="border rounded-lg p-6 bg-gray-50">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-gray-900">📋 Basic Information</h3>
+                                <button
+                                    onClick={() => setEditingBasicInfo(!editingBasicInfo)}
+                                    className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                    {editingBasicInfo ? 'Done' : 'Edit'}
+                                </button>
+                            </div>
+
+                            {editingBasicInfo ? (
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                        <input
+                                            type="text"
+                                            value={reviewData.basic_info.name}
+                                            onChange={(e) => updateBasicInfoField('name', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Cuisine</label>
+                                            <input
+                                                type="text"
+                                                value={reviewData.basic_info.cuisine || ''}
+                                                onChange={(e) => updateBasicInfoField('cuisine', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
+                                            <select
+                                                value={reviewData.basic_info.difficulty}
+                                                onChange={(e) => updateBasicInfoField('difficulty', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                            >
+                                                <option value="beginner">Beginner</option>
+                                                <option value="intermediate">Intermediate</option>
+                                                <option value="advanced">Advanced</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Servings</label>
+                                        <input
+                                            type="number"
+                                            value={reviewData.basic_info.servings}
+                                            onChange={(e) => updateBasicInfoField('servings', parseInt(e.target.value))}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                            min={1}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                        <textarea
+                                            value={reviewData.basic_info.description || ''}
+                                            onChange={(e) => updateBasicInfoField('description', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                            rows={3}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-2 text-sm">
+                                    <p><strong>Name:</strong> {reviewData.basic_info.name}</p>
+                                    <p><strong>Cuisine:</strong> {reviewData.basic_info.cuisine || 'Not specified'}</p>
+                                    <p><strong>Difficulty:</strong> {reviewData.basic_info.difficulty}</p>
+                                    <p><strong>Servings:</strong> {reviewData.basic_info.servings}</p>
+                                    {reviewData.basic_info.description && (
+                                        <p><strong>Description:</strong> {reviewData.basic_info.description}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Ingredients Section */}
+                        <div className="border rounded-lg p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-gray-900">🥕 Ingredients ({reviewData.ingredients.length})</h3>
+                                <button
+                                    onClick={addReviewIngredient}
+                                    className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Add
+                                </button>
+                            </div>
+
+                            <div className="space-y-2">
+                                {reviewData.ingredients.map((ing, index) => (
+                                    <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex-1 grid grid-cols-4 gap-2">
+                                            <input
+                                                type="number"
+                                                value={ing.amount || ''}
+                                                onChange={(e) => updateReviewIngredient(index, 'amount', parseFloat(e.target.value))}
+                                                placeholder="Amt"
+                                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={ing.unit || ''}
+                                                onChange={(e) => updateReviewIngredient(index, 'unit', e.target.value)}
+                                                placeholder="Unit"
+                                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={ing.name}
+                                                onChange={(e) => updateReviewIngredient(index, 'name', e.target.value)}
+                                                placeholder="Ingredient"
+                                                className="col-span-2 px-2 py-1 border border-gray-300 rounded text-sm"
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => removeReviewIngredient(index)}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded transition"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Steps Section */}
+                        <div className="border rounded-lg p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-gray-900">👨‍🍳 Cooking Steps ({reviewData.steps.length})</h3>
+                                <button
+                                    onClick={addReviewStep}
+                                    className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Add Step
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                {reviewData.steps.map((step, index) => (
+                                    <div key={index} className="flex gap-3 items-start p-3 bg-gray-50 rounded-lg">
+                                        <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                                            {step.order}
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                            <textarea
+                                                value={step.instruction}
+                                                onChange={(e) => updateReviewStep(index, 'instruction', e.target.value)}
+                                                placeholder="Step instruction..."
+                                                className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                                                rows={2}
+                                            />
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={step.time_minutes || ''}
+                                                    onChange={(e) => updateReviewStep(index, 'time_minutes', parseInt(e.target.value) || null)}
+                                                    placeholder="Time (min)"
+                                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={step.temperature || ''}
+                                                    onChange={(e) => updateReviewStep(index, 'temperature', e.target.value)}
+                                                    placeholder="Temp (optional)"
+                                                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                                />
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => removeReviewStep(index)}
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded transition"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Time Estimates */}
+                        {reviewData.estimated_times && (
+                            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <h4 className="font-semibold text-yellow-900 mb-2">⏱️ Estimated Times</h4>
+                                <div className="grid grid-cols-3 gap-4 text-sm text-yellow-800">
+                                    <div>
+                                        <strong>Prep:</strong> {reviewData.estimated_times.prep_time || 0} min
+                                    </div>
+                                    <div>
+                                        <strong>Cook:</strong> {reviewData.estimated_times.cook_time || 0} min
+                                    </div>
+                                    <div>
+                                        <strong>Total:</strong> {reviewData.estimated_times.total_time || 0} min
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Diet Labels */}
+                        {reviewData.diet_labels && reviewData.diet_labels.length > 0 && (
+                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <h4 className="font-semibold text-green-900 mb-2">🌱 Auto-Detected Labels</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {reviewData.diet_labels.map((label, index) => (
+                                        <span key={index} className="px-3 py-1 bg-green-200 text-green-800 rounded-full text-sm">
+                                            {label}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {currentStep === 5 && (
                     <div className="space-y-4">
                         <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Step 4: Finalize Recipe
+                            Step 5: Finalize Recipe
                         </h2>
 
                         <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
@@ -346,7 +690,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                 className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                             />
                             <label htmlFor="is_public" className="text-sm font-medium text-gray-700">
-                                Make this recipe public (visible to all users)
+                                Make this recipe public (visible to all users on Discover page)
                             </label>
                         </div>
 
@@ -364,9 +708,9 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         </div>
 
                         <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                            <h4 className="font-semibold text-green-900 mb-2">🎉 Almost done!</h4>
+                            <h4 className="font-semibold text-green-900 mb-2">🎉 Ready to save!</h4>
                             <p className="text-green-800 text-sm">
-                                Click "Create Recipe" to save your recipe. AI will automatically detect diet labels and create a beautiful recipe card.
+                                Click "Create Recipe" to save your recipe. It will be added to your collection and {finalizeOptions.is_public ? 'published to the Discover page' : 'kept private'}.
                             </p>
                         </div>
                     </div>
@@ -399,8 +743,10 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                             </svg>
                             Processing...
                         </span>
-                    ) : currentStep === 4 ? (
+                    ) : currentStep === 5 ? (
                         'Create Recipe'
+                    ) : currentStep === 4 ? (
+                        'Confirm & Continue'
                     ) : (
                         'Next'
                     )}
@@ -411,4 +757,3 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
 };
 
 export default RecipeBuilderWizard;
-

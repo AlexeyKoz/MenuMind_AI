@@ -5,7 +5,8 @@ USER FLOW:
 Step 1: Basic Info → name, cuisine, servings, difficulty
 Step 2: Ingredients → AI suggests quantities & units
 Step 3: Steps → AI structures cooking instructions
-Step 4: Finalize → Create canonical recipe (source_type='user_created')
+Step 4: Review & Edit → User can review and edit the compiled recipe before saving
+Step 5: Finalize → Create canonical recipe (source_type='user_created')
 """
 from typing import Dict, List, Optional
 import json
@@ -98,6 +99,8 @@ class RecipeBuilderService:
             return await self._process_ingredients(session, session_id, user_input)
         elif step == 'steps':
             return await self._process_steps(session, session_id, user_input)
+        elif step == 'review':
+            return await self._process_review(session, session_id, user_input)
         elif step == 'finalize':
             return await self._process_finalize(session, session_id, user_input)
         else:
@@ -582,12 +585,104 @@ Return JSON only:
         }
 
     # ============================================================================
-    # STEP 4: FINALIZE
+    # STEP 4: REVIEW & EDIT
+    # ============================================================================
+
+    async def _process_review(self, session: Dict, session_id: str, user_input: Dict) -> Dict:
+        """
+        Step 4: Review compiled recipe and allow edits
+
+        On first call (no save_edits flag):
+        - Returns compiled recipe data for user to review/edit
+
+        On second call (with save_edits=True):
+        - Saves user's edits back to session
+        - Proceeds to finalize step
+
+        User provides:
+        - save_edits: (optional) Boolean to save edits
+        - edited_data: (optional) Modified recipe data
+        """
+        save_edits = user_input.get('save_edits', False)
+
+        if save_edits:
+            # User has finished editing, save changes back to session
+            edited_data = user_input.get('edited_data', {})
+
+            if edited_data:
+                # Update session with edited data
+                if 'basic_info' in edited_data:
+                    session['data']['basic_info'] = edited_data['basic_info']
+
+                if 'ingredients' in edited_data:
+                    session['data']['ingredients'] = edited_data['ingredients']
+
+                if 'steps' in edited_data:
+                    # Reconstruct steps format
+                    session['data']['steps'] = {
+                        'steps': edited_data['steps'],
+                        'estimated_prep_time': edited_data.get('estimated_times', {}).get('prep_time', 0),
+                        'estimated_cook_time': edited_data.get('estimated_times', {}).get('cook_time', 0),
+                        'total_time': edited_data.get('estimated_times', {}).get('total_time', 0)
+                    }
+
+                # Update session
+                session['step'] = 'review_completed'
+                await cache.aset(f"recipe_builder:{session_id}", session, timeout=3600)
+
+                print(f"[BUILDER] User edits saved to session")
+
+            return {
+                'success': True,
+                'next_step': 'finalize',
+                'current_step': 'review',
+                'message': 'Edits saved! Ready to finalize your recipe.'
+            }
+
+        else:
+            # First call - compile and return recipe data for review
+            basic_info = session['data'].get('basic_info', {})
+            ingredients = session['data'].get('ingredients', [])
+            steps_data = session['data'].get('steps', {})
+
+            # Auto-detect diet labels for preview
+            diet_labels = await self._detect_diet_labels(ingredients)
+
+            # Compile review data
+            review_data = {
+                'basic_info': basic_info,
+                'ingredients': ingredients,
+                'steps': steps_data.get('steps', []),
+                'diet_labels': diet_labels,
+                'estimated_times': {
+                    'prep_time': steps_data.get('estimated_prep_time', 0),
+                    'cook_time': steps_data.get('estimated_cook_time', 0),
+                    'total_time': steps_data.get('total_time', 0)
+                }
+            }
+
+            # Update session step
+            session['step'] = 'review'
+            await cache.aset(f"recipe_builder:{session_id}", session, timeout=3600)
+
+            print(
+                f"[BUILDER] Compiled recipe data for review: {basic_info.get('name')}")
+
+            return {
+                'success': True,
+                'next_step': 'review',
+                'current_step': 'review',
+                'data': review_data,
+                'message': 'Review your recipe and make any edits before finalizing!'
+            }
+
+    # ============================================================================
+    # STEP 5: FINALIZE
     # ============================================================================
 
     async def _process_finalize(self, session: Dict, session_id: str, user_input: Dict) -> Dict:
         """
-        Step 4: Finalize and create canonical recipe
+        Step 5: Finalize and create canonical recipe
 
         User provides:
         - is_public: Whether to publish recipe
