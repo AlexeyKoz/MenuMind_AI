@@ -1,0 +1,8 @@
+export { default as Dashboard } from './Dashboard';
+export { default as ShoppingList } from './ShoppingList';
+export { default as NutritionTracker } from './NutritionTracker';
+export { default as Recipes } from './Recipes';
+export { default as Login } from './Login';
+export { default as Inventory } from './Inventory';
+export { default as SettingsPage } from './SettingsPage';
+export { default as CanonicalRecipesPage } from './CanonicalRecipesPage';

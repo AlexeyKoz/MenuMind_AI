@@ -1,0 +1,177 @@
+# ==========================================
+# Frontend React - Docker Ignore
+# ==========================================
+
+# ==========================================
+# Node.js Specific
+# ==========================================
+
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Production build (will be built in container)
+build/
+dist/
+
+# ==========================================
+# Cache & Logs
+# ==========================================
+
+# npm
+.npm/
+npm-debug.log*
+
+# Yarn
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+yarn-debug.log*
+yarn-error.log*
+
+# Package manager logs
+lerna-debug.log*
+
+# Cache directories
+.cache/
+.parcel-cache/
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output/
+
+# ==========================================
+# TypeScript
+# ==========================================
+
+# TypeScript cache
+*.tsbuildinfo
+
+# TypeScript v1 declaration files
+typings/
+
+# ==========================================
+# Testing
+# ==========================================
+
+# Jest coverage
+coverage/
+
+# Testing artifacts
+.coverage/
+
+# ==========================================
+# Development Tools
+# ==========================================
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# ==========================================
+# Environment Variables
+# ==========================================
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Keep example files
+!.env.example
+
+# ==========================================
+# Build Tools
+# ==========================================
+
+# ESLint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# ==========================================
+# Framework Specific
+# ==========================================
+
+# Next.js
+.next/
+
+# Nuxt.js
+.nuxt/
+
+# Gatsby
+.cache/
+public/
+
+# Storybook build outputs
+.out/
+.storybook-out/
+
+# ==========================================
+# Docker & Deployment
+# ==========================================
+
+# Dockerfiles
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# nginx config (will be copied separately in production)
+nginx.conf
+
+# ==========================================
+# Documentation
+# ==========================================
+README.md
+*.md
+docs/
+
+# ==========================================
+# Version Control
+# ==========================================
+.git/
+.gitignore
+
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+*.log
+logs/
+tmp/
+temp/
+
+# ==========================================
+# Backup Files
+# ==========================================
+*.backup
+*.bak

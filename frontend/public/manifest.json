@@ -1,0 +1,22 @@
+{
+    "short_name": "MenuMind AI",
+    "name": "MenuMind AI - Smart Family Food Platform",
+    "description": "Collaborative shopping lists, meal planning, and nutrition tracking with AI assistance",
+    "icons": [
+        {
+            "src": "favicon.ico",
+            "sizes": "64x64 32x32 24x24 16x16",
+            "type": "image/x-icon"
+        }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#4F46E5",
+    "background_color": "#F3F4F6",
+    "categories": [
+        "food",
+        "lifestyle",
+        "productivity",
+        "health"
+    ]
+}

@@ -1,0 +1,394 @@
+import React, { useState, useEffect } from 'react';
+import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner } from '../components';
+import { useAuth } from '../contexts/AuthContext';
+import ApiService from '../services/api';
+
+/**
+ * CanonicalRecipesPage - Browse and discover deduplicated recipes
+ * 
+ * Features:
+ * - Browse all canonical recipes (no duplicates!)
+ * - Filter by cuisine, difficulty, diet labels
+ * - Sort by popularity, rating, recent, most cooked
+ * - Like and rate recipes
+ * - View recipe details with reviews
+ * - Create new recipes with AI builder wizard
+ */
+const CanonicalRecipesPage: React.FC = () => {
+    const { token, user, logout } = useAuth();
+    const api = new ApiService(token, () => {
+        console.log('🔐 Token expired - logging out user');
+        alert('Your session has expired. Please log in again.');
+        logout();
+    });
+
+    const [recipes, setRecipes] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [selectedRecipe, setSelectedRecipe] = useState<any>(null);
+    const [showBuilder, setShowBuilder] = useState(false);
+
+    // Filters
+    const [search, setSearch] = useState('');
+    const [cuisine, setCuisine] = useState('');
+    const [difficulty, setDifficulty] = useState('');
+    const [dietLabels, setDietLabels] = useState<string[]>([]);
+    const [sortBy, setSortBy] = useState('popular');
+
+    useEffect(() => {
+        loadRecipes();
+    }, [search, cuisine, difficulty, dietLabels, sortBy]);
+
+    // Handle direct recipe link from query parameter
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const recipeId = params.get('recipe');
+
+        console.log(`📖 CanonicalRecipesPage - Checking for recipe param: ${recipeId}`);
+
+        if (recipeId) {
+            console.log(`✅ Recipe ID found in URL: ${recipeId}, loading recipe...`);
+            // Auto-open the recipe if provided in URL
+            const loadRecipeFromUrl = async () => {
+                try {
+                    console.log(`🔍 Fetching recipe with ID: ${recipeId}`);
+                    const recipe = await api.getCanonicalRecipe(recipeId);
+                    console.log(`✅ Recipe loaded:`, recipe.name);
+                    setSelectedRecipe(recipe);
+
+                    // Remove query param from URL to clean it up
+                    window.history.replaceState({}, '', window.location.pathname);
+                } catch (err: any) {
+                    console.error('❌ Failed to load recipe from URL:', err);
+                }
+            };
+
+            loadRecipeFromUrl();
+        } else {
+            console.log(`⚠️ No recipe ID in URL`);
+        }
+    }, [api]);
+
+    const loadRecipes = async () => {
+        setLoading(true);
+        setError('');
+
+        try {
+            const result = await api.getCanonicalRecipes({
+                search: search || undefined,
+                cuisine: cuisine || undefined,
+                difficulty: difficulty || undefined,
+                diet_labels: dietLabels.length > 0 ? dietLabels : undefined,
+                sort: sortBy  // Backend expects 'sort' parameter with values: popular, top_rated, most_cooked, recent
+            });
+
+            setRecipes(result.results || result);
+        } catch (err: any) {
+            setError(err.message || 'Failed to load recipes');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLike = async (recipeId: string) => {
+        const result = await api.likeCanonicalRecipe(recipeId);
+        return result;
+    };
+
+    const handleRate = async (recipeId: string, rating: number) => {
+        await api.rateCanonicalRecipe(recipeId, rating);
+        await loadRecipes(); // Refresh to show updated rating
+    };
+
+    const handleRecipeClick = async (recipeId: string) => {
+        try {
+            const recipe = await api.getCanonicalRecipe(recipeId);
+            setSelectedRecipe(recipe);
+        } catch (err: any) {
+            alert(err.message || 'Failed to load recipe details');
+        }
+    };
+
+    const handleBuilderComplete = (result: any) => {
+        setShowBuilder(false);
+        alert(`Recipe "${result.recipe_summary.name}" created successfully!`);
+        loadRecipes();
+    };
+
+    const toggleDietLabel = (label: string) => {
+        setDietLabels(prev =>
+            prev.includes(label)
+                ? prev.filter(l => l !== label)
+                : [...prev, label]
+        );
+    };
+
+    if (showBuilder) {
+        return (
+            <div className="min-h-screen bg-gray-50 py-8 px-4">
+                <RecipeBuilderWizard
+                    onStartBuilder={api.startBuilder}
+                    onBuilderStep={api.builderStep}
+                    onComplete={handleBuilderComplete}
+                    onCancel={() => setShowBuilder(false)}
+                />
+            </div>
+        );
+    }
+
+    if (selectedRecipe) {
+        return (
+            <div className="min-h-screen bg-gray-50 py-8 px-4">
+                <div className="max-w-4xl mx-auto">
+                    <button
+                        onClick={() => setSelectedRecipe(null)}
+                        className="mb-6 flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Back to recipes
+                    </button>
+
+                    <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
+                        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                            {selectedRecipe.name}
+                        </h1>
+                        <p className="text-lg text-gray-600 mb-6">
+                            {selectedRecipe.description}
+                        </p>
+
+                        {/* Recipe Stats */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <div className="text-2xl font-bold text-gray-900">{selectedRecipe.servings}</div>
+                                <div className="text-sm text-gray-600">Servings</div>
+                            </div>
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <div className="text-2xl font-bold text-gray-900">{selectedRecipe.total_time_minutes}</div>
+                                <div className="text-sm text-gray-600">Minutes</div>
+                            </div>
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <div className="text-2xl font-bold text-gray-900">{selectedRecipe.difficulty}</div>
+                                <div className="text-sm text-gray-600">Difficulty</div>
+                            </div>
+                            <div className="text-center p-4 bg-gray-50 rounded-lg">
+                                <div className="text-2xl font-bold text-gray-900">{selectedRecipe.total_cooked}</div>
+                                <div className="text-sm text-gray-600">Times Cooked</div>
+                            </div>
+                        </div>
+
+                        {/* Ingredients & Steps */}
+                        <div className="grid md:grid-cols-2 gap-8">
+                            {/* Ingredients */}
+                            <div>
+                                <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
+                                    <span className="text-3xl">🥘</span>
+                                    Ingredients
+                                </h3>
+                                {selectedRecipe.base_ingredients && selectedRecipe.base_ingredients.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {selectedRecipe.base_ingredients.map((ing: any, idx: number) => (
+                                            <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                                                <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-sm font-semibold">
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <span className="font-semibold text-blue-600">
+                                                        {ing.amount && ing.unit ? `${ing.amount} ${ing.unit}` : ''}
+                                                    </span>
+                                                    {' '}
+                                                    <span className="text-gray-900">{ing.name}</span>
+                                                    {ing.notes && (
+                                                        <p className="text-sm text-gray-500 mt-1">{ing.notes}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-500 italic">No ingredients listed</p>
+                                )}
+                            </div>
+
+                            {/* Steps */}
+                            <div>
+                                <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
+                                    <span className="text-3xl">📝</span>
+                                    Instructions
+                                </h3>
+                                {selectedRecipe.base_steps && selectedRecipe.base_steps.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {selectedRecipe.base_steps.map((step: any, idx: number) => (
+                                            <div key={idx} className="flex items-start gap-3">
+                                                <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-green-100 text-green-700 rounded-full font-bold">
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1 pt-1">
+                                                    <p className="text-gray-900 leading-relaxed">
+                                                        {step.instruction || step.text || step}
+                                                    </p>
+                                                    {step.time_minutes && (
+                                                        <p className="text-sm text-gray-500 mt-1">
+                                                            ⏱️ {step.time_minutes} minutes
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-500 italic">No instructions listed</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Reviews Section */}
+                    <div className="bg-white rounded-xl shadow-lg p-8">
+                        <ReviewsSection
+                            recipeId={selectedRecipe.id}
+                            currentUserId={user?.username}
+                            onGetReviews={api.getReviews}
+                            onAddReview={api.addReview}
+                            onUpdateReview={api.updateReview}
+                            onDeleteReview={api.deleteReview}
+                            onMarkHelpful={api.markReviewHelpful}
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-50 py-8 px-4">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                            Discover Recipes
+                        </h1>
+                        <p className="text-gray-600">
+                            Browse deduplicated, community-curated recipes
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => setShowBuilder(true)}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Create Recipe
+                    </button>
+                </div>
+
+                {/* Filters */}
+                <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        {/* Search */}
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search recipes..."
+                            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+
+                        {/* Cuisine */}
+                        <select
+                            value={cuisine}
+                            onChange={(e) => setCuisine(e.target.value)}
+                            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="">All Cuisines</option>
+                            <option value="Italian">Italian</option>
+                            <option value="Mexican">Mexican</option>
+                            <option value="Chinese">Chinese</option>
+                            <option value="Indian">Indian</option>
+                            <option value="Japanese">Japanese</option>
+                            <option value="French">French</option>
+                        </select>
+
+                        {/* Difficulty */}
+                        <select
+                            value={difficulty}
+                            onChange={(e) => setDifficulty(e.target.value)}
+                            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="">All Difficulties</option>
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                        </select>
+
+                        {/* Sort */}
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                            <option value="popular">Most Popular</option>
+                            <option value="top_rated">Top Rated</option>
+                            <option value="most_cooked">Most Cooked</option>
+                            <option value="recent">Most Recent</option>
+                        </select>
+                    </div>
+
+                    {/* Diet Labels */}
+                    <div className="flex flex-wrap gap-2">
+                        {['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].map((label) => (
+                            <button
+                                key={label}
+                                onClick={() => toggleDietLabel(label)}
+                                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${dietLabels.includes(label)
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Error */}
+                {error && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                        {error}
+                    </div>
+                )}
+
+                {/* Recipes Grid */}
+                {loading ? (
+                    <div className="flex justify-center py-12">
+                        <LoadingSpinner />
+                    </div>
+                ) : recipes.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                        No recipes found. Try adjusting your filters.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {recipes.map((recipe) => (
+                            <RecipeCard
+                                key={recipe.id}
+                                recipe={recipe}
+                                onLike={handleLike}
+                                onRate={handleRate}
+                                onClick={handleRecipeClick}
+                                showStats={true}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default CanonicalRecipesPage;
+
+
