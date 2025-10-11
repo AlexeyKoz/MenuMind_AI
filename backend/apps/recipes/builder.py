@@ -596,7 +596,7 @@ Return JSON only:
 
         Creates CanonicalRecipe with source_type='user_created'
         """
-        from .models import CanonicalRecipe, Recipe
+        from .models import CanonicalRecipe, Recipe, UserRecipe
         import hashlib
 
         # Extract all collected data
@@ -665,6 +665,8 @@ Return JSON only:
         # Create user's fork
         @sync_to_async
         def create_user_fork():
+            from django.utils import timezone
+
             fork = Recipe.objects.create(
                 canonical_recipe=canonical,
                 is_fork=True,
@@ -684,10 +686,20 @@ Return JSON only:
                 recipe_hash=None  # NULL for forks - bypasses unique constraint
             )
 
+            # Create UserRecipe entry to make it appear in "My Recipes"
+            UserRecipe.objects.create(
+                user=user,
+                recipe=fork,
+                saved_at=timezone.now(),
+                is_archived=False,
+                times_cooked=0
+            )
+
             # Update canonical statistics
             canonical.total_saves += 1
             canonical.save(update_fields=['total_saves'])
 
+            print(f"[BUILDER] Created fork with UserRecipe entry: {fork.id}")
             return fork
 
         user_fork = await create_user_fork()

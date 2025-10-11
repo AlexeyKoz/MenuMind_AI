@@ -424,9 +424,13 @@ class UserRecipe(models.Model):
     # User customizations
     notes = models.TextField(blank=True)
     rating = models.IntegerField(null=True, blank=True, choices=[
-                                 (i, i) for i in range(1, 6)])
+                                (i, i) for i in range(1, 6)])
     times_cooked = models.IntegerField(default=0)
     last_cooked = models.DateTimeField(null=True, blank=True)
+
+    # Archive functionality
+    is_archived = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
 
     # Timestamps
     saved_at = models.DateTimeField(auto_now_add=True)

@@ -328,44 +328,127 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['delete'])
     def unsave_recipe(self, request, pk=None):
-        """Remove recipe from user's collection"""
+        """Archive recipe (soft delete) from user's collection"""
+        from django.utils import timezone
         recipe = self.get_object()
 
-        deleted_count, _ = UserRecipe.objects.filter(
-            user=request.user,
-            recipe=recipe
-        ).delete()
+        try:
+            user_recipe = UserRecipe.objects.get(
+                user=request.user,
+                recipe=recipe
+            )
+            user_recipe.is_archived = True
+            user_recipe.archived_at = timezone.now()
+            user_recipe.save(update_fields=['is_archived', 'archived_at'])
 
-        if deleted_count > 0:
             return Response({
-                'message': f'Removed recipe: {recipe.name}',
-                'saved': False
+                'message': f'Recipe "{recipe.name}" moved to archive',
+                'saved': False,
+                'archived': True
             })
-        else:
+        except UserRecipe.DoesNotExist:
             return Response({
                 'message': 'Recipe was not saved',
                 'saved': False
             }, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=True, methods=['post'])
+    def restore_recipe(self, request, pk=None):
+        """Restore archived recipe to user's collection"""
+        recipe = self.get_object()
+
+        try:
+            user_recipe = UserRecipe.objects.get(
+                user=request.user,
+                recipe=recipe,
+                is_archived=True
+            )
+            user_recipe.is_archived = False
+            user_recipe.archived_at = None
+            user_recipe.save(update_fields=['is_archived', 'archived_at'])
+
+            return Response({
+                'message': f'Recipe "{recipe.name}" restored to My Recipes',
+                'saved': True,
+                'archived': False
+            })
+        except UserRecipe.DoesNotExist:
+            return Response({
+                'message': 'Recipe is not archived',
+                'error': True
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['delete'])
+    def permanently_delete_recipe(self, request, pk=None):
+        """Permanently delete recipe from user's collection (from archive only)"""
+        recipe = self.get_object()
+
+        deleted_count, _ = UserRecipe.objects.filter(
+            user=request.user,
+            recipe=recipe,
+            is_archived=True
+        ).delete()
+
+        if deleted_count > 0:
+            return Response({
+                'message': f'Recipe "{recipe.name}" permanently deleted',
+                'deleted': True
+            })
+        else:
+            return Response({
+                'message': 'Recipe is not archived or does not exist',
+                'error': True
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'])
     def mark_cooked(self, request, pk=None):
-        """Mark recipe as cooked"""
+        """
+        Toggle recipe cooked status (like the Like button)
+        - First click: Mark as cooked (increment global counter)
+        - Second click: Unmark (decrement global counter)
+        Global counter shows total times cooked by ALL users
+        """
         recipe = self.get_object()
 
         try:
             user_recipe = UserRecipe.objects.get(
                 user=request.user, recipe=recipe)
-            user_recipe.times_cooked += 1
-            user_recipe.last_cooked = timezone.now()
-            user_recipe.save()
 
-            # Update recipe statistics
-            recipe.times_cooked += 1
-            recipe.save()
+            # Check if already marked as cooked (using last_cooked as indicator)
+            if user_recipe.last_cooked is not None:
+                # Unmark as cooked
+                user_recipe.last_cooked = None
+                user_recipe.times_cooked = max(0, user_recipe.times_cooked - 1)
+                user_recipe.save()
+
+                # Decrement global counter
+                recipe.times_cooked = max(0, recipe.times_cooked - 1)
+                recipe.save()
+
+                cooked = False
+                message = 'Recipe unmarked as cooked'
+                print(
+                    f"[COOKED] User {request.user.username} unmarked {recipe.name} as cooked")
+            else:
+                # Mark as cooked
+                user_recipe.times_cooked += 1
+                user_recipe.last_cooked = timezone.now()
+                user_recipe.save()
+
+                # Increment global counter
+                recipe.times_cooked += 1
+                recipe.save()
+
+                cooked = True
+                message = 'Recipe marked as cooked'
+                print(
+                    f"[COOKED] User {request.user.username} marked {recipe.name} as cooked")
 
             return Response({
-                'message': 'Recipe marked as cooked',
-                'times_cooked': user_recipe.times_cooked
+                'message': message,
+                'cooked': cooked,
+                'user_times_cooked': user_recipe.times_cooked,
+                'global_times_cooked': recipe.times_cooked
             })
         except UserRecipe.DoesNotExist:
             return Response(
@@ -375,15 +458,57 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def my_recipes(self, request):
-        """Get user's saved recipes"""
+        """Get user's saved recipes (excluding archived)"""
         user_recipes = UserRecipe.objects.filter(
-            user=request.user
+            user=request.user,
+            is_archived=False
         ).select_related('recipe').order_by('-saved_at')
 
-        serializer = UserRecipeSerializer(user_recipes, many=True)
+        # Flatten the structure: merge UserRecipe and Recipe data
+        recipes_data = []
+        for user_recipe in user_recipes:
+            recipe = user_recipe.recipe
+            recipe_data = RecipeSerializer(
+                recipe, context={'request': request}).data
+            recipe_data['is_saved'] = True  # All my_recipes are saved
+            recipe_data['saved_at'] = user_recipe.saved_at
+            recipe_data['times_cooked'] = user_recipe.times_cooked
+            recipe_data['last_cooked'] = user_recipe.last_cooked
+            recipe_data['user_notes'] = user_recipe.notes
+            recipe_data['user_rating'] = user_recipe.rating
+            recipes_data.append(recipe_data)
+
         return Response({
-            'recipes': serializer.data,
+            'recipes': recipes_data,
             'total': user_recipes.count()
+        })
+
+    @action(detail=False, methods=['get'])
+    def archived_recipes(self, request):
+        """Get user's archived recipes"""
+        archived_recipes = UserRecipe.objects.filter(
+            user=request.user,
+            is_archived=True
+        ).select_related('recipe').order_by('-archived_at')
+
+        # Flatten the structure: merge UserRecipe and Recipe data
+        recipes_data = []
+        for user_recipe in archived_recipes:
+            recipe = user_recipe.recipe
+            recipe_data = RecipeSerializer(
+                recipe, context={'request': request}).data
+            # Archived recipes are not actively "saved"
+            recipe_data['is_saved'] = False
+            recipe_data['archived_at'] = user_recipe.archived_at
+            recipe_data['times_cooked'] = user_recipe.times_cooked
+            recipe_data['last_cooked'] = user_recipe.last_cooked
+            recipe_data['user_notes'] = user_recipe.notes
+            recipe_data['user_rating'] = user_recipe.rating
+            recipes_data.append(recipe_data)
+
+        return Response({
+            'recipes': recipes_data,
+            'total': archived_recipes.count()
         })
 
     @action(detail=False, methods=['get'])
@@ -854,13 +979,15 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
     def like(self, request, pk=None):
         """
         Toggle like on canonical recipe
+        When liked, automatically saves recipe to user's collection (My Recipes)
 
         POST /api/recipes/canonical/{id}/like/
 
         Returns:
         {
             "liked": true/false,
-            "total_likes": 123
+            "total_likes": 123,
+            "saved_to_my_recipes": true/false
         }
         """
         canonical = self.get_object()
@@ -869,6 +996,8 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             user=request.user,
             canonical_recipe=canonical
         )
+
+        saved_to_my_recipes = False
 
         if not created:
             # Unlike
@@ -881,20 +1010,46 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             print(
                 f"[LIKE] User {request.user.username} liked {canonical.name}")
 
+            # When user likes a recipe, automatically save it to their collection
+            # Create or get user's fork of this canonical recipe
+            from .services import RecipeAgentService
+            from asgiref.sync import async_to_sync
+
+            try:
+                agent = RecipeAgentService()
+                # This will create a fork + UserRecipe entry if needed
+                user_fork = async_to_sync(agent._create_or_get_user_fork)(
+                    request.user, canonical
+                )
+                saved_to_my_recipes = True
+                print(f"[LIKE] Recipe saved to My Recipes: {user_fork.id}")
+            except Exception as e:
+                print(f"[ERROR] Failed to save recipe to My Recipes: {e}")
+
         # Get updated like count
         total_likes = canonical.likes.count()
 
-        # Invalidate caches
-        RecipeCache.invalidate_user_likes(str(request.user.id))
-        RecipeCache.invalidate_all_for_recipe(str(canonical.id))
+        # Invalidate caches (gracefully handle if Redis not running)
+        try:
+            RecipeCache.invalidate_user_likes(str(request.user.id))
+            RecipeCache.invalidate_all_for_recipe(str(canonical.id))
+        except Exception as e:
+            print(
+                f"[WARNING] Could not invalidate cache (Redis may not be running): {e}")
 
-        # Queue background task to update statistics
-        update_canonical_recipe_statistics.delay(str(canonical.id))
+        # Queue background task to update statistics (optional - gracefully handle if Redis/Celery not running)
+        try:
+            update_canonical_recipe_statistics.delay(str(canonical.id))
+        except Exception as e:
+            print(
+                f"[WARNING] Could not queue background task (Redis/Celery may not be running): {e}")
+            # Continue anyway - statistics will be eventually consistent
 
         return Response({
             'liked': liked,
             'total_likes': total_likes,
-            'user_liked': liked
+            'user_liked': liked,
+            'saved_to_my_recipes': saved_to_my_recipes
         })
 
     @action(detail=True, methods=['get'])
@@ -958,9 +1113,13 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         # Update canonical's average rating (denormalized)
         self._update_average_rating(canonical)
 
-        # Invalidate caches
-        RecipeCache.invalidate_user_ratings(str(request.user.id))
-        RecipeCache.invalidate_all_for_recipe(str(canonical.id))
+        # Invalidate caches (gracefully handle if Redis not running)
+        try:
+            RecipeCache.invalidate_user_ratings(str(request.user.id))
+            RecipeCache.invalidate_all_for_recipe(str(canonical.id))
+        except Exception as e:
+            print(
+                f"[WARNING] Could not invalidate cache (Redis may not be running): {e}")
 
         action_text = 'rated' if created else 'updated rating for'
         print(
@@ -1079,10 +1238,10 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             reviews_qs, many=True, context={'request': request})
         return Response(serializer.data)
 
-    @action(detail=True, methods=['patch'], url_path='reviews/(?P<review_id>[^/.]+)')
-    def update_review(self, request, pk=None, review_id=None):
+    @action(detail=True, methods=['patch', 'delete'], url_path='reviews/(?P<review_id>[^/.]+)')
+    def manage_review(self, request, pk=None, review_id=None):
         """
-        Update user's review
+        Update or delete user's review
 
         PATCH /api/recipes/canonical/{id}/reviews/{review_id}/
         Body: {
@@ -1090,42 +1249,6 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             "content": "Updated content",
             "rating": 4
         }
-        """
-        canonical = self.get_object()
-        review = get_object_or_404(
-            RecipeReview,
-            id=review_id,
-            canonical_recipe=canonical,
-            user=request.user  # Only owner can update
-        )
-
-        serializer = CreateReviewSerializer(data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-
-        for field, value in serializer.validated_data.items():
-            setattr(review, field, value)
-        review.save()
-
-        # Update rating if changed
-        if 'rating' in serializer.validated_data:
-            RecipeRating.objects.update_or_create(
-                user=request.user,
-                canonical_recipe=canonical,
-                defaults={'rating': review.rating}
-            )
-            self._update_average_rating(canonical)
-
-        print(
-            f"[REVIEW] User {request.user.username} updated review for {canonical.name}")
-
-        return Response(
-            RecipeReviewSerializer(review, context={'request': request}).data
-        )
-
-    @action(detail=True, methods=['delete'], url_path='reviews/(?P<review_id>[^/.]+)')
-    def delete_review(self, request, pk=None, review_id=None):
-        """
-        Delete user's review
 
         DELETE /api/recipes/canonical/{id}/reviews/{review_id}/
         """
@@ -1134,22 +1257,51 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             RecipeReview,
             id=review_id,
             canonical_recipe=canonical,
-            user=request.user  # Only owner can delete
+            user=request.user  # Only owner can update/delete
         )
 
-        review.delete()
+        if request.method == 'PATCH':
+            # Update review
+            serializer = CreateReviewSerializer(
+                data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
 
-        # Update canonical statistics
-        canonical.total_reviews = max(0, canonical.total_reviews - 1)
-        canonical.save(update_fields=['total_reviews'])
+            for field, value in serializer.validated_data.items():
+                setattr(review, field, value)
+            review.save()
 
-        print(
-            f"[REVIEW] User {request.user.username} deleted review for {canonical.name}")
+            # Update rating if changed
+            if 'rating' in serializer.validated_data:
+                RecipeRating.objects.update_or_create(
+                    user=request.user,
+                    canonical_recipe=canonical,
+                    defaults={'rating': review.rating}
+                )
+                self._update_average_rating(canonical)
 
-        return Response(
-            {'message': 'Review deleted successfully'},
-            status=status.HTTP_204_NO_CONTENT
-        )
+            print(
+                f"[REVIEW] User {request.user.username} updated review for {canonical.name}")
+
+            return Response(
+                RecipeReviewSerializer(
+                    review, context={'request': request}).data
+            )
+
+        elif request.method == 'DELETE':
+            # Delete review
+            review.delete()
+
+            # Update canonical statistics
+            canonical.total_reviews = max(0, canonical.total_reviews - 1)
+            canonical.save(update_fields=['total_reviews'])
+
+            print(
+                f"[REVIEW] User {request.user.username} deleted review for {canonical.name}")
+
+            return Response(
+                {'message': 'Review deleted successfully'},
+                status=status.HTTP_204_NO_CONTENT
+            )
 
     @action(detail=True, methods=['post'], url_path='reviews/(?P<review_id>[^/.]+)/helpful')
     def mark_review_helpful(self, request, pk=None, review_id=None):

@@ -61,7 +61,7 @@ class CanonicalRecipeSerializer(serializers.ModelSerializer):
         return None
 
     def get_user_has_fork(self, obj):
-        """Check if user has forked this recipe"""
+        """Check if user has a fork of this canonical recipe"""
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             return Recipe.objects.filter(
@@ -78,6 +78,9 @@ class CanonicalRecipeListSerializer(serializers.ModelSerializer):
     original_creator_username = serializers.CharField(
         source='original_creator.username', read_only=True, allow_null=True
     )
+    user_liked = serializers.SerializerMethodField()
+    user_rating = serializers.SerializerMethodField()
+    user_has_fork = serializers.SerializerMethodField()
 
     class Meta:
         model = CanonicalRecipe
@@ -85,9 +88,40 @@ class CanonicalRecipeListSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'source_type',
             'original_creator_username', 'cuisine', 'difficulty',
             'diet_labels', 'total_time_minutes', 'servings',
-            'total_saves', 'average_rating', 'total_ratings',
-            'is_featured', 'created_at'
+            'total_saves', 'total_cooked', 'average_rating', 'total_ratings',
+            'is_featured', 'created_at', 'user_liked', 'user_rating', 'user_has_fork'
         ]
+
+    def get_user_liked(self, obj):
+        """Check if current user has liked this recipe"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return RecipeLike.objects.filter(
+                user=request.user,
+                canonical_recipe=obj
+            ).exists()
+        return False
+
+    def get_user_rating(self, obj):
+        """Get current user's rating for this recipe"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            rating = RecipeRating.objects.filter(
+                user=request.user,
+                canonical_recipe=obj
+            ).first()
+            return rating.rating if rating else None
+        return None
+
+    def get_user_has_fork(self, obj):
+        """Check if user has a fork of this canonical recipe"""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return Recipe.objects.filter(
+                created_by=request.user,
+                canonical_recipe=obj
+            ).exists()
+        return False
 
 
 # ============================================================================
@@ -278,7 +312,7 @@ class CreateReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RecipeReview
-        fields = ['canonical_recipe', 'title', 'content', 'rating']
+        fields = ['title', 'content', 'rating']
 
     def validate_rating(self, value):
         if not (1 <= value <= 5):

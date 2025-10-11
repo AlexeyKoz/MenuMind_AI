@@ -178,25 +178,45 @@ class RecipeAgentService:
         ).first()
 
         if canonical:
+            print(f"[MATCH] Exact match found: {canonical.name}")
             return canonical
 
-        # Try partial match (first significant word)
+        # Improved partial match: require at least 2 significant words to match
         words = normalized_name.split()
-        if words:
-            first_word = words[0]
-            # Find recipes starting with the same word
+        if len(words) >= 2:
+            # Require at least the first 2 words to match (e.g., "fried fish" won't match "fried potato")
+            # This prevents false positives like "fried fish" matching "fried potato"
+            first_two_words = ' '.join(words[:2])
+
+            # Search for recipes containing both words (in any order)
             similar = CanonicalRecipe.objects.filter(
-                name__icontains=first_word,
+                Q(name__icontains=words[0]) & Q(name__icontains=words[1]),
                 is_published=True
             ).first()
-            return similar
 
+            if similar:
+                print(
+                    f"[MATCH] Partial match found: {similar.name} (searched for: {normalized_name})")
+                # Extra validation: check if at least 2 words match
+                similar_words = similar.name.lower().split()
+                matches = sum(1 for word in words[:2] if word in similar_words)
+                if matches >= 2:
+                    return similar
+                else:
+                    print(
+                        f"[MATCH] Rejected partial match (not enough word overlap)")
+                    return None
+
+        # If single word or no good match, don't match partially
+        # Let the AI search for the exact recipe instead
+        print(f"[MATCH] No existing recipe found, will search web")
         return None
 
     @sync_to_async
     def _create_or_get_user_fork(self, user, canonical_recipe):
         """Create or retrieve user's fork of canonical recipe"""
-        from .models import Recipe
+        from .models import Recipe, UserRecipe
+        from django.utils import timezone
 
         # Check if user already has a fork
         existing_fork = Recipe.objects.filter(
@@ -207,6 +227,15 @@ class RecipeAgentService:
 
         if existing_fork:
             print(f"[FORK] User already has fork: {existing_fork.id}")
+            # Ensure UserRecipe entry exists
+            UserRecipe.objects.get_or_create(
+                user=user,
+                recipe=existing_fork,
+                defaults={
+                    'saved_at': timezone.now(),
+                    'is_archived': False
+                }
+            )
             return existing_fork
 
         # Create new fork
@@ -229,11 +258,20 @@ class RecipeAgentService:
             recipe_hash=None  # NULL for forks - bypasses unique constraint
         )
 
+        # Create UserRecipe entry to make it appear in "My Recipes"
+        UserRecipe.objects.create(
+            user=user,
+            recipe=fork,
+            saved_at=timezone.now(),
+            is_archived=False,
+            times_cooked=0
+        )
+
         # Update canonical statistics
         canonical_recipe.total_saves += 1
         canonical_recipe.save(update_fields=['total_saves'])
 
-        print(f"[FORK] Created new fork: {fork.id}")
+        print(f"[FORK] Created new fork: {fork.id} with UserRecipe entry")
         return fork
 
     @sync_to_async
