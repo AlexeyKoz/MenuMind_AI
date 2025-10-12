@@ -145,6 +145,19 @@ class ShoppingList(models.Model):
                 self.permanently_deleted_at is None and
                 (user == self.creator or user == self.deleted_by))
 
+    def can_access(self, user):
+        """Check if user can access this shopping list"""
+        # Creator has full access
+        if self.creator == user:
+            return True
+
+        # Collaborators have access based on their permissions
+        try:
+            collaborator = self.collaborators.get(user=user)
+            return True  # If they're a collaborator, they have access
+        except ShoppingListCollaborator.DoesNotExist:
+            return False
+
     def is_permanently_deleted(self):
         """Check if list has been permanently deleted by creator"""
         return self.permanently_deleted_at is not None
@@ -366,7 +379,7 @@ class ShoppingItem(models.Model):
 
 
 class Inventory(models.Model):
-    """Track household inventory"""
+    """Track household inventory with AI-powered categorization"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
@@ -382,6 +395,7 @@ class Inventory(models.Model):
     )
 
     expiration_date = models.DateField(null=True, blank=True)
+    purchase_date = models.DateField(null=True, blank=True, auto_now_add=True)
     location = models.CharField(
         max_length=20,
         choices=[
@@ -402,6 +416,17 @@ class Inventory(models.Model):
         default=1
     )
     auto_add_to_list = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    # Permission inheritance from shopping list
+    shopping_list = models.ForeignKey(
+        'ShoppingList',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='inventory_items',
+        help_text='Shopping list this item was created from (for permission inheritance)'
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -413,16 +438,112 @@ class Inventory(models.Model):
         return self.expiration_date < timezone.now().date()
 
     @property
+    def is_expiring_soon(self):
+        """Check if item expires within 3 days"""
+        if not self.expiration_date:
+            return False
+        days_until_expiry = (self.expiration_date - timezone.now().date()).days
+        return 0 <= days_until_expiry <= 3
+
+    @property
+    def expiry_status(self):
+        """Return expiry status: expired, urgent, warning, ok"""
+        if not self.expiration_date:
+            return 'ok'
+        days_until_expiry = (self.expiration_date - timezone.now().date()).days
+        if days_until_expiry < 0:
+            return 'expired'
+        elif days_until_expiry <= 2:
+            return 'urgent'  # Red
+        elif days_until_expiry <= 5:
+            return 'warning'  # Yellow
+        else:
+            return 'ok'  # Green
+
+    @property
     def is_low_stock(self):
         return self.quantity <= self.low_stock_threshold
 
+    def can_access(self, user):
+        """Check if user can access this inventory item"""
+        # Owner has full access
+        if self.user == user:
+            return True
+
+        # Collaborators on linked shopping list have access
+        if self.shopping_list:
+            return self.shopping_list.can_access(user)
+
+        return False
+
+    def __str__(self):
+        return f"{self.name} ({self.quantity}{self.unit}) - {self.location}"
+
     class Meta:
         db_table = 'inventory'
-        ordering = ['expiration_date', 'name']
+        # Removed expiration_date to avoid null comparison issues
+        ordering = ['location', 'name']
+        verbose_name_plural = 'Inventory items'
         indexes = [
             models.Index(fields=['user', 'expiration_date']),
+            models.Index(fields=['user', 'location']),
             models.Index(fields=['category']),
             models.Index(fields=['barcode']),
+            models.Index(fields=['shopping_list']),
+        ]
+
+
+class InventoryHistory(models.Model):
+    """Track inventory changes and consumption"""
+
+    ACTION_CHOICES = [
+        ('added', 'Added from shopping list'),
+        ('consumed', 'Used in recipe'),
+        ('expired', 'Discarded (expired)'),
+        ('moved', 'Moved location'),
+        ('adjusted', 'Manual adjustment'),
+        ('deleted', 'Deleted'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    inventory_item = models.ForeignKey(
+        Inventory,
+        on_delete=models.CASCADE,
+        related_name='history'
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+
+    quantity_change = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text='Positive for additions, negative for consumption'
+    )
+    previous_quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    new_quantity = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # Optional metadata
+    recipe = models.ForeignKey(
+        'recipes.Recipe',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text='Recipe this item was used in (if consumed)'
+    )
+    notes = models.TextField(blank=True)
+
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.inventory_item.name} - {self.action} ({self.quantity_change:+.2f})"
+
+    class Meta:
+        db_table = 'inventory_history'
+        ordering = ['-timestamp']
+        verbose_name_plural = 'Inventory history'
+        indexes = [
+            models.Index(fields=['inventory_item', '-timestamp']),
+            models.Index(fields=['action']),
+            models.Index(fields=['recipe']),
         ]
 
 

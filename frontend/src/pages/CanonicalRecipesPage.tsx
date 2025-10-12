@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
+import { Heart } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 /**
  * CanonicalRecipesPage - Browse and discover deduplicated recipes
@@ -27,6 +29,8 @@ const CanonicalRecipesPage: React.FC = () => {
     const [error, setError] = useState('');
     const [selectedRecipe, setSelectedRecipe] = useState<any>(null);
     const [showBuilder, setShowBuilder] = useState(false);
+    const [recipeLiked, setRecipeLiked] = useState(false);
+    const [liking, setLiking] = useState(false);
 
     // Filters
     const [search, setSearch] = useState('');
@@ -103,9 +107,47 @@ const CanonicalRecipesPage: React.FC = () => {
     const handleRecipeClick = async (recipeId: string) => {
         try {
             const recipe = await api.getCanonicalRecipe(recipeId);
+
+            // Check if recipe is already liked
+            try {
+                const likeStatus = await api.getLikeStatus(recipeId);
+                setRecipeLiked(likeStatus.is_liked || false);
+            } catch (likeErr) {
+                // If we can't get like status, assume not liked
+                setRecipeLiked(false);
+            }
+
             setSelectedRecipe(recipe);
         } catch (err: any) {
             alert(err.message || 'Failed to load recipe details');
+        }
+    };
+
+    const handleLikeAction = async () => {
+        if (!selectedRecipe || liking) return;
+
+        setLiking(true);
+        try {
+            await api.likeCanonicalRecipe(selectedRecipe.id);
+
+            // Toggle the liked state
+            setRecipeLiked(!recipeLiked);
+
+            // Show success message
+            if (!recipeLiked) {
+                toast.success('Recipe added to your favorites!');
+            } else {
+                toast.success('Recipe removed from favorites');
+            }
+
+            // Refresh recipes to update like count in the grid
+            await loadRecipes();
+
+        } catch (error: any) {
+            console.error('Like error:', error);
+            toast.error(error.message || 'Failed to update like status');
+        } finally {
+            setLiking(false);
         }
     };
 
@@ -151,12 +193,30 @@ const CanonicalRecipesPage: React.FC = () => {
                     </button>
 
                     <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
-                        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                            {selectedRecipe.name}
-                        </h1>
-                        <p className="text-lg text-gray-600 mb-6">
-                            {selectedRecipe.description}
-                        </p>
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="flex-1">
+                                <h1 className="text-4xl font-bold text-gray-900">
+                                    {selectedRecipe.name}
+                                </h1>
+                                <p className="text-lg text-gray-600 mt-2">
+                                    {selectedRecipe.description}
+                                </p>
+                            </div>
+
+                            {/* Like Button */}
+                            <button
+                                onClick={handleLikeAction}
+                                disabled={liking}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all font-medium ${recipeLiked
+                                        ? 'bg-red-600 text-white hover:bg-red-700'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    } ${liking ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                title={recipeLiked ? 'Remove from favorites' : 'Add to favorites'}
+                            >
+                                <Heart className={`w-5 h-5 ${recipeLiked ? 'fill-current' : ''}`} />
+                                {liking ? 'Updating...' : recipeLiked ? 'Favorited' : 'Add to Favorites'}
+                            </button>
+                        </div>
 
                         {/* Recipe Stats */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

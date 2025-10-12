@@ -1,3 +1,5 @@
+import { BulkCreateInventoryResponse } from '../types';
+
 class ApiService {
     private token: string | null;
     private baseURL: string;
@@ -176,15 +178,6 @@ class ApiService {
     generateRecipes = () => this.request('/ai/recipes/', {
         method: 'POST'
     });
-
-    // Inventory endpoints
-    getInventory = () => this.request('/shopping/inventory/');
-    addInventoryItem = (data: any) => this.request('/shopping/inventory/', {
-        method: 'POST',
-        body: JSON.stringify(data)
-    });
-    getLowStock = () => this.request('/shopping/inventory/low_stock/');
-    getExpiringItems = () => this.request('/shopping/inventory/expiring_soon/');
 
     // Collaboration endpoints
     addCollaborator = (listId: string, data: any) => this.request(`/shopping/lists/${listId}/add_collaborator/`, {
@@ -391,6 +384,120 @@ class ApiService {
         this.request('/recipes/recipes/builder_step/', {
             method: 'POST',
             body: JSON.stringify(payload)
+        });
+
+    // ===== INVENTORY MANAGEMENT (Phase 5) =====
+
+    // Inventory CRUD
+    getInventory = () =>
+        this.request('/shopping/inventory/');
+
+    getInventoryByLocation = (location?: string) =>
+        this.request(`/shopping/inventory/by_location/${location ? `?location=${location}` : ''}`);
+
+    getInventoryExpiringSoon = (days: number = 7) =>
+        this.request(`/shopping/inventory/expiring_soon/?days=${days}`);
+
+    getInventoryLowStock = () =>
+        this.request('/shopping/inventory/low_stock/');
+
+    getInventoryItem = (id: string) =>
+        this.request(`/shopping/inventory/${id}/`);
+
+    createInventoryItem = (data: {
+        name: string;
+        quantity: number;
+        unit: string;
+        location: 'fridge' | 'freezer' | 'pantry' | 'counter';
+        category: string;
+        expiration_date?: string;
+        notes?: string;
+        shopping_list?: string;
+    }) =>
+        this.request('/shopping/inventory/', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+
+    updateInventoryItem = (id: string, data: Partial<{
+        name: string;
+        quantity: number;
+        unit: string;
+        location: string;
+        category: string;
+        expiration_date: string;
+        notes: string;
+        low_stock_threshold: number;
+        auto_add_to_list: boolean;
+    }>) =>
+        this.request(`/shopping/inventory/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data)
+        });
+
+    deleteInventoryItem = (id: string) =>
+        this.request(`/shopping/inventory/${id}/`, {
+            method: 'DELETE'
+        });
+
+    // Inventory Actions
+    moveInventoryItem = (id: string, newLocation: 'fridge' | 'freezer' | 'pantry' | 'counter') =>
+        this.request(`/shopping/inventory/${id}/move/`, {
+            method: 'PATCH',
+            body: JSON.stringify({ new_location: newLocation })
+        });
+
+    getInventoryHistory = (id: string) =>
+        this.request(`/shopping/inventory/${id}/history/`);
+
+    // Bulk Operations
+    bulkCreateInventory = (items: Array<{
+        name: string;
+        quantity: number;
+        unit: string;
+        location: string;
+        category: string;
+        expiration_date?: string;
+        shopping_list_id?: string;
+    }>): Promise<BulkCreateInventoryResponse> =>
+        this.request('/shopping/inventory/bulk_create/', {
+            method: 'POST',
+            body: JSON.stringify({ items })
+        });
+
+    consumeInventory = (
+        items: Array<{ inventory_id: string; quantity_used: number; unit: string }>,
+        recipeId?: string,
+        notes?: string
+    ) =>
+        this.request('/shopping/inventory/consume/', {
+            method: 'POST',
+            body: JSON.stringify({
+                items,
+                recipe_id: recipeId,
+                notes
+            })
+        });
+
+    // AI Features
+    generateRecipesFromInventory = (options?: {
+        max_recipes?: number;
+        prioritize_expiring?: boolean;
+        max_missing_ingredients?: number;
+    }) =>
+        this.request('/shopping/inventory/generate_recipes/', {
+            method: 'POST',
+            body: JSON.stringify(options || {})
+        });
+
+    // Shopping List → Inventory Integration
+    sendToInventory = (listId: string, itemIds: string[], aiCategorize: boolean = true) =>
+        this.request(`/shopping/lists/${listId}/send_to_inventory/`, {
+            method: 'POST',
+            body: JSON.stringify({
+                item_ids: itemIds,
+                ai_categorize: aiCategorize
+            })
         });
 }
 

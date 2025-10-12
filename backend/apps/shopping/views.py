@@ -1183,6 +1183,81 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             'list_name': shopping_list.name
         }, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['post'])
+    def send_to_inventory(self, request, pk=None):
+        """
+        Transfer completed items from shopping list to inventory with AI categorization
+
+        POST /api/shopping/lists/{id}/send_to_inventory/
+        Body:
+        {
+            "item_ids": [uuid, uuid, ...],  // IDs of completed items
+            "ai_categorize": true
+        }
+
+        Returns AI categorization suggestions for review
+        """
+        from .inventory_services import InventoryCategorizationService
+
+        shopping_list = self.get_object()
+        item_ids = request.data.get('item_ids', [])
+        ai_categorize = request.data.get('ai_categorize', True)
+
+        if not item_ids:
+            return Response(
+                {'error': 'item_ids is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get the shopping items
+        items = ShoppingItem.objects.filter(
+            id__in=item_ids,
+            shopping_list=shopping_list,
+            is_completed=True  # Only completed items
+        )
+
+        if not items.exists():
+            return Response(
+                {'error': 'No completed items found with provided IDs'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prepare items for categorization
+        items_for_categorization = []
+        for item in items:
+            items_for_categorization.append({
+                'id': str(item.id),
+                'name': item.name
+            })
+
+        # Get AI categorization suggestions
+        suggestions = []
+        if ai_categorize:
+            service = InventoryCategorizationService()
+            suggestions = service.categorize_items(items_for_categorization)
+        else:
+            # Return items without AI suggestions
+            for item in items:
+                suggestions.append({
+                    'item_id': str(item.id),
+                    'name': item.name,
+                    'suggested_location': 'pantry',
+                    'suggested_category': 'other',
+                    'suggested_expiration_days': 30,
+                    'suggested_quantity': 1,
+                    'suggested_unit': 'units',
+                    'confidence': 0.5
+                })
+
+        return Response({
+            'success': True,
+            'shopping_list_id': str(shopping_list.id),
+            'shopping_list_name': shopping_list.name,
+            'item_count': items.count(),
+            'suggestions': suggestions,
+            'message': 'Review and confirm the categorization before adding to inventory'
+        })
+
     def destroy(self, request, *args, **kwargs):
         """Step 1: Creator deletes from active lists → Move to archive (soft delete only)"""
         shopping_list = self.get_object()

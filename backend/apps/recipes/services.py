@@ -163,6 +163,14 @@ class RecipeAgentService:
         normalized = name.lower().strip()
         normalized = re.sub(r'[^\w\s]', '', normalized)
         normalized = ' '.join(normalized.split())
+
+        # Remove common words that don't help with matching
+        stop_words = {'and', 'or', 'with', 'the', 'a', 'an', 'in', 'to', 'for'}
+        words = normalized.split()
+        filtered_words = [w for w in words if w not in stop_words]
+        if filtered_words:  # Only filter if we have remaining words
+            normalized = ' '.join(filtered_words)
+
         return normalized
 
     @sync_to_async
@@ -181,14 +189,10 @@ class RecipeAgentService:
             print(f"[MATCH] Exact match found: {canonical.name}")
             return canonical
 
-        # Improved partial match: require at least 2 significant words to match
+        # Improved partial match: require at least 70% of words to match
         words = normalized_name.split()
         if len(words) >= 2:
-            # Require at least the first 2 words to match (e.g., "fried fish" won't match "fried potato")
-            # This prevents false positives like "fried fish" matching "fried potato"
-            first_two_words = ' '.join(words[:2])
-
-            # Search for recipes containing both words (in any order)
+            # Search for recipes containing at least the first 2 significant words
             similar = CanonicalRecipe.objects.filter(
                 Q(name__icontains=words[0]) & Q(name__icontains=words[1]),
                 is_published=True
@@ -196,15 +200,28 @@ class RecipeAgentService:
 
             if similar:
                 print(
-                    f"[MATCH] Partial match found: {similar.name} (searched for: {normalized_name})")
-                # Extra validation: check if at least 2 words match
-                similar_words = similar.name.lower().split()
-                matches = sum(1 for word in words[:2] if word in similar_words)
-                if matches >= 2:
+                    f"[MATCH] Potential match found: {similar.name} (searched for: {normalized_name})")
+
+                # Strict validation: normalize the similar recipe name and check word overlap
+                similar_normalized = self._normalize_recipe_name(similar.name)
+                similar_words = set(similar_normalized.split())
+                search_words = set(words)
+
+                # Calculate overlap percentage (intersection / search words)
+                overlap = similar_words.intersection(search_words)
+                overlap_percentage = len(
+                    overlap) / len(search_words) if search_words else 0
+
+                print(
+                    f"[MATCH] Word overlap: {overlap} ({overlap_percentage * 100:.0f}% of search terms)")
+
+                # Only accept if at least 70% of search words match
+                if overlap_percentage >= 0.7:
+                    print(f"[MATCH] ✅ Accepted match (sufficient overlap)")
                     return similar
                 else:
                     print(
-                        f"[MATCH] Rejected partial match (not enough word overlap)")
+                        f"[MATCH] ❌ Rejected match (insufficient overlap: {overlap_percentage * 100:.0f}% < 70%)")
                     return None
 
         # If single word or no good match, don't match partially

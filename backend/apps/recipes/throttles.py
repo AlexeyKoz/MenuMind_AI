@@ -83,7 +83,7 @@ class RecipeSearchThrottle(UserRateThrottle):
     - 100 searches per day
     """
     scope = 'recipe_search'
-    rate = '20/hour'
+    rate = '100/hour'
 
 
 class RecipeSearchDailyThrottle(UserRateThrottle):
@@ -168,4 +168,3 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         # Like logic
         pass
 """
-

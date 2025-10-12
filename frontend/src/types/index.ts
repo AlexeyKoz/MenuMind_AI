@@ -90,3 +90,39 @@ export interface NutritionGoals {
     fat: number;
 }
 
+// Inventory types
+export interface InventoryItem {
+    id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+    category: string;
+    location: 'fridge' | 'freezer' | 'pantry' | 'counter';
+    expiration_date?: string;
+    purchase_date?: string;
+    nutrition_data?: Record<string, any>;
+    barcode?: string;
+    low_stock_threshold: number;
+    auto_add_to_list: boolean;
+    notes?: string;
+    shopping_list?: string;
+    shopping_list_name?: string;
+    is_expired: boolean;
+    is_expiring_soon: boolean;
+    is_low_stock: boolean;
+    expiry_status: 'expired' | 'urgent' | 'warning' | 'ok';
+    created_at: string;
+    updated_at: string;
+}
+
+export interface BulkCreateInventoryResponse {
+    success: boolean;
+    created_count: number;
+    merged_count: number;
+    total_count: number;
+    error_count: number;
+    items: InventoryItem[];
+    errors: Array<{ item: string; error: string }>;
+    message?: string;
+}
+

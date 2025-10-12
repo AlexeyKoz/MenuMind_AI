@@ -8,6 +8,7 @@ import LeaveConfirmationModal from '../components/LeaveConfirmationModal';
 import { toast } from 'react-hot-toast';
 import { formatWeight, formatVolume, parseWeightInput, parseVolumeInput } from '../utils/unitConversion';
 import { getUserFriendlyError } from '../utils/errorHandler';
+import { Package, X, Check } from 'lucide-react';
 
 const ShoppingList: React.FC = () => {
     const { token, user, logout } = useAuth();
@@ -85,6 +86,11 @@ const ShoppingList: React.FC = () => {
         countdown: 5,
         isLeaving: false
     });
+
+    // Inventory transfer states
+    const [showInventoryModal, setShowInventoryModal] = useState(false);
+    const [inventorySuggestions, setInventorySuggestions] = useState<any[]>([]);
+    const [loadingInventory, setLoadingInventory] = useState(false);
 
     // Create API service with useMemo to prevent recreation on every render
     const api = useMemo(() => {
@@ -1496,6 +1502,81 @@ const ShoppingList: React.FC = () => {
         toast.success('Leave cancelled');
     };
 
+    const handleSendToInventory = async () => {
+        if (!activeList) return;
+
+        // Get completed items
+        const completedItems = items.filter(item => item.is_completed);
+
+        if (completedItems.length === 0) {
+            toast.error('No completed items to send to inventory');
+            return;
+        }
+
+        setLoadingInventory(true);
+        try {
+            const itemIds = completedItems.map(item => item.id);
+            const result = await api.sendToInventory(activeList.id, itemIds, true);
+
+            console.log('[INVENTORY] AI suggestions:', result);
+            setInventorySuggestions(result.suggestions || []);
+            setShowInventoryModal(true);
+
+            toast.success(`AI categorized ${result.item_count} items!`);
+        } catch (error: any) {
+            console.error('[INVENTORY] Error:', error);
+            toast.error('Failed to get inventory suggestions');
+        } finally {
+            setLoadingInventory(false);
+        }
+    };
+
+    const confirmInventoryTransfer = async () => {
+        if (!inventorySuggestions.length) return;
+
+        try {
+            // Convert suggestions to inventory items
+            const items = inventorySuggestions.map(sugg => {
+                const itemData: any = {
+                    name: sugg.name,
+                    quantity: sugg.suggested_quantity,
+                    unit: sugg.suggested_unit,
+                    location: sugg.suggested_location,
+                    category: sugg.suggested_category,
+                    shopping_list_id: activeList?.id
+                };
+
+                // Only add expiration_date if we have a valid suggestion
+                if (sugg.suggested_expiration_days && sugg.suggested_expiration_days > 0) {
+                    const expirationDate = new Date();
+                    expirationDate.setDate(expirationDate.getDate() + sugg.suggested_expiration_days);
+                    itemData.expiration_date = expirationDate.toISOString().split('T')[0];
+                }
+
+                return itemData;
+            });
+
+            const result = await api.bulkCreateInventory(items);
+
+            // Show detailed message about created vs merged items
+            if (result.merged_count > 0) {
+                toast.success(`✅ ${result.message || `Added to inventory: ${result.created_count} new, ${result.merged_count} merged with existing items`}`);
+            } else {
+                toast.success(`✅ Added ${result.created_count} items to inventory!`);
+            }
+
+            setShowInventoryModal(false);
+            setInventorySuggestions([]);
+
+            // Optionally: Delete completed items from shopping list
+            // or mark them in some way
+
+        } catch (error: any) {
+            console.error('[INVENTORY] Transfer error:', error);
+            toast.error('Failed to transfer to inventory');
+        }
+    };
+
     const handleMockOrder = async (storeType: string) => {
         setLoading(true);
         try {
@@ -2103,6 +2184,30 @@ const ShoppingList: React.FC = () => {
                                 ))}
                             </div>
 
+                            {/* Send to Inventory Section */}
+                            {items.filter(item => item.is_completed).length > 0 && (
+                                <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h4 className="font-semibold text-gray-900 mb-1">
+                                                📦 Ready to Stock Up?
+                                            </h4>
+                                            <p className="text-sm text-gray-600">
+                                                Send {items.filter(item => item.is_completed).length} completed items to your inventory
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={handleSendToInventory}
+                                            disabled={loadingInventory}
+                                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 font-medium"
+                                        >
+                                            <Package className="w-5 h-5" />
+                                            {loadingInventory ? 'Processing...' : 'Send to Inventory'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="mt-8 p-4 bg-gray-50 rounded-lg">
                                 <h4 className="font-semibold mb-3">Order from Store (Mock)</h4>
                                 <div className="flex gap-3">
@@ -2157,6 +2262,78 @@ const ShoppingList: React.FC = () => {
                 onConfirm={confirmLeaveList}
                 onCancel={cancelLeave}
             />
+
+            {/* Inventory Review Modal */}
+            {showInventoryModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
+                            <h2 className="text-2xl font-bold text-gray-900">
+                                Review AI Categorization
+                            </h2>
+                            <button
+                                onClick={() => setShowInventoryModal(false)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="p-6">
+                            <p className="text-gray-600 mb-6">
+                                Our AI has categorized your items. Review and edit before adding to inventory.
+                            </p>
+
+                            <div className="space-y-4 mb-6">
+                                {inventorySuggestions.map((sugg, index) => (
+                                    <div
+                                        key={index}
+                                        className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition"
+                                    >
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                            <div>
+                                                <label className="text-xs text-gray-600">Item Name</label>
+                                                <p className="font-semibold">{sugg.name}</p>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-gray-600">Location</label>
+                                                <p className="font-medium capitalize">{sugg.suggested_location}</p>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-gray-600">Category</label>
+                                                <p className="font-medium capitalize">{sugg.suggested_category}</p>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-gray-600">Expires In</label>
+                                                <p className="font-medium">{sugg.suggested_expiration_days} days</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 text-xs text-gray-500">
+                                            AI Confidence: {(sugg.confidence * 100).toFixed(0)}%
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowInventoryModal(false)}
+                                    className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmInventoryTransfer}
+                                    className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                                >
+                                    <Check className="w-4 h-4 mr-2" />
+                                    Add All to Inventory
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

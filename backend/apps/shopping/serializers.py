@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ShoppingList, ShoppingItem, ShoppingListCollaborator, Inventory, ShoppingEvent
+from .models import ShoppingList, ShoppingItem, ShoppingListCollaborator, Inventory, InventoryHistory, ShoppingEvent
 from apps.users.serializers import UserSerializer
 
 
@@ -110,18 +110,112 @@ class UpdateCollaboratorPermissionsSerializer(serializers.Serializer):
 
 
 class InventorySerializer(serializers.ModelSerializer):
+    """Enhanced inventory serializer with expiry status"""
     is_expired = serializers.BooleanField(read_only=True)
+    is_expiring_soon = serializers.BooleanField(read_only=True)
     is_low_stock = serializers.BooleanField(read_only=True)
+    expiry_status = serializers.CharField(read_only=True)
+    shopping_list_name = serializers.CharField(
+        source='shopping_list.name', read_only=True)
 
     class Meta:
         model = Inventory
         fields = [
             'id', 'name', 'quantity', 'unit', 'category',
-            'expiration_date', 'location', 'nutrition_data',
-            'barcode', 'low_stock_threshold', 'auto_add_to_list',
-            'is_expired', 'is_low_stock', 'created_at', 'updated_at'
+            'expiration_date', 'purchase_date', 'location',
+            'nutrition_data', 'barcode', 'low_stock_threshold',
+            'auto_add_to_list', 'notes',
+            'shopping_list', 'shopping_list_name',
+            'is_expired', 'is_expiring_soon', 'is_low_stock', 'expiry_status',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user',
+                            'purchase_date', 'created_at', 'updated_at']
+
+
+class InventoryHistorySerializer(serializers.ModelSerializer):
+    """Serializer for inventory history tracking"""
+    inventory_name = serializers.CharField(
+        source='inventory_item.name', read_only=True)
+    recipe_name = serializers.CharField(source='recipe.name', read_only=True)
+
+    class Meta:
+        model = InventoryHistory
+        fields = [
+            'id', 'inventory_item', 'inventory_name',
+            'action', 'quantity_change',
+            'previous_quantity', 'new_quantity',
+            'recipe', 'recipe_name', 'notes', 'timestamp'
+        ]
+        read_only_fields = ['id', 'timestamp']
+
+
+class AICategorizationSuggestionSerializer(serializers.Serializer):
+    """Serializer for AI categorization suggestions"""
+    item_id = serializers.UUIDField()
+    name = serializers.CharField()
+    suggested_location = serializers.ChoiceField(
+        choices=['fridge', 'freezer', 'pantry', 'counter'])
+    suggested_category = serializers.CharField()
+    suggested_expiration_days = serializers.IntegerField()
+    suggested_quantity = serializers.DecimalField(
+        max_digits=10, decimal_places=2)
+    suggested_unit = serializers.CharField()
+    confidence = serializers.FloatField()
+
+
+class BulkInventoryCreateSerializer(serializers.Serializer):
+    """Serializer for bulk inventory creation from shopping list"""
+    items = serializers.ListField(
+        child=serializers.DictField(),
+        help_text="List of items to create in inventory"
+    )
+
+    def validate_items(self, value):
+        """Validate each item has required fields"""
+        required_fields = ['name', 'quantity', 'unit', 'location', 'category']
+        for item in value:
+            for field in required_fields:
+                if field not in item:
+                    raise serializers.ValidationError(
+                        f"Missing required field '{field}' in item"
+                    )
+        return value
+
+
+class InventoryConsumeSerializer(serializers.Serializer):
+    """Serializer for consuming inventory items (e.g., cooking)"""
+    items = serializers.ListField(
+        child=serializers.DictField(),
+        help_text="List of items to consume"
+    )
+    recipe_id = serializers.UUIDField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    def validate_items(self, value):
+        """Validate each item has required fields"""
+        for item in value:
+            if 'inventory_id' not in item:
+                raise serializers.ValidationError(
+                    "Missing 'inventory_id' in item")
+            if 'quantity_used' not in item:
+                raise serializers.ValidationError(
+                    "Missing 'quantity_used' in item")
+        return value
+
+
+class RecipeFromInventorySerializer(serializers.Serializer):
+    """Serializer for AI-generated recipe suggestions from inventory"""
+    name = serializers.CharField()
+    priority = serializers.ChoiceField(choices=['urgent', 'high', 'normal'])
+    ingredients_from_inventory = serializers.ListField(
+        child=serializers.DictField())
+    missing_ingredients = serializers.ListField(child=serializers.CharField())
+    nutrition = serializers.DictField()
+    difficulty = serializers.ChoiceField(
+        choices=['easy', 'intermediate', 'advanced'])
+    cooking_time = serializers.CharField()
+    reasoning = serializers.CharField()
 
 
 class ShoppingEventSerializer(serializers.ModelSerializer):
