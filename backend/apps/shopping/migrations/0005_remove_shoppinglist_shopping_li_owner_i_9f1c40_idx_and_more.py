@@ -41,11 +41,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='shoppinglist',
-            index=models.Index(
-                fields=['creator', '-updated_at'], name='shopping_li_creator_59f442_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='shoppinglist',
             index=models.Index(fields=['deleted_at'],
                                name='shopping_li_deleted_97707b_idx'),
         ),

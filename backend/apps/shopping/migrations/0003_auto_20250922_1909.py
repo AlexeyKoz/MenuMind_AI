@@ -25,10 +25,6 @@ class Migration(migrations.Migration):
             model_name='shoppinglist',
             name='shared_with',
         ),
-        migrations.RemoveField(
-            model_name='shoppinglist',
-            name='owner',
-        ),
 
         # Update ordering and indexes
         migrations.AlterModelOptions(

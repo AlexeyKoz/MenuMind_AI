@@ -344,6 +344,94 @@ class ShoppingItem(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # ... existing fields (name, quantity, unit, weight_quantity, liquid_quantity, category) ...
+
+    # ============================================================================
+    # IML INTEGRATION (NEW - v2.0)
+    # ============================================================================
+
+    ingredient_key = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Link to IML ingredient: tomatoes-red-ripe'
+    )
+
+    custom_name = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text='If no IML match, store user\'s original text'
+    )
+
+    match_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending Match'),
+            ('matched', 'Matched to IML'),
+            ('no_match', 'No Match Found'),
+            ('manual', 'Manually Linked')
+        ],
+        default='pending'
+    )
+
+    match_confidence = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='Confidence score: 0.0-1.0'
+    )
+
+    suggested_key = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        help_text='AI suggestion before user confirms'
+    )
+
+    # Unit tracking
+    normalized_unit = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        help_text='Normalized unit: tsp, tbsp, g, kg, ml, L, pcs'
+    )
+
+    original_unit = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text='User\'s original: teaspoon, pieces, gramms'
+    )
+
+    unit_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('weight', 'Weight'),
+            ('volume', 'Volume'),
+            ('count', 'Count'),
+            ('cooking', 'Cooking Unit')
+        ],
+        null=True,
+        blank=True
+    )
+
+    original_quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Before conversion (if any)'
+    )
+
+    conversion_applied = models.BooleanField(
+        default=False,
+        help_text='Whether unit conversion was applied'
+    )
+
+    # ... existing fields (is_completed, added_by, notes, etc.) ...
+    # ... existing Meta, methods ...
+
     @property
     def is_recent(self):
         """Check if item was added recently (within last hour)"""
@@ -430,6 +518,46 @@ class Inventory(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # ... existing fields (name, quantity, unit, category, expiration_date, location) ...
+
+    # ============================================================================
+    # IML INTEGRATION (NEW - v2.0)
+    # ============================================================================
+
+    ingredient_key = models.CharField(
+        max_length=200,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Link to IML ingredient'
+    )
+
+    unit_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('weight', 'Weight'),
+            ('volume', 'Volume'),
+            ('count', 'Count'),
+            ('cooking', 'Cooking Unit')
+        ],
+        null=True,
+        blank=True
+    )
+
+    expiration_source = models.CharField(
+        max_length=20,
+        choices=[
+            ('iml', 'From IML Data'),
+            ('ai', 'AI Suggested'),
+            ('manual', 'User Set')
+        ],
+        default='manual',
+        help_text='Source of expiration date calculation'
+    )
+
+    # ... existing fields (nutrition_data, barcode, etc.) ...
+    # ... existing Meta, methods ...
 
     @property
     def is_expired(self):

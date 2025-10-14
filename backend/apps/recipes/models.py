@@ -76,6 +76,49 @@ class CanonicalRecipe(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+
+
+    # ... existing fields ...
+    
+    # ============================================================================
+    # MULTILINGUAL SUPPORT (NEW - v2.0)
+    # ============================================================================
+    
+    title_translations = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Translations: {en: "Ukrainian Borscht", ru: "Украинский борщ", he: "בורשט אוקראיני"}'
+    )
+    
+    description_translations = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Description translations for each language'
+    )
+    
+    steps_translations = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Steps translations: {en: [{step_number: 1, instruction: "..."}], ru: [...], he: [...]}'
+    )
+    
+    nutrition_per_serving = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Nutrition calculated from IML: {calories: 380, protein: 26, fat: 15, carbs: 32, fiber: 4}'
+    )
+    
+    original_language = models.CharField(
+        max_length=2,
+        choices=[('en', 'English'), ('ru', 'Russian'), ('he', 'Hebrew')],
+        default='en',
+        help_text='Language in which recipe was originally created'
+    )
+    
+    # ... existing Meta, methods ...
+
+
+
     class Meta:
         db_table = 'canonical_recipes'
         ordering = ['-created_at']
@@ -168,7 +211,20 @@ class Recipe(models.Model):
     #   "notes": "My personal twist - extra garlic!",
     #   "servings": 6  // override
     # }
-
+   
+    # ... existing fields ...
+    
+    # ============================================================================
+    # MULTILINGUAL SUPPORT (NEW - v2.0)
+    # ============================================================================
+    
+    title_translations = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Title translations if user renames fork: {en: "...", ru: "...", he: "..."}'
+    )
+    
+    # ... existing Meta, methods ...
     # RCIP metadata (kept for standalone recipes)
     rcip_version = models.CharField(max_length=10, default="0.1")
     name = models.CharField(max_length=200, db_index=True)

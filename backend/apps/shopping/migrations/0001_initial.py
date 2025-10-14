@@ -18,14 +18,17 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ShoppingList',
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ('id', models.UUIDField(default=uuid.uuid4,
+                 editable=False, primary_key=True, serialize=False)),
                 ('name', models.CharField(default='Shopping List', max_length=100)),
                 ('is_active', models.BooleanField(default=True)),
                 ('completed_at', models.DateTimeField(blank=True, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='owned_lists', to=settings.AUTH_USER_MODEL)),
-                ('shared_with', models.ManyToManyField(blank=True, related_name='shared_lists', to=settings.AUTH_USER_MODEL)),
+                ('creator', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                 related_name='created_lists', to=settings.AUTH_USER_MODEL)),
+                ('shared_with', models.ManyToManyField(blank=True,
+                 related_name='shared_lists', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'db_table': 'shopping_lists',
@@ -35,22 +38,29 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ShoppingItem',
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ('id', models.UUIDField(default=uuid.uuid4,
+                 editable=False, primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=200)),
-                ('quantity', models.DecimalField(decimal_places=2, default=1, max_digits=10)),
+                ('quantity', models.DecimalField(
+                    decimal_places=2, default=1, max_digits=10)),
                 ('unit', models.CharField(default='unit', max_length=20)),
-                ('category', models.CharField(choices=[('produce', 'Produce'), ('dairy', 'Dairy'), ('meat', 'Meat & Fish'), ('bakery', 'Bakery'), ('frozen', 'Frozen'), ('pantry', 'Pantry'), ('beverages', 'Beverages'), ('snacks', 'Snacks'), ('household', 'Household'), ('other', 'Other')], default='other', max_length=20)),
+                ('category', models.CharField(choices=[('produce', 'Produce'), ('dairy', 'Dairy'), ('meat', 'Meat & Fish'), ('bakery', 'Bakery'), ('frozen', 'Frozen'), (
+                    'pantry', 'Pantry'), ('beverages', 'Beverages'), ('snacks', 'Snacks'), ('household', 'Household'), ('other', 'Other')], default='other', max_length=20)),
                 ('is_completed', models.BooleanField(default=False)),
                 ('completed_at', models.DateTimeField(blank=True, null=True)),
                 ('notes', models.TextField(blank=True)),
                 ('ai_suggested', models.BooleanField(default=False)),
                 ('nutrition_data', models.JSONField(blank=True, default=dict)),
-                ('estimated_price', models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True)),
+                ('estimated_price', models.DecimalField(
+                    blank=True, decimal_places=2, max_digits=10, null=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('added_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='added_items', to=settings.AUTH_USER_MODEL)),
-                ('completed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='completed_items', to=settings.AUTH_USER_MODEL)),
-                ('shopping_list', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='items', to='shopping.shoppinglist')),
+                ('added_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                 related_name='added_items', to=settings.AUTH_USER_MODEL)),
+                ('completed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL,
+                 related_name='completed_items', to=settings.AUTH_USER_MODEL)),
+                ('shopping_list', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                 related_name='items', to='shopping.shoppinglist')),
             ],
             options={
                 'db_table': 'shopping_items',
@@ -60,16 +70,22 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ShoppingEvent',
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ('id', models.UUIDField(default=uuid.uuid4,
+                 editable=False, primary_key=True, serialize=False)),
                 ('store_name', models.CharField(max_length=100)),
-                ('store_type', models.CharField(choices=[('wolt', 'Wolt'), ('shufersal', 'Shufersal'), ('rami_levy', 'Rami Levy'), ('other', 'Other')], max_length=20)),
-                ('total_amount', models.DecimalField(decimal_places=2, max_digits=10)),
+                ('store_type', models.CharField(choices=[('wolt', 'Wolt'), ('shufersal', 'Shufersal'), (
+                    'rami_levy', 'Rami Levy'), ('other', 'Other')], max_length=20)),
+                ('total_amount', models.DecimalField(
+                    decimal_places=2, max_digits=10)),
                 ('currency', models.CharField(default='NIS', max_length=3)),
                 ('items_data', models.JSONField(default=list)),
-                ('receipt_image', models.ImageField(blank=True, null=True, upload_to='receipts/')),
+                ('receipt_image', models.ImageField(
+                    blank=True, null=True, upload_to='receipts/')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('shopping_list', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='shopping.shoppinglist')),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='shopping_events', to=settings.AUTH_USER_MODEL)),
+                ('shopping_list', models.ForeignKey(blank=True, null=True,
+                 on_delete=django.db.models.deletion.SET_NULL, to='shopping.shoppinglist')),
+                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                 related_name='shopping_events', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'db_table': 'shopping_events',
@@ -79,20 +95,25 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Inventory',
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ('id', models.UUIDField(default=uuid.uuid4,
+                 editable=False, primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=200)),
                 ('quantity', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('unit', models.CharField(default='unit', max_length=20)),
-                ('category', models.CharField(choices=[('produce', 'Produce'), ('dairy', 'Dairy'), ('meat', 'Meat & Fish'), ('bakery', 'Bakery'), ('frozen', 'Frozen'), ('pantry', 'Pantry'), ('beverages', 'Beverages'), ('snacks', 'Snacks'), ('household', 'Household'), ('other', 'Other')], default='other', max_length=20)),
+                ('category', models.CharField(choices=[('produce', 'Produce'), ('dairy', 'Dairy'), ('meat', 'Meat & Fish'), ('bakery', 'Bakery'), ('frozen', 'Frozen'), (
+                    'pantry', 'Pantry'), ('beverages', 'Beverages'), ('snacks', 'Snacks'), ('household', 'Household'), ('other', 'Other')], default='other', max_length=20)),
                 ('expiration_date', models.DateField(blank=True, null=True)),
-                ('location', models.CharField(choices=[('fridge', 'Refrigerator'), ('freezer', 'Freezer'), ('pantry', 'Pantry'), ('counter', 'Counter')], default='pantry', max_length=20)),
+                ('location', models.CharField(choices=[('fridge', 'Refrigerator'), ('freezer', 'Freezer'), (
+                    'pantry', 'Pantry'), ('counter', 'Counter')], default='pantry', max_length=20)),
                 ('nutrition_data', models.JSONField(blank=True, default=dict)),
                 ('barcode', models.CharField(blank=True, max_length=50)),
-                ('low_stock_threshold', models.DecimalField(decimal_places=2, default=1, max_digits=10)),
+                ('low_stock_threshold', models.DecimalField(
+                    decimal_places=2, default=1, max_digits=10)),
                 ('auto_add_to_list', models.BooleanField(default=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='inventory_items', to=settings.AUTH_USER_MODEL)),
+                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                 related_name='inventory_items', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'db_table': 'inventory',
@@ -101,38 +122,47 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='shoppinglist',
-            index=models.Index(fields=['owner', '-updated_at'], name='shopping_li_owner_i_9f1c40_idx'),
+            index=models.Index(
+                fields=['creator', '-updated_at'], name='shopping_li_creator_updated_idx'),
         ),
         migrations.AddIndex(
             model_name='shoppinglist',
-            index=models.Index(fields=['is_active'], name='shopping_li_is_acti_ffee63_idx'),
+            index=models.Index(fields=['is_active'],
+                               name='shopping_li_is_acti_ffee63_idx'),
         ),
         migrations.AddIndex(
             model_name='shoppingitem',
-            index=models.Index(fields=['shopping_list', 'is_completed'], name='shopping_it_shoppin_bdb496_idx'),
+            index=models.Index(
+                fields=['shopping_list', 'is_completed'], name='shopping_it_shoppin_bdb496_idx'),
         ),
         migrations.AddIndex(
             model_name='shoppingitem',
-            index=models.Index(fields=['category'], name='shopping_it_categor_86d78f_idx'),
+            index=models.Index(fields=['category'],
+                               name='shopping_it_categor_86d78f_idx'),
         ),
         migrations.AddIndex(
             model_name='shoppingevent',
-            index=models.Index(fields=['user', '-created_at'], name='shopping_ev_user_id_fd0350_idx'),
+            index=models.Index(
+                fields=['user', '-created_at'], name='shopping_ev_user_id_fd0350_idx'),
         ),
         migrations.AddIndex(
             model_name='shoppingevent',
-            index=models.Index(fields=['store_type'], name='shopping_ev_store_t_1f9341_idx'),
+            index=models.Index(fields=['store_type'],
+                               name='shopping_ev_store_t_1f9341_idx'),
         ),
         migrations.AddIndex(
             model_name='inventory',
-            index=models.Index(fields=['user', 'expiration_date'], name='inventory_user_id_82e57f_idx'),
+            index=models.Index(
+                fields=['user', 'expiration_date'], name='inventory_user_id_82e57f_idx'),
         ),
         migrations.AddIndex(
             model_name='inventory',
-            index=models.Index(fields=['category'], name='inventory_categor_ee7c14_idx'),
+            index=models.Index(fields=['category'],
+                               name='inventory_categor_ee7c14_idx'),
         ),
         migrations.AddIndex(
             model_name='inventory',
-            index=models.Index(fields=['barcode'], name='inventory_barcode_04d106_idx'),
+            index=models.Index(fields=['barcode'],
+                               name='inventory_barcode_04d106_idx'),
         ),
     ]

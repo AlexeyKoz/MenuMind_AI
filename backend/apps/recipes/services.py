@@ -2,6 +2,12 @@
 Recipe Agent Service - AI-powered recipe search, scraping, and conversion
 WITH DEDUPLICATION SUPPORT
 """
+
+
+from apps.core.ingredient_mapper import IngredientMapper
+from apps.core.unit_converter import UnitConverter
+from apps.core.nutrition_calculator import NutritionCalculator
+from apps.core.translation_service import TranslationService
 from rcip_converter import RCIPConverter, RecipeAnalyzer
 import os
 import sys
@@ -45,12 +51,158 @@ class RecipeAgentService:
         self.recipe_analyzer = RecipeAnalyzer()
         self.model = "llama-3.1-8b-instant"
 
-    async def find_and_convert_recipe(
+        # NEW: Initialize new services
+        self.ingredient_mapper = IngredientMapper()
+        self.unit_converter = UnitConverter()
+        self.nutrition_calculator = NutritionCalculator()
+        self.translation_service = TranslationService()
+
+    async def _enrich_recipe_with_iml(
         self,
-        user_query: str,
-        user,  # Django User object
+        rcip_recipe: Dict,
         user_preferences: Dict = None
-    ) -> Tuple[bool, Optional[Dict], str]:
+    ) -> Dict:
+        """
+        Enrich recipe with IML data:
+        - Map ingredients to ingredient_keys
+        - Calculate nutrition from IML
+        - Add unit alternatives
+        - Apply user unit preferences
+
+        Args:
+            rcip_recipe: Recipe in RCIP format from AI
+            user_preferences: User preferences (language, unit_system)
+
+        Returns:
+            Enhanced RCIP recipe
+        """
+        print("[ENRICH] Starting IML enrichment...")
+
+        user_language = user_preferences.get(
+            'language', 'en') if user_preferences else 'en'
+        user_unit_system = user_preferences.get(
+            'unit_system', 'metric') if user_preferences else 'metric'
+
+        # Step 1: Map ingredients to IML keys
+        enriched_ingredients = []
+        for ingredient in rcip_recipe.get('ingredients', []):
+            ingredient_text = ingredient.get('name', '')
+            quantity = ingredient.get('quantity')
+            unit = ingredient.get('unit', '')
+
+            # Map to IML
+            match_result = self.ingredient_mapper.map(
+                text=f"{quantity}{unit} {ingredient_text}" if quantity and unit else ingredient_text,
+                language=user_language,
+                user_unit_system=user_unit_system
+            )
+
+            # Build enriched ingredient
+            enriched = {
+                'name': ingredient_text,
+                'quantity': match_result.quantity or quantity,
+                'unit': match_result.unit or unit,
+                'ingredient_key': match_result.ingredient_key,
+                'unit_type': match_result.unit_type,
+                'match_confidence': match_result.confidence,
+                'display_name': match_result.display_name,
+                'original': ingredient.get('original', ingredient_text)
+            }
+
+            # Add unit alternatives (metric/imperial)
+            if match_result.unit and match_result.quantity:
+                alternatives = self.unit_converter.get_conversion_alternatives(
+                    match_result.quantity,
+                    match_result.unit
+                )
+                enriched['alternatives'] = {
+                    'metric': alternatives.get('display_metric'),
+                    'imperial': alternatives.get('display_imperial')
+                }
+
+            enriched_ingredients.append(enriched)
+
+            if match_result.ingredient_key:
+                print(
+                    f"   ✅ Mapped: {ingredient_text} → {match_result.ingredient_key} ({match_result.confidence})")
+            else:
+                print(f"   ⚠️  No match: {ingredient_text}")
+
+        # Step 2: Calculate nutrition from IML
+        nutrition_ingredients = [
+            {
+                'ingredient_key': ing.get('ingredient_key'),
+                'quantity': ing.get('quantity'),
+                'unit': ing.get('unit')
+            }
+            for ing in enriched_ingredients
+            if ing.get('ingredient_key')
+        ]
+
+        servings = rcip_recipe.get('meta', {}).get(
+            'servings', {}).get('amount', 4)
+        if isinstance(servings, dict):
+            servings = servings.get('amount', 4)
+
+        nutrition = self.nutrition_calculator.calculate_recipe_nutrition(
+            nutrition_ingredients,
+            servings=servings
+        )
+
+        print(
+            f"   🍎 Nutrition calculated: {nutrition['coverage']*100:.0f}% coverage")
+        print(
+            f"      Per serving: {nutrition['per_serving']['calories']:.0f} cal, {nutrition['per_serving']['protein']:.1f}g protein")
+
+        # Step 3: Update recipe with enriched data
+        rcip_recipe['ingredients'] = enriched_ingredients
+        rcip_recipe['meta']['nutrition_per_serving'] = nutrition['per_serving']
+        rcip_recipe['meta']['nutrition_total'] = nutrition['total']
+        rcip_recipe['meta']['nutrition_coverage'] = nutrition['coverage']
+
+        return rcip_recipe
+
+    async def _translate_recipe(
+        self,
+        rcip_recipe: Dict,
+        original_language: str
+    ) -> Dict:
+        """
+        Translate recipe to all supported languages
+
+        Args:
+            rcip_recipe: Recipe in RCIP format
+            original_language: Language recipe was created in
+
+        Returns:
+            Recipe with translations
+        """
+        print(f"[TRANSLATE] Translating from {original_language}...")
+
+        content = {
+            'title': rcip_recipe['meta']['name'],
+            'description': rcip_recipe['meta'].get('description', ''),
+            'steps': rcip_recipe.get('steps', [])
+        }
+
+        translations = self.translation_service.translate_recipe(
+            content,
+            from_language=original_language,
+            to_languages=None  # Translate to all other languages
+        )
+
+        # Add translations to recipe
+        rcip_recipe['meta']['title_translations'] = translations['title_translations']
+        rcip_recipe['meta']['description_translations'] = translations['description_translations']
+        rcip_recipe['meta']['steps_translations'] = translations['steps_translations']
+        rcip_recipe['meta']['original_language'] = original_language
+
+        print(
+            f"   ✅ Translated to: {', '.join(translations['title_translations'].keys())}")
+
+        return rcip_recipe
+
+    async def process_recipe_query(self, user_query: str, user, user_preferences: Dict = None):
         """
         Main method: Search, scrape, convert recipe from user query WITH DEDUPLICATION
 
@@ -329,11 +481,23 @@ class RecipeAgentService:
             total_time_minutes=meta.get('total_time_minutes'),
             servings=meta.get('servings', {}).get('amount', 4) if isinstance(
                 meta.get('servings'), dict) else meta.get('servings', 4),
-            recipe_hash=hash_string
+            recipe_hash=hash_string,
+
+            # NEW: Multilingual fields
+            title_translations=meta.get('title_translations', {}),
+            description_translations=meta.get('description_translations', {}),
+            steps_translations=meta.get('steps_translations', {}),
+            nutrition_per_serving=meta.get('nutrition_per_serving', {}),
+            original_language=meta.get('original_language', 'en')
         )
 
         print(
             f"[CANONICAL] Created: {canonical.name} (hash: {hash_string[:8]}...)")
+        print(
+            f"   Languages: {', '.join(canonical.title_translations.keys())}")
+        print(
+            f"   Nutrition: {canonical.nutrition_per_serving.get('calories', 0):.0f} cal/serving")
+
         return canonical
 
     @sync_to_async
@@ -477,31 +641,37 @@ class RecipeAgentService:
             return self._fallback_conversion(scraped_data, recipe_name)
 
         try:
+            # Get user preferences
+            user_language = user_preferences.get(
+                'language', 'en') if user_preferences else 'en'
+            user_unit_system = user_preferences.get(
+                'unit_system', 'metric') if user_preferences else 'metric'
+
             # First, extract structured data using LLM
             prompt = f"""Extract from the recipe text ONLY the list of ingredients and cooking steps.
 
 Recipe Name: {recipe_name}
-User Preferences: {user_preferences or 'None'}
+User Language: {user_language}
+User Unit System: {user_unit_system}
 
 Text:
 {scraped_data['text'][:3000]}
 
 CRITICAL MEASUREMENT RULES:
 1. ALWAYS include specific measurements (never "to taste" or "some")
-2. For solids (flour, sugar, meat, vegetables): use WEIGHT (g, kg, oz, lb)
-3. For liquids (water, milk, oil, juice): use VOLUME (ml, l, cups, fl oz)
-4. For small amounts: use weight (10g butter) not vague terms (tablespoon)
-5. For eggs/items: use COUNT (2 eggs, 3 tomatoes)
-6. If original recipe is vague, estimate reasonable amounts based on servings
+2. Use {user_unit_system} units: {'g, kg, ml, L' if user_unit_system == 'metric' else 'oz, lb, cups, fl oz'}
+3. For solids: use weight ({'g, kg' if user_unit_system == 'metric' else 'oz, lb'})
+4. For liquids: use volume ({'ml, L' if user_unit_system == 'metric' else 'cups, fl oz'})
+5. For small amounts: use cooking units (tsp, tbsp) - these are universal
+6. For eggs/items: use count (2 eggs, 3 tomatoes)
+7. If original recipe is vague, estimate reasonable amounts based on servings
 
-Return in this exact format:
+Return in {user_language} language in this exact format:
 
 INGREDIENTS:
 - 300g flour
 - 250ml milk
 - 2 eggs
-- 100g butter
-- 5ml vanilla extract
 ...
 
 STEPS:
@@ -517,7 +687,7 @@ STEPS:
                     messages=[
                         {
                             "role": "system",
-                            "content": "You extract ingredients and steps from recipes. Be precise and clear. Always separate ingredients and steps clearly."
+                            "content": f"You extract ingredients and steps from recipes in {user_language}. Be precise and clear. Always separate ingredients and steps clearly. Use {user_unit_system} units."
                         },
                         {
                             "role": "user",
@@ -569,11 +739,21 @@ STEPS:
             )
             rcip_recipe['meta']['difficulty'] = difficulty
 
-            print(f"   [OK] Conversion successful!")
+            # NEW: Enrich with IML data
+            rcip_recipe = await self._enrich_recipe_with_iml(rcip_recipe, user_preferences)
+
+            # NEW: Translate to all languages
+            user_language = user_preferences.get(
+                'language', 'en') if user_preferences else 'en'
+            rcip_recipe = await self._translate_recipe(rcip_recipe, user_language)
+
+            print(f"   [OK] Conversion successful with IML enrichment!")
             return rcip_recipe
 
         except Exception as e:
             print(f"   [ERROR] AI conversion failed: {e}")
+            import traceback
+            traceback.print_exc()
             return self._fallback_conversion(scraped_data, recipe_name)
 
     def _fallback_conversion(self, scraped_data: Dict, recipe_name: str) -> Optional[Dict]:

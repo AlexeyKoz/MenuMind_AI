@@ -11,6 +11,16 @@ class User(AbstractUser):
 
     # Profile Information
     birth_date = models.DateField(null=True, blank=True)
+    gender = models.CharField(
+        max_length=10,
+        choices=[
+            ('male', 'Male'),
+            ('female', 'Female'),
+            ('other', 'Other'),
+        ],
+        null=True,
+        blank=True
+    )
     height_cm = models.IntegerField(null=True, blank=True)
     weight_kg = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True)
@@ -136,19 +146,19 @@ class User(AbstractUser):
         partner_user.save()
 
     def calculate_bmr(self):
-        """Calculate Basal Metabolic Rate"""
+        """Calculate Basal Metabolic Rate using Mifflin-St Jeor Equation"""
         if not all([self.birth_date, self.height_cm, self.weight_kg]):
             return None
 
         age = (timezone.now().date() - self.birth_date).days // 365
 
         # Mifflin-St Jeor Equation
-        if self.username:  # Placeholder for gender
-            # Male formula
+        if self.gender == 'male':
+            # Male formula: BMR = 10W + 6.25H - 5A + 5
             bmr = 10 * float(self.weight_kg) + 6.25 * \
                 self.height_cm - 5 * age + 5
         else:
-            # Female formula
+            # Female formula (default for female/other): BMR = 10W + 6.25H - 5A - 161
             bmr = 10 * float(self.weight_kg) + 6.25 * \
                 self.height_cm - 5 * age - 161
 
@@ -172,3 +182,47 @@ class User(AbstractUser):
             models.Index(fields=['collaboration_key']),
             models.Index(fields=['shopping_role']),
         ]
+
+
+class UserPreferences(models.Model):
+    """User preferences for multilingual and unit system"""
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='preferences'
+    )
+
+    # Language
+    language = models.CharField(
+        max_length=2,
+        choices=[('en', 'English'), ('ru', 'Russian'), ('he', 'Hebrew')],
+        default='en'
+    )
+
+    # Unit System
+    unit_system = models.CharField(
+        max_length=10,
+        choices=[('metric', 'Metric'), ('imperial', 'Imperial')],
+        default='metric'
+    )
+
+    weight_unit = models.CharField(max_length=5, default='kg')
+    # kg or lb
+
+    volume_unit = models.CharField(max_length=10, default='L')
+    # L or gallon
+
+    temperature_unit = models.CharField(max_length=1, default='C')
+    # C or F
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'user_preferences'
+        verbose_name = 'User Preference'
+        verbose_name_plural = 'User Preferences'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.language}/{self.unit_system}"

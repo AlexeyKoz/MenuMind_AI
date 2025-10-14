@@ -675,6 +675,31 @@ class ApiService {
             method: 'POST',
             body: JSON.stringify(data)
         });
+
+    // ============================================
+    // USER PREFERENCES METHODS (NEW)
+    // ============================================
+
+    /**
+     * Get user preferences (language, unit system, etc.)
+     */
+    getUserPreferences = async (): Promise<any> => {
+        return this.get('/users/profile/preferences/');
+    };
+
+    /**
+     * Update user preferences
+     */
+    updateUserPreferences = async (data: Partial<{
+        preferred_language: 'en' | 'ru' | 'he';
+        unit_system: 'metric' | 'imperial';
+        timezone?: string;
+        date_format?: string;
+    }>): Promise<any> => {
+        return this.patch('/users/profile/preferences/', data);
+    };
+
+
 }
 
 export default ApiService;

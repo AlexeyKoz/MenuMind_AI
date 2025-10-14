@@ -17,8 +17,8 @@ if os.path.exists(env_file):
 else:
     print(f"[WARNING] .env file not found at: {env_file}")
 
-# Add the apps directory to Python path
-sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
+# Note: We use full path 'apps.app_name' in INSTALLED_APPS
+# Do NOT modify sys.path as it breaks Django's app loading
 
 # Security
 SECRET_KEY = env(
@@ -105,6 +105,18 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
+    # IML Integration
+IML_DB_PATH = os.getenv('IML_DB_PATH', '../ingredient-master-list/data/iml.db')
+
+# Multilingual
+LANGUAGES = [
+    ('en', 'English'),
+    ('ru', 'Русский'),
+    ('he', 'עברית')
+]
+LANGUAGE_CODE = 'en'
+USE_I18N = True
 
 # Redis & Channels
 REDIS_URL = env('REDIS_URL', default='redis://localhost:6379/0')

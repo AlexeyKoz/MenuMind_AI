@@ -6,4 +6,5 @@ export { default as StarRating } from './StarRating';
 export { default as ReviewsSection } from './ReviewsSection';
 export { default as RecipeCard } from './RecipeCard';
 export { default as RecipeBuilderWizard } from './RecipeBuilderWizard';
+export { default as LanguageSwitcher } from './LanguageSwitcher';
 

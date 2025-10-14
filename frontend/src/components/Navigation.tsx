@@ -1,5 +1,7 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 interface NavigationProps {
     currentPage: string;
@@ -8,16 +10,17 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) => {
     const { user, logout } = useAuth();
+    const { t } = useTranslation();
 
     const navItems = [
-        { id: 'shopping', label: 'Shopping', icon: '🛒' },
-        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-        { id: 'nutrition', label: 'Nutrition', icon: '🥗' },
-        { id: 'recipes', label: 'My Recipes', icon: '👨‍🍳' },
-        { id: 'discover', label: 'Discover', icon: '🌟' },
-        { id: 'inventory', label: 'Inventory', icon: '📦' },
-        { id: 'archive', label: 'Archive', icon: '🗃️' },
-        { id: 'settings', label: 'Settings', icon: '⚙️' }
+        { id: 'shopping', translationKey: 'nav.shopping', icon: '🛒' },
+        { id: 'dashboard', translationKey: 'nav.dashboard', icon: '📊' },
+        { id: 'nutrition', translationKey: 'nav.nutrition', icon: '🥗' },
+        { id: 'recipes', translationKey: 'nav.recipes', icon: '👨‍🍳' },
+        { id: 'discover', translationKey: 'nav.discover', icon: '🌟' },
+        { id: 'inventory', translationKey: 'nav.inventory', icon: '📦' },
+        { id: 'archive', translationKey: 'nav.archive', icon: '🗃️' },
+        { id: 'settings', translationKey: 'nav.settings', icon: '⚙️' }
     ];
 
     return (
@@ -27,9 +30,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                     <button
                         onClick={() => setCurrentPage('shopping')}
                         className="text-2xl font-bold hover:text-green-200 transition cursor-pointer"
-                        title="Go to Home (Shopping Lists)"
+                        title={t('nav.shopping')}
                     >
-                        🥗 MenuMind AI
+                        🥗 {t('app.name')}
                     </button>
                     <div className="flex space-x-6">
                         {navItems.map(item => (
@@ -39,19 +42,20 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 className={`hover:text-green-200 transition ${currentPage === item.id ? 'text-green-200 font-bold' : ''
                                     }`}
                             >
-                                {item.icon} {item.label}
+                                {item.icon} {t(item.translationKey)}
                             </button>
                         ))}
                     </div>
                 </div>
                 <div className="flex items-center space-x-4">
+                    <LanguageSwitcher />
                     <span className="text-sm">👤 {user?.username}</span>
-                    {user?.partner && <span className="text-sm">💑 Connected</span>}
+                    {user?.partner && <span className="text-sm">💑 {t('nav.connected')}</span>}
                     <button
                         onClick={logout}
                         className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded transition"
                     >
-                        Logout
+                        {t('nav.logout')}
                     </button>
                 </div>
             </div>

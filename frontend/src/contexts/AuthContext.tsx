@@ -51,19 +51,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const fetchUserProfile = async () => {
         try {
-            const response = await fetch('http://localhost:8000/api/users/profile/', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setUser(data.results?.[0] || data);
-            } else {
-                logout();
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setLoading(false);
+                return;
             }
+
+            // Fetch user profile
+            const profileResponse = await fetch('http://localhost:8000/api/users/profile/', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!profileResponse.ok) {
+                throw new Error('Failed to fetch profile');
+            }
+
+            const profileData = await profileResponse.json();
+
+            // ⬇️ NEW: Fetch user preferences
+            try {
+                const prefsResponse = await fetch('http://localhost:8000/api/users/profile/preferences/', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+
+                if (prefsResponse.ok) {
+                    const prefsData = await prefsResponse.json();
+
+                    // Merge preferences into user object
+                    setUser({
+                        ...profileData,
+                        preferred_language: prefsData.preferred_language,
+                        unit_system: prefsData.unit_system,
+                    });
+
+                    console.log('✅ User preferences loaded:', {
+                        language: prefsData.preferred_language,
+                        unit_system: prefsData.unit_system
+                    });
+                } else {
+                    // If preferences don't exist yet, set user without them
+                    setUser(profileData);
+                    console.log('⚠️ No preferences found, using defaults');
+                }
+            } catch (prefsError) {
+                console.error('Failed to fetch preferences:', prefsError);
+                // Still set user even if preferences fail
+                setUser(profileData);
+            }
+
         } catch (error) {
-            console.error('Profile fetch error:', error);
+            console.error('Failed to fetch user profile:', error);
+            localStorage.removeItem('token');
+            localStorage.removeItem('refresh');
+            setUser(null);
         } finally {
             setLoading(false);
         }

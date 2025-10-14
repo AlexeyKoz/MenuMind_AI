@@ -1,5 +1,6 @@
 """
 Inventory AI Services - AI-powered categorization and recipe generation
+Enhanced with IML integration (IML FIRST, AI fallback)
 """
 import os
 import json
@@ -7,9 +8,14 @@ from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from django.conf import settings
 
+# NEW: Import IML services
+from apps.core.ingredient_mapper import IngredientMapper
+from apps.core.expiration_calculator import ExpirationCalculator
+from apps.core.models import IngredientCache
+
 
 class InventoryCategorizationService:
-    """AI service for automatic categorization of shopping items"""
+    """AI service for automatic categorization of shopping items (IML FIRST, AI fallback)"""
 
     def __init__(self):
         try:
@@ -27,9 +33,15 @@ class InventoryCategorizationService:
             print("[WARNING] Groq not installed. Using fallback categorization.")
             self.groq_client = None
 
+        # NEW: Initialize IML services
+        self.ingredient_mapper = IngredientMapper()
+        self.expiration_calculator = ExpirationCalculator()
+
     def categorize_items(self, items: List[Dict]) -> List[Dict]:
         """
-        Categorize multiple shopping items with AI
+        Categorize multiple shopping items with IML/AI
+
+        NEW: Uses IML data FIRST, AI fallback only if needed
 
         Args:
             items: List of dicts with 'id' and 'name' keys
@@ -50,7 +62,10 @@ class InventoryCategorizationService:
                     'suggested_expiration_days': suggestion['expiration_days'],
                     'suggested_quantity': suggestion['quantity'],
                     'suggested_unit': suggestion['unit'],
-                    'confidence': suggestion.get('confidence', 0.85)
+                    'confidence': suggestion.get('confidence', 0.85),
+                    'ingredient_key': suggestion.get('ingredient_key'),  # NEW
+                    # NEW: iml, ai, or default
+                    'source': suggestion.get('source', 'iml')
                 })
             except Exception as e:
                 print(f"[ERROR] Failed to categorize {item['name']}: {e}")
@@ -61,7 +76,13 @@ class InventoryCategorizationService:
 
     def categorize_single_item(self, item_name: str) -> Dict:
         """
-        Categorize a single shopping item with AI
+        Categorize a single shopping item with IML/AI
+
+        NEW FLOW:
+        1. Try IngredientMapper (IML lookup)
+        2. If matched → use IML data (shelf_life, storage, category)
+        3. If no match → AI fallback
+        4. If AI fails → rule-based fallback
 
         Args:
             item_name: Name of the shopping item
@@ -69,14 +90,110 @@ class InventoryCategorizationService:
         Returns:
             Dict with categorization details
         """
+        print(f"[CATEGORIZE] Processing: {item_name}")
+
+        # Step 1: Try to match ingredient in IML
+        match_result = self.ingredient_mapper.map(item_name, language='en')
+
+        if match_result.ingredient_key and match_result.confidence >= 0.70:
+            # Found in IML - use IML data
+            print(
+                f"   ✅ IML match: {match_result.ingredient_key} ({match_result.confidence})")
+            return self._categorize_from_iml(match_result.ingredient_key, item_name)
+
+        # Step 2: No IML match - try AI
+        print(f"   ⚠️  No IML match, trying AI...")
         if self.groq_client:
             try:
                 return self._ai_categorize(item_name)
             except Exception as e:
-                print(f"[WARNING] AI categorization failed: {e}")
-                return self._fallback_categorization({'name': item_name})
-        else:
+                print(f"   [WARNING] AI categorization failed: {e}")
+
+        # Step 3: Fallback to rule-based
+        print(f"   ⚠️  Using rule-based fallback")
+        return self._fallback_categorization({'name': item_name})
+
+    def _categorize_from_iml(self, ingredient_key: str, item_name: str) -> Dict:
+        """
+        Categorize using IML data (fast, accurate)
+
+        Args:
+            ingredient_key: Matched ingredient key
+            item_name: Original item name
+
+        Returns:
+            Categorization dict with IML data
+        """
+        try:
+            ingredient = IngredientCache.objects.get(
+                ingredient_key=ingredient_key)
+
+            # Get storage location from IML
+            location, source = self.expiration_calculator.suggest_storage_location(
+                ingredient_key)
+
+            # Get shelf life info
+            shelf_life_info = self.expiration_calculator.get_shelf_life_info(
+                ingredient_key)
+
+            # Determine expiration days based on recommended location
+            expiration_days = 7  # default
+            if shelf_life_info:
+                expiration_days = shelf_life_info.get(location, 7)
+
+            # Map IML category to shopping category
+            category = self._map_iml_category_to_shopping(ingredient.category)
+
+            # Parse quantity/unit from item name (if present)
+            quantity, unit = self._parse_quantity_unit(item_name)
+
+            print(
+                f"   📦 IML data: {location}, {expiration_days} days, category: {category}")
+
+            return {
+                'location': location,
+                'category': category,
+                'expiration_days': expiration_days,
+                'quantity': quantity,
+                'unit': unit,
+                'confidence': 0.95,  # High confidence from IML
+                'ingredient_key': ingredient_key,
+                'source': 'iml'
+            }
+
+        except IngredientCache.DoesNotExist:
+            print(f"   ❌ IML ingredient not found: {ingredient_key}")
             return self._fallback_categorization({'name': item_name})
+
+    def _map_iml_category_to_shopping(self, iml_category: str) -> str:
+        """Map IML category to shopping list category"""
+        mapping = {
+            'vegetables': 'produce',
+            'fruits': 'produce',
+            'meat': 'meat',
+            'poultry': 'meat',
+            'fish': 'meat',
+            'seafood': 'meat',
+            'dairy': 'dairy',
+            'cheese': 'dairy',
+            'grains': 'pantry',
+            'pasta': 'pantry',
+            'rice': 'pantry',
+            'bread': 'bakery',
+            'bakery': 'bakery',
+            'frozen': 'frozen',
+            'canned': 'pantry',
+            'spices': 'pantry',
+            'herbs': 'pantry',
+            'beverages': 'beverages',
+            'drinks': 'beverages',
+            'snacks': 'snacks',
+            'condiments': 'pantry',
+            'oils': 'pantry',
+        }
+
+        iml_category_lower = iml_category.lower() if iml_category else ''
+        return mapping.get(iml_category_lower, 'other')
 
     def _ai_categorize(self, item_name: str) -> Dict:
         """Use AI to categorize item"""
@@ -139,10 +256,11 @@ Return ONLY valid JSON (no markdown, no explanations):
             result.setdefault('expiration_days', 30)
             result.setdefault('quantity', 1)
             result.setdefault('unit', 'units')
-            result.setdefault('confidence', 0.85)
+            result.setdefault('confidence', 0.75)  # AI confidence
+            result['source'] = 'ai'  # Mark as AI-generated
 
             print(
-                f"[AI CATEGORIZE] {item_name} → {result['location']}/{result['category']} (expires in {result['expiration_days']} days)")
+                f"   [AI CATEGORIZE] {item_name} → {result['location']}/{result['category']} (expires in {result['expiration_days']} days)")
 
             return result
 
@@ -154,84 +272,92 @@ Return ONLY valid JSON (no markdown, no explanations):
             return self._fallback_categorization({'name': item_name})
 
     def _fallback_categorization(self, item: Dict) -> Dict:
-        """Rule-based fallback categorization"""
+        """Rule-based fallback categorization (LAST RESORT)"""
         name = item.get('name', '').lower()
 
         # Parse quantity and unit from name
         quantity, unit = self._parse_quantity_unit(name)
 
-        # Categorize by keywords
-        if any(word in name for word in ['milk', 'yogurt', 'cheese', 'butter', 'cream']):
+        # Categorize by keywords (improved with IML-like logic)
+        if any(word in name for word in ['milk', 'yogurt', 'cheese', 'butter', 'cream', 'sour cream', 'cottage cheese']):
             return {
                 'location': 'fridge',
                 'category': 'dairy',
                 'expiration_days': 7,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.7
+                'confidence': 0.7,
+                'source': 'default'
             }
-        elif any(word in name for word in ['chicken', 'beef', 'pork', 'fish', 'meat', 'steak']):
+        elif any(word in name for word in ['chicken', 'beef', 'pork', 'fish', 'meat', 'steak', 'turkey', 'lamb']):
             return {
                 'location': 'fridge',
                 'category': 'meat',
                 'expiration_days': 3,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.7
+                'confidence': 0.7,
+                'source': 'default'
             }
-        elif any(word in name for word in ['frozen', 'ice cream']):
+        elif any(word in name for word in ['frozen', 'ice cream', 'popsicle']):
             return {
                 'location': 'freezer',
                 'category': 'frozen',
                 'expiration_days': 90,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.8
+                'confidence': 0.8,
+                'source': 'default'
             }
-        elif any(word in name for word in ['tomato', 'lettuce', 'carrot', 'pepper', 'onion', 'vegetable']):
+        elif any(word in name for word in ['tomato', 'lettuce', 'carrot', 'pepper', 'onion', 'vegetable', 'celery', 'cucumber', 'broccoli']):
             return {
                 'location': 'fridge',
-                'category': 'vegetables',
+                'category': 'produce',
                 'expiration_days': 7,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.7
+                'confidence': 0.7,
+                'source': 'default'
             }
-        elif any(word in name for word in ['apple', 'banana', 'orange', 'fruit']):
+        elif any(word in name for word in ['apple', 'banana', 'orange', 'fruit', 'berry', 'grape', 'pear']):
             return {
                 'location': 'counter',
-                'category': 'fruits',
+                'category': 'produce',
                 'expiration_days': 5,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.7
+                'confidence': 0.7,
+                'source': 'default'
             }
-        elif any(word in name for word in ['rice', 'pasta', 'bread', 'flour', 'grain']):
+        elif any(word in name for word in ['rice', 'pasta', 'bread', 'flour', 'grain', 'cereal']):
             return {
                 'location': 'pantry',
-                'category': 'grains',
-                'expiration_days': 180,
+                'category': 'pantry' if 'bread' not in name else 'bakery',
+                'expiration_days': 180 if 'bread' not in name else 7,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.7
+                'confidence': 0.7,
+                'source': 'default'
             }
         elif any(word in name for word in ['can', 'canned', 'tin']):
             return {
                 'location': 'pantry',
-                'category': 'canned',
+                'category': 'pantry',
                 'expiration_days': 365,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.8
+                'confidence': 0.8,
+                'source': 'default'
             }
-        elif any(word in name for word in ['juice', 'soda', 'water', 'drink', 'beverage']):
+        elif any(word in name for word in ['juice', 'soda', 'water', 'drink', 'beverage', 'cola', 'tea', 'coffee']):
             return {
                 'location': 'fridge',
                 'category': 'beverages',
                 'expiration_days': 30,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.7
+                'confidence': 0.7,
+                'source': 'default'
             }
         else:
             # Default
@@ -241,7 +367,8 @@ Return ONLY valid JSON (no markdown, no explanations):
                 'expiration_days': 30,
                 'quantity': quantity,
                 'unit': unit,
-                'confidence': 0.5
+                'confidence': 0.5,
+                'source': 'default'
             }
 
     def _parse_quantity_unit(self, name: str) -> tuple:

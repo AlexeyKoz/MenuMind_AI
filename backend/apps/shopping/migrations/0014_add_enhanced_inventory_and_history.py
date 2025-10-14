@@ -9,18 +9,23 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('recipes', '0005_add_archive_to_user_recipe'),
-        ('shopping', '0013_add_items_added_count'),
+        ('shopping', '0009_shoppinglistownershiptransfer_and_more'),
     ]
 
     operations = [
         migrations.CreateModel(
             name='InventoryHistory',
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('action', models.CharField(choices=[('added', 'Added from shopping list'), ('consumed', 'Used in recipe'), ('expired', 'Discarded (expired)'), ('moved', 'Moved location'), ('adjusted', 'Manual adjustment'), ('deleted', 'Deleted')], max_length=20)),
-                ('quantity_change', models.DecimalField(decimal_places=2, help_text='Positive for additions, negative for consumption', max_digits=10)),
-                ('previous_quantity', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('new_quantity', models.DecimalField(decimal_places=2, max_digits=10)),
+                ('id', models.UUIDField(default=uuid.uuid4,
+                 editable=False, primary_key=True, serialize=False)),
+                ('action', models.CharField(choices=[('added', 'Added from shopping list'), ('consumed', 'Used in recipe'), (
+                    'expired', 'Discarded (expired)'), ('moved', 'Moved location'), ('adjusted', 'Manual adjustment'), ('deleted', 'Deleted')], max_length=20)),
+                ('quantity_change', models.DecimalField(decimal_places=2,
+                 help_text='Positive for additions, negative for consumption', max_digits=10)),
+                ('previous_quantity', models.DecimalField(
+                    decimal_places=2, max_digits=10)),
+                ('new_quantity', models.DecimalField(
+                    decimal_places=2, max_digits=10)),
                 ('notes', models.TextField(blank=True)),
                 ('timestamp', models.DateTimeField(auto_now_add=True)),
             ],
@@ -32,7 +37,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterModelOptions(
             name='inventory',
-            options={'ordering': ['location', 'expiration_date', 'name'], 'verbose_name_plural': 'Inventory items'},
+            options={'ordering': ['location', 'expiration_date',
+                                  'name'], 'verbose_name_plural': 'Inventory items'},
         ),
         migrations.AddField(
             model_name='inventory',
@@ -47,36 +53,44 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='inventory',
             name='shopping_list',
-            field=models.ForeignKey(blank=True, help_text='Shopping list this item was created from (for permission inheritance)', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_items', to='shopping.shoppinglist'),
+            field=models.ForeignKey(blank=True, help_text='Shopping list this item was created from (for permission inheritance)',
+                                    null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='inventory_items', to='shopping.shoppinglist'),
         ),
         migrations.AddIndex(
             model_name='inventory',
-            index=models.Index(fields=['user', 'location'], name='inventory_user_id_7108d1_idx'),
+            index=models.Index(
+                fields=['user', 'location'], name='inventory_user_id_7108d1_idx'),
         ),
         migrations.AddIndex(
             model_name='inventory',
-            index=models.Index(fields=['shopping_list'], name='inventory_shoppin_9f5f6a_idx'),
+            index=models.Index(
+                fields=['shopping_list'], name='inventory_shoppin_9f5f6a_idx'),
         ),
         migrations.AddField(
             model_name='inventoryhistory',
             name='inventory_item',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='history', to='shopping.inventory'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                                    related_name='history', to='shopping.inventory'),
         ),
         migrations.AddField(
             model_name='inventoryhistory',
             name='recipe',
-            field=models.ForeignKey(blank=True, help_text='Recipe this item was used in (if consumed)', null=True, on_delete=django.db.models.deletion.SET_NULL, to='recipes.recipe'),
+            field=models.ForeignKey(blank=True, help_text='Recipe this item was used in (if consumed)',
+                                    null=True, on_delete=django.db.models.deletion.SET_NULL, to='recipes.recipe'),
         ),
         migrations.AddIndex(
             model_name='inventoryhistory',
-            index=models.Index(fields=['inventory_item', '-timestamp'], name='inventory_h_invento_cdf20f_idx'),
+            index=models.Index(
+                fields=['inventory_item', '-timestamp'], name='inventory_h_invento_cdf20f_idx'),
         ),
         migrations.AddIndex(
             model_name='inventoryhistory',
-            index=models.Index(fields=['action'], name='inventory_h_action_3e8d21_idx'),
+            index=models.Index(fields=['action'],
+                               name='inventory_h_action_3e8d21_idx'),
         ),
         migrations.AddIndex(
             model_name='inventoryhistory',
-            index=models.Index(fields=['recipe'], name='inventory_h_recipe__a40563_idx'),
+            index=models.Index(fields=['recipe'],
+                               name='inventory_h_recipe__a40563_idx'),
         ),
     ]

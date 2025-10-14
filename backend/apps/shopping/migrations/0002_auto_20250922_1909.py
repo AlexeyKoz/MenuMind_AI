@@ -5,22 +5,6 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
-def copy_owner_to_creator(apps, schema_editor):
-    """Copy owner field to creator field"""
-    ShoppingList = apps.get_model('shopping', 'ShoppingList')
-    for shopping_list in ShoppingList.objects.all():
-        shopping_list.creator = shopping_list.owner
-        shopping_list.save()
-
-
-def copy_creator_to_owner(apps, schema_editor):
-    """Reverse: copy creator field back to owner field"""
-    ShoppingList = apps.get_model('shopping', 'ShoppingList')
-    for shopping_list in ShoppingList.objects.all():
-        shopping_list.owner = shopping_list.creator
-        shopping_list.save()
-
-
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -56,12 +40,6 @@ class Migration(migrations.Migration):
         # Step 2: Add new fields to existing models
         migrations.AddField(
             model_name='shoppinglist',
-            name='creator',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE,
-                                    related_name='created_lists', to=settings.AUTH_USER_MODEL),
-        ),
-        migrations.AddField(
-            model_name='shoppinglist',
             name='is_collaborative',
             field=models.BooleanField(default=True),
         ),
@@ -74,16 +52,5 @@ class Migration(migrations.Migration):
             model_name='shoppingitem',
             name='user_color',
             field=models.CharField(blank=True, max_length=7),
-        ),
-
-        # Step 3: Copy data from owner to creator
-        migrations.RunPython(copy_owner_to_creator, copy_creator_to_owner),
-
-        # Step 4: Make creator non-nullable now that it has data
-        migrations.AlterField(
-            model_name='shoppinglist',
-            name='creator',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
-                                    related_name='created_lists', to=settings.AUTH_USER_MODEL),
         ),
     ]
