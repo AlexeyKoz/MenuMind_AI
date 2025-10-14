@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'apps.recipes',
     'apps.ai_agents',
     'apps.nutrition',
+    'apps.analytics',
     'apps.core',
 ]
 

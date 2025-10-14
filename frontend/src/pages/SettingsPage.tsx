@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
+import NutritionSettings from '../components/NutritionSettings';
 
 interface UserSettings {
     id: string;
@@ -10,6 +11,7 @@ interface UserSettings {
     first_name: string;
     last_name: string;
     birth_date: string | null;
+    gender: string | null;
     height_cm: number | null;
     weight_kg: number | null;
     activity_level: string;
@@ -287,6 +289,7 @@ const SettingsPage: React.FC = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Birth Date
+                                        <span className="text-xs text-gray-500 ml-1">(for AI goal calculation)</span>
                                     </label>
                                     <input
                                         type="date"
@@ -294,6 +297,22 @@ const SettingsPage: React.FC = () => {
                                         onChange={(e) => handleInputChange('birth_date', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                     />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Gender
+                                        <span className="text-xs text-gray-500 ml-1">(for AI goal calculation)</span>
+                                    </label>
+                                    <select
+                                        value={formData.gender || ''}
+                                        onChange={(e) => handleInputChange('gender', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">Select...</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="other">Other</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -344,6 +363,53 @@ const SettingsPage: React.FC = () => {
                                             </option>
                                         ))}
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Dietary Information */}
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">🥗 Dietary Information</h2>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Dietary Restrictions
+                                        <span className="text-xs text-gray-500 ml-1">(comma-separated)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={Array.isArray(formData.dietary_restrictions) ? formData.dietary_restrictions.join(', ') : ''}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            const restrictions = value ? value.split(',').map(s => s.trim()).filter(s => s) : [];
+                                            handleInputChange('dietary_restrictions', restrictions);
+                                        }}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                        placeholder="e.g., Vegetarian, Gluten-free, Halal"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Examples: Vegetarian, Vegan, Gluten-free, Dairy-free, Kosher, Halal, Low-carb, Keto
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Allergies
+                                        <span className="text-xs text-gray-500 ml-1">(comma-separated)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={Array.isArray(formData.allergies) ? formData.allergies.join(', ') : ''}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            const allergyList = value ? value.split(',').map(s => s.trim()).filter(s => s) : [];
+                                            handleInputChange('allergies', allergyList);
+                                        }}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                        placeholder="e.g., Peanuts, Shellfish, Dairy"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Examples: Peanuts, Tree nuts, Shellfish, Fish, Eggs, Dairy, Soy, Wheat, Sesame
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -541,6 +607,19 @@ const SettingsPage: React.FC = () => {
                             )}
                             {saving ? 'Saving...' : 'Save Changes'}
                         </button>
+                    </div>
+                </div>
+
+                {/* AI Nutrition Coach Settings */}
+                <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50">
+                        <h2 className="text-2xl font-bold text-gray-900">🤖 AI Nutrition Coach</h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Privacy-first nutrition tracking with optional AI coaching
+                        </p>
+                    </div>
+                    <div className="p-6">
+                        <NutritionSettings api={api} />
                     </div>
                 </div>
             </div>

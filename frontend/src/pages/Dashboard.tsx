@@ -1,161 +1,696 @@
+/**
+ * Dashboard Page
+ * 
+ * Comprehensive analytics and AI insights for shopping, recipes, inventory, and nutrition.
+ */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
+import { toast } from 'react-hot-toast';
+import {
+    TrendingDown, TrendingUp, DollarSign, ChefHat, Package, Activity,
+    ShoppingCart, UtensilsCrossed, AlertTriangle, Flame, Trophy, Sparkles,
+    Calendar, RefreshCw
+} from 'lucide-react';
+
+interface DashboardData {
+    period: string;
+    overview: {
+        total_spent: number;
+        recipes_cooked: number;
+        inventory_items: number;
+        nutrition_days_logged: number | null;
+    };
+    shopping: any;
+    recipes: any;
+    inventory: any;
+    nutrition: any | null;
+    achievements: any;
+    ai_insight_of_day: string | null;
+}
 
 const Dashboard: React.FC = () => {
     const { user, token, logout } = useAuth();
-    const [todayNutrition, setTodayNutrition] = useState<any>(null);
-    const [weeklyData, setWeeklyData] = useState<any>(null);
-    const [insights, setInsights] = useState<any[]>([]);
-
-    // Create API service with useMemo to prevent recreation on every render
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
-        alert('Your session has expired. Please log in again.');
+        toast.error('Your session has expired. Please log in again.');
         logout();
     }), [token, logout]);
 
-    const loadDashboardData = useCallback(async () => {
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<DashboardData | null>(null);
+    const [period, setPeriod] = useState<'7days' | '30days' | '90days' | '1year'>('30days');
+    const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
+
+    const loadDashboard = useCallback(async () => {
         try {
-            const [nutrition, weekly] = await Promise.all([
-                api.getNutritionToday(),
-                api.getWeeklyReport()
-            ]);
-            setTodayNutrition(nutrition);
-            setWeeklyData(weekly);
-            setInsights(weekly.insights || []);
+            setLoading(true);
+            const response = await api.getDashboardOverview({ period, include_ai: true });
+            setData(response);
         } catch (error) {
-            console.error('Dashboard load error:', error);
-            // Set empty data to prevent continuous loading
-            setTodayNutrition({ totals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, goals: { calories: 2000 }, progress: { calories: 0 } });
-            setWeeklyData({ daily_data: {}, insights: [] });
-            setInsights([]);
+            console.error('Failed to load dashboard:', error);
+            toast.error('Failed to load dashboard data');
+        } finally {
+            setLoading(false);
         }
-    }, [api]);
+    }, [api, period]);
 
     useEffect(() => {
-        loadDashboardData();
-    }, [loadDashboardData]);
+        loadDashboard();
+    }, [loadDashboard]);
 
-    const macroData = todayNutrition ? [
-        { name: 'Protein', value: todayNutrition.totals.protein, color: '#FF6384' },
-        { name: 'Carbs', value: todayNutrition.totals.carbs, color: '#36A2EB' },
-        { name: 'Fat', value: todayNutrition.totals.fat, color: '#FFCE56' }
-    ] : [];
+    const toggleSection = (section: string) => {
+        setExpandedSections(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(section)) {
+                newSet.delete(section);
+            } else {
+                newSet.add(section);
+            }
+            return newSet;
+        });
+    };
 
-    const weeklyChartData = weeklyData?.daily_data ? Object.entries(weeklyData.daily_data).map(([date, data]: [string, any]) => ({
-        date: new Date(date).toLocaleDateString('en', { weekday: 'short' }),
-        calories: data.calories,
-        protein: data.protein
-    })) : [];
+    const getPeriodLabel = () => {
+        const labels = {
+            '7days': 'Last 7 days',
+            '30days': 'Last 30 days',
+            '90days': 'Last 90 days',
+            '1year': 'Last year'
+        };
+        return labels[period];
+    };
+
+    if (loading && !data) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600 font-medium">Loading your dashboard...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!data) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-600 font-medium">Failed to load dashboard</p>
+                    <button
+                        onClick={loadDashboard}
+                        className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-7xl mx-auto p-6">
-            <h2 className="text-3xl font-bold mb-6">Welcome back, {user?.first_name || user?.username}! 👋</h2>
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                {/* Header */}
+                <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                                🏠 Dashboard
+                                <span className="text-sm font-normal text-gray-500">Welcome back, {user?.first_name || user?.username}!</span>
+                            </h1>
+                        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h3 className="text-xl font-semibold mb-4">Today's Calories</h3>
-                    <div className="text-center">
-                        <div className="text-4xl font-bold text-green-600">
-                            {todayNutrition?.totals.calories || 0}
-                        </div>
-                        <div className="text-gray-600">
-                            of {todayNutrition?.goals.calories || 2000} goal
-                        </div>
-                        <div className="mt-4 bg-gray-200 rounded-full h-4">
-                            <div
-                                className="bg-green-500 h-4 rounded-full transition-all"
-                                style={{ width: `${Math.min(todayNutrition?.progress.calories || 0, 100)}%` }}
-                            />
+                        <div className="flex items-center gap-4">
+                            {/* Period Selector */}
+                            <div className="flex items-center gap-2">
+                                <Calendar className="w-5 h-5 text-gray-400" />
+                                <select
+                                    value={period}
+                                    onChange={(e) => setPeriod(e.target.value as any)}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                >
+                                    <option value="7days">Last 7 days</option>
+                                    <option value="30days">Last 30 days</option>
+                                    <option value="90days">Last 90 days</option>
+                                    <option value="1year">Last year</option>
+                                </select>
+                            </div>
+
+                            {/* Refresh Button */}
+                            <button
+                                onClick={loadDashboard}
+                                disabled={loading}
+                                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                                title="Refresh"
+                            >
+                                <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                            </button>
+
+                            {/* AI Status */}
+                            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
+                                <Sparkles className="w-5 h-5" />
+                                <span className="font-medium">AI Active</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h3 className="text-xl font-semibold mb-4">Macro Distribution</h3>
-                    {macroData.length > 0 ? (
-                        <div className="space-y-3">
-                            {macroData.map((macro, index) => (
-                                <div key={index} className="space-y-1">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="font-medium">{macro.name}</span>
-                                        <span className="text-gray-600">{macro.value}g</span>
-                                    </div>
-                                    <div className="bg-gray-200 rounded-full h-2">
-                                        <div
-                                            className="h-2 rounded-full transition-all"
-                                            style={{
-                                                width: `${(macro.value / macroData.reduce((sum, m) => sum + m.value, 0)) * 100}%`,
-                                                backgroundColor: macro.color
-                                            }}
-                                        />
+                {/* Quick Overview Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                    <QuickStatCard
+                        icon={<DollarSign className="w-8 h-8" />}
+                        value={`$${data.overview.total_spent.toFixed(0)}`}
+                        label="Spent on groceries"
+                        color="green"
+                    />
+                    <QuickStatCard
+                        icon={<ChefHat className="w-8 h-8" />}
+                        value={data.overview.recipes_cooked}
+                        label="Recipes Cooked"
+                        color="purple"
+                    />
+                    <QuickStatCard
+                        icon={<Package className="w-8 h-8" />}
+                        value={data.overview.inventory_items}
+                        label="Items in Inventory"
+                        color="blue"
+                    />
+                    <QuickStatCard
+                        icon={<Activity className="w-8 h-8" />}
+                        value={data.overview.nutrition_days_logged ?? 'N/A'}
+                        label="Days Logged"
+                        color="orange"
+                    />
+                </div>
+
+                {/* AI Insight of the Day */}
+                {data.ai_insight_of_day && (
+                    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
+                        <div className="flex items-start gap-4">
+                            <Sparkles className="w-8 h-8 flex-shrink-0 mt-1" />
+                            <div>
+                                <h2 className="text-xl font-bold mb-2">💡 AI Insight of the Day</h2>
+                                <p className="text-lg opacity-95">{data.ai_insight_of_day}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Main Sections */}
+                <div className="space-y-6">
+                    <ShoppingInsightsSection
+                        data={data.shopping}
+                        period={getPeriodLabel()}
+                        expanded={expandedSections.has('shopping')}
+                        onToggle={() => toggleSection('shopping')}
+                    />
+
+                    <RecipeInsightsSection
+                        data={data.recipes}
+                        period={getPeriodLabel()}
+                        expanded={expandedSections.has('recipes')}
+                        onToggle={() => toggleSection('recipes')}
+                    />
+
+                    <InventoryInsightsSection
+                        data={data.inventory}
+                        expanded={expandedSections.has('inventory')}
+                        onToggle={() => toggleSection('inventory')}
+                    />
+
+                    {data.nutrition && (
+                        <NutritionCoachSection
+                            data={data.nutrition}
+                            period={getPeriodLabel()}
+                            expanded={expandedSections.has('nutrition')}
+                            onToggle={() => toggleSection('nutrition')}
+                        />
+                    )}
+
+                    <AchievementsSection
+                        data={data.achievements}
+                        expanded={expandedSections.has('achievements')}
+                        onToggle={() => toggleSection('achievements')}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Quick Stat Card Component
+const QuickStatCard: React.FC<{
+    icon: React.ReactNode;
+    value: string | number;
+    label: string;
+    color: 'green' | 'purple' | 'blue' | 'orange';
+}> = ({ icon, value, label, color }) => {
+    const colorClasses = {
+        green: 'from-green-500 to-emerald-600',
+        purple: 'from-purple-500 to-indigo-600',
+        blue: 'from-blue-500 to-cyan-600',
+        orange: 'from-orange-500 to-red-600'
+    };
+
+    return (
+        <div className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
+            <div className={`inline-flex p-3 rounded-lg bg-gradient-to-br ${colorClasses[color]} text-white mb-4`}>
+                {icon}
+            </div>
+            <div>
+                <div className="text-3xl font-bold text-gray-900 mb-1">{value}</div>
+                <div className="text-sm text-gray-600">{label}</div>
+            </div>
+        </div>
+    );
+};
+
+// Shopping Insights Section
+const ShoppingInsightsSection: React.FC<{
+    data: any;
+    period: string;
+    expanded: boolean;
+    onToggle: () => void;
+}> = ({ data, period, expanded, onToggle }) => {
+    if (!data) return null;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <button
+                onClick={onToggle}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition"
+            >
+                <div className="flex items-center gap-3">
+                    <ShoppingCart className="w-6 h-6 text-green-600" />
+                    <h2 className="text-2xl font-bold text-gray-900">🛒 Shopping Insights</h2>
+                </div>
+                <div className="text-gray-400">
+                    {expanded ? '▼' : '▶'}
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="p-6 border-t border-gray-200 space-y-6">
+                    {/* Budget Overview */}
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3">💰 Budget Overview ({period})</h3>
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <span className="text-gray-700">Total spent:</span>
+                                <span className="text-2xl font-bold text-gray-900">
+                                    ${data.total_spent} / ${data.budget}
+                                    <span className="text-sm text-gray-500 ml-2">({data.budget_percentage}%)</span>
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                                <div
+                                    className={`h-3 rounded-full ${data.budget_percentage > 100 ? 'bg-red-500' : data.budget_percentage > 85 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                    style={{ width: `${Math.min(data.budget_percentage, 100)}%` }}
+                                ></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                    <div className="text-sm text-gray-600">vs Last period</div>
+                                    <div className={`text-xl font-bold flex items-center gap-2 ${data.vs_last_period.difference < 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {data.vs_last_period.difference < 0 ? <TrendingDown className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
+                                        ${Math.abs(data.vs_last_period.difference).toFixed(2)}
+                                        {data.vs_last_period.difference < 0 && ' saved! 🎉'}
                                     </div>
                                 </div>
-                            ))}
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                    <div className="text-sm text-gray-600">Average per week</div>
+                                    <div className="text-xl font-bold text-gray-900">${data.avg_per_week.toFixed(2)}</div>
+                                </div>
+                            </div>
                         </div>
-                    ) : (
-                        <p className="text-gray-500 text-sm">No macro data yet</p>
+                    </div>
+
+                    {/* Category Breakdown */}
+                    {data.category_breakdown && data.category_breakdown.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">📊 Spending by Category</h3>
+                            <div className="space-y-2">
+                                {data.category_breakdown.map((cat: any, index: number) => (
+                                    <div key={index} className="flex items-center gap-3">
+                                        <div className="flex-1">
+                                            <div className="flex justify-between mb-1">
+                                                <span className="text-gray-700">{cat.category}</span>
+                                                <span className="font-semibold text-gray-900">${cat.amount} ({cat.percentage}%)</span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 rounded-full h-2">
+                                                <div
+                                                    className="bg-indigo-600 h-2 rounded-full"
+                                                    style={{ width: `${cat.percentage}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Top Items */}
+                    {data.top_items && data.top_items.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">🔄 Most Purchased Items</h3>
+                            <div className="space-y-2">
+                                {data.top_items.slice(0, 5).map((item: any, index: number) => (
+                                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                                        <div>
+                                            <span className="font-medium text-gray-900">{item.name}</span>
+                                            <span className="text-sm text-gray-600 ml-2">({item.count}x)</span>
+                                        </div>
+                                        <span className="text-sm text-gray-600">Every {item.frequency}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
+            )}
+        </div>
+    );
+};
 
-                <div className="bg-white rounded-lg shadow-lg p-6">
-                    <h3 className="text-xl font-semibold mb-4">AI Insights</h3>
-                    <div className="space-y-3">
-                        {insights.slice(0, 3).map((insight: any, index: number) => (
-                            <div key={index} className="flex items-start space-x-2">
-                                <span className="text-2xl">
-                                    {insight.type === 'achievement' ? '🏆' :
-                                        insight.type === 'warning' ? '⚠️' : '💡'}
-                                </span>
-                                <div>
-                                    <p className="font-semibold text-sm">{insight.title}</p>
-                                    <p className="text-xs text-gray-600">{insight.description}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+// Recipe Insights Section (simplified - will be similar structure)
+const RecipeInsightsSection: React.FC<{
+    data: any;
+    period: string;
+    expanded: boolean;
+    onToggle: () => void;
+}> = ({ data, period, expanded, onToggle }) => {
+    if (!data) return null;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <button
+                onClick={onToggle}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition"
+            >
+                <div className="flex items-center gap-3">
+                    <UtensilsCrossed className="w-6 h-6 text-purple-600" />
+                    <h2 className="text-2xl font-bold text-gray-900">🍳 Recipe Insights</h2>
                 </div>
-            </div>
+                <div className="text-gray-400">
+                    {expanded ? '▼' : '▶'}
+                </div>
+            </button>
 
-            <div className="bg-white rounded-lg shadow-lg p-6">
-                <h3 className="text-xl font-semibold mb-4">Weekly Nutrition Trend</h3>
-                {weeklyChartData.length > 0 ? (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-7 gap-2">
-                            {weeklyChartData.map((day: any, index: number) => (
-                                <div key={index} className="text-center">
-                                    <div className="text-xs text-gray-600 mb-2">{day.date}</div>
-                                    <div className="bg-indigo-100 rounded p-2">
-                                        <div className="text-sm font-semibold text-indigo-900">
-                                            {Math.round(day.calories)}
-                                        </div>
-                                        <div className="text-xs text-indigo-600">cal</div>
-                                    </div>
-                                    <div className="bg-green-100 rounded p-2 mt-1">
-                                        <div className="text-sm font-semibold text-green-900">
-                                            {Math.round(day.protein)}
-                                        </div>
-                                        <div className="text-xs text-green-600">g</div>
-                                    </div>
-                                </div>
-                            ))}
+            {expanded && (
+                <div className="p-6 border-t border-gray-200">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-purple-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-purple-600">{data.total_cooked}</div>
+                            <div className="text-sm text-gray-600">Total Cooked</div>
                         </div>
-                        <div className="flex justify-center gap-4 text-sm pt-2">
-                            <div className="flex items-center gap-1">
-                                <div className="w-3 h-3 bg-indigo-500 rounded"></div>
-                                <span>Calories</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <div className="w-3 h-3 bg-green-500 rounded"></div>
-                                <span>Protein</span>
-                            </div>
+                        <div className="bg-indigo-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-indigo-600">{data.unique_recipes}</div>
+                            <div className="text-sm text-gray-600">Unique Recipes</div>
+                        </div>
+                        <div className="bg-pink-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-pink-600">{data.reviews_written}</div>
+                            <div className="text-sm text-gray-600">Reviews Written</div>
+                        </div>
+                        <div className="bg-amber-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-amber-600">{data.avg_rating_given}⭐</div>
+                            <div className="text-sm text-gray-600">Avg Rating Given</div>
                         </div>
                     </div>
-                ) : (
-                    <p className="text-gray-500 text-sm">No weekly data yet</p>
-                )}
-            </div>
+
+                    {data.favorite && data.favorite.name && (
+                        <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg">
+                            <div className="text-sm text-gray-600">Your Favorite Recipe</div>
+                            <div className="text-xl font-bold text-gray-900">
+                                {data.favorite.name}
+                                <span className="text-sm font-normal text-gray-600 ml-2">({data.favorite.count}x cooked)</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Inventory Insights Section (simplified)
+const InventoryInsightsSection: React.FC<{
+    data: any;
+    expanded: boolean;
+    onToggle: () => void;
+}> = ({ data, expanded, onToggle }) => {
+    if (!data) return null;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <button
+                onClick={onToggle}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition"
+            >
+                <div className="flex items-center gap-3">
+                    <Package className="w-6 h-6 text-blue-600" />
+                    <h2 className="text-2xl font-bold text-gray-900">📦 Inventory Insights</h2>
+                    {(data.expiring_soon_count > 0 || data.low_stock_count > 0) && (
+                        <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-semibold">
+                            {data.expiring_soon_count + data.low_stock_count} alerts
+                        </span>
+                    )}
+                </div>
+                <div className="text-gray-400">
+                    {expanded ? '▼' : '▶'}
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="p-6 border-t border-gray-200 space-y-6">
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-blue-600">{data.total_items}</div>
+                            <div className="text-sm text-gray-600">Total Items</div>
+                        </div>
+                        <div className="bg-yellow-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-yellow-600">{data.low_stock_count}</div>
+                            <div className="text-sm text-gray-600">Low Stock</div>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-red-600">{data.expiring_soon_count}</div>
+                            <div className="text-sm text-gray-600">Expiring Soon</div>
+                        </div>
+                    </div>
+
+                    {/* Expiring Items */}
+                    {data.expiring_items && (data.expiring_items.tomorrow?.length > 0 || data.expiring_items.in_2_3_days?.length > 0) && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5 text-red-600" />
+                                Immediate Attention Needed
+                            </h3>
+
+                            {data.expiring_items.tomorrow?.length > 0 && (
+                                <div className="mb-4">
+                                    <div className="text-sm font-semibold text-red-700 mb-2">🔴 Expires Tomorrow:</div>
+                                    <div className="space-y-2">
+                                        {data.expiring_items.tomorrow.map((item: any, index: number) => (
+                                            <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                                <span className="font-medium text-gray-900">{item.name}</span>
+                                                <span className="text-sm text-gray-600 ml-2">({item.quantity} {item.unit})</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {data.expiring_items.in_2_3_days?.length > 0 && (
+                                <div>
+                                    <div className="text-sm font-semibold text-yellow-700 mb-2">🟡 Expires in 2-3 days:</div>
+                                    <div className="space-y-2">
+                                        {data.expiring_items.in_2_3_days.map((item: any, index: number) => (
+                                            <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                <span className="font-medium text-gray-900">{item.name}</span>
+                                                <span className="text-sm text-gray-600 ml-2">({item.quantity} {item.unit})</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Nutrition Coach Section (simplified)
+const NutritionCoachSection: React.FC<{
+    data: any;
+    period: string;
+    expanded: boolean;
+    onToggle: () => void;
+}> = ({ data, period, expanded, onToggle }) => {
+    if (!data) return null;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <button
+                onClick={onToggle}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition"
+            >
+                <div className="flex items-center gap-3">
+                    <Activity className="w-6 h-6 text-orange-600" />
+                    <h2 className="text-2xl font-bold text-gray-900">🏋️ Nutrition Coach</h2>
+                    {data.current_streak > 0 && (
+                        <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-semibold flex items-center gap-1">
+                            <Flame className="w-4 h-4" />
+                            {data.current_streak} day streak!
+                        </span>
+                    )}
+                </div>
+                <div className="text-gray-400">
+                    {expanded ? '▼' : '▶'}
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="p-6 border-t border-gray-200 space-y-6">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-orange-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-orange-600">{data.days_logged}/{data.total_days}</div>
+                            <div className="text-sm text-gray-600">Days Logged ({data.logging_percentage}%)</div>
+                        </div>
+                        <div className="bg-green-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-green-600">{data.goal_achievement.calories.percentage}%</div>
+                            <div className="text-sm text-gray-600">Calorie Goals Hit</div>
+                        </div>
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-blue-600">{data.goal_achievement.protein.percentage}%</div>
+                            <div className="text-sm text-gray-600">Protein Goals Hit</div>
+                        </div>
+                        <div className="bg-red-50 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-red-600 flex items-center gap-1">
+                                <Flame className="w-8 h-8" />
+                                {data.current_streak}
+                            </div>
+                            <div className="text-sm text-gray-600">Day Streak</div>
+                        </div>
+                    </div>
+
+                    {data.monthly_totals && (
+                        <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">Monthly Summary</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <div className="text-sm text-gray-600">Avg Calories/day</div>
+                                    <div className="text-2xl font-bold text-gray-900">{data.monthly_totals.avg_per_day.calories} kcal</div>
+                                </div>
+                                <div>
+                                    <div className="text-sm text-gray-600">Avg Protein/day</div>
+                                    <div className="text-2xl font-bold text-gray-900">{data.monthly_totals.avg_per_day.protein}g</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Achievements Section
+const AchievementsSection: React.FC<{
+    data: any;
+    expanded: boolean;
+    onToggle: () => void;
+}> = ({ data, expanded, onToggle }) => {
+    if (!data) return null;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <button
+                onClick={onToggle}
+                className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition"
+            >
+                <div className="flex items-center gap-3">
+                    <Trophy className="w-6 h-6 text-yellow-600" />
+                    <h2 className="text-2xl font-bold text-gray-900">🎊 Streaks & Achievements</h2>
+                    {data.badges_earned?.length > 0 && (
+                        <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-semibold">
+                            {data.badges_earned.length} badges
+                        </span>
+                    )}
+                </div>
+                <div className="text-gray-400">
+                    {expanded ? '▼' : '▶'}
+                </div>
+            </button>
+
+            {expanded && (
+                <div className="p-6 border-t border-gray-200 space-y-6">
+                    {/* Current Streaks */}
+                    {data.current_streaks && Object.keys(data.current_streaks).length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <Flame className="w-5 h-5 text-orange-600" />
+                                Current Streaks
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {Object.entries(data.current_streaks).map(([type, count]: [string, any]) => (
+                                    <div key={type} className="p-4 bg-gradient-to-br from-orange-50 to-red-50 rounded-lg border border-orange-200">
+                                        <div className="text-3xl font-bold text-orange-600 flex items-center gap-2">
+                                            <Flame className="w-8 h-8" />
+                                            {count}
+                                        </div>
+                                        <div className="text-sm text-gray-700 capitalize">{type.replace('_', ' ')}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Badges Earned */}
+                    {data.badges_earned && data.badges_earned.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">🏆 Badges Earned ({data.badges_earned.length} total)</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {data.badges_earned.map((badge: any) => (
+                                    <div key={badge.id} className="p-4 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg border border-yellow-200 text-center">
+                                        <div className="text-4xl mb-2">{badge.icon}</div>
+                                        <div className="font-semibold text-gray-900">{badge.name}</div>
+                                        <div className="text-xs text-gray-600 mt-1">{badge.description}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Next Goals */}
+                    {data.next_goals && data.next_goals.length > 0 && (
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">🎯 Next Goals</h3>
+                            <div className="space-y-3">
+                                {data.next_goals.map((goal: any, index: number) => (
+                                    <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="font-medium text-gray-900">{goal.name}</span>
+                                            <span className="text-sm text-gray-600">{goal.progress}/{goal.target}</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                            <div
+                                                className="bg-indigo-600 h-2 rounded-full"
+                                                style={{ width: `${(goal.progress / goal.target) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="text-xs text-gray-600 mt-1">
+                                            {goal.remaining} more to go!
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

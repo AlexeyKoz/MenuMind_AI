@@ -499,6 +499,182 @@ class ApiService {
                 ai_categorize: aiCategorize
             })
         });
+
+    // ========================================
+    // NUTRITION TRACKING & AI COACH
+    // ========================================
+
+    // Nutrition Settings
+    getNutritionSettings = () =>
+        this.request('/nutrition/settings/');
+
+    updateNutritionSettings = (settings: Partial<any>) =>
+        this.request('/nutrition/settings/update/', {
+            method: 'PATCH',
+            body: JSON.stringify(settings)
+        });
+
+    getNutritionGoals = () =>
+        this.request('/nutrition/settings/goals/');
+
+    // Nutrition Entries (CRUD)
+    getNutritionEntries = (params?: {
+        date?: string;
+        start_date?: string;
+        end_date?: string;
+        meal_type?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    }) => {
+        const queryParams = new URLSearchParams();
+        if (params?.date) queryParams.append('date', params.date);
+        if (params?.start_date) queryParams.append('start_date', params.start_date);
+        if (params?.end_date) queryParams.append('end_date', params.end_date);
+        if (params?.meal_type) queryParams.append('meal_type', params.meal_type);
+
+        const queryString = queryParams.toString();
+        return this.request(`/nutrition/entries/${queryString ? `?${queryString}` : ''}`);
+    };
+
+    createNutritionEntry = (entry: {
+        date: string;
+        meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+        time?: string;
+        entry_type?: 'manual' | 'recipe' | 'product' | 'ai_suggested';
+        food_name: string;
+        portion_size: number;
+        portion_unit: string;
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+        fiber?: number;
+        sugar?: number;
+        sodium?: number;
+        notes?: string;
+    }) =>
+        this.request('/nutrition/entries/', {
+            method: 'POST',
+            body: JSON.stringify(entry)
+        });
+
+    updateNutritionEntry = (id: string, entry: Partial<any>) =>
+        this.request(`/nutrition/entries/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(entry)
+        });
+
+    deleteNutritionEntry = (id: string) =>
+        this.request(`/nutrition/entries/${id}/`, {
+            method: 'DELETE'
+        });
+
+    // Log from Recipe/Inventory
+    logFromRecipe = (data: {
+        recipe_id: string;
+        portion_multiplier: number;
+        meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+        date: string;
+        time?: string;
+        notes?: string;
+    }) =>
+        this.request('/nutrition/entries/from_recipe/', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+
+    logFromInventory = (data: {
+        inventory_item_id: string;
+        amount_grams: number;
+        meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+        date: string;
+        time?: string;
+        update_inventory?: boolean;
+        notes?: string;
+    }) =>
+        this.request('/nutrition/entries/from_inventory/', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+
+    // Summaries
+    getTodaySummary = () =>
+        this.request('/nutrition/entries/today_summary/');
+
+    getWeeklySummary = (weekStart?: string) => {
+        const params = weekStart ? `?week_start=${weekStart}` : '';
+        return this.request(`/nutrition/entries/weekly_summary/${params}`);
+    };
+
+    getMonthlySummary = (month?: string) => {
+        const params = month ? `?month=${month}` : '';
+        return this.request(`/nutrition/entries/monthly_summary/${params}`);
+    };
+
+    // AI Features (only work if AI coach is enabled)
+    getAISuggestions = (params?: {
+        meal_type?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+        max_calories?: number;
+    }) =>
+        this.request('/nutrition/ai/suggestions/', {
+            method: 'POST',
+            body: JSON.stringify(params || {})
+        });
+
+    askAICoach = (question: string) =>
+        this.request('/nutrition/ai/coaching/', {
+            method: 'POST',
+            body: JSON.stringify({ question })
+        });
+
+    getAIWeeklyReport = () =>
+        this.request('/nutrition/ai/weekly_report/');
+
+    // ========================================
+    // DASHBOARD & ANALYTICS
+    // ========================================
+
+    // Dashboard Overview
+    getDashboardOverview = (params?: { period?: '7days' | '30days' | '90days' | '1year'; include_ai?: boolean }) => {
+        const queryParams = new URLSearchParams();
+        if (params?.period) queryParams.append('period', params.period);
+        if (params?.include_ai !== undefined) queryParams.append('include_ai', String(params.include_ai));
+        const queryString = queryParams.toString();
+        return this.request(`/analytics/dashboard/overview/${queryString ? '?' + queryString : ''}`);
+    };
+
+    // AI Insights
+    getAIInsights = (params?: { period?: string }) => {
+        const queryParams = new URLSearchParams();
+        if (params?.period) queryParams.append('period', params.period);
+        const queryString = queryParams.toString();
+        return this.request(`/analytics/dashboard/ai_insights/${queryString ? '?' + queryString : ''}`);
+    };
+
+    regenerateAIInsights = (period?: string) =>
+        this.request('/analytics/dashboard/ai_insights/regenerate/', {
+            method: 'POST',
+            body: JSON.stringify({ period: period || '30days' })
+        });
+
+    // Achievements
+    getAchievements = () =>
+        this.request('/analytics/dashboard/achievements/');
+
+    getAchievementsList = () =>
+        this.request('/analytics/achievements/');
+
+    // Streaks
+    getStreaks = () =>
+        this.request('/analytics/streaks/');
+
+    // Cooking Logs
+    getCookingLogs = () =>
+        this.request('/analytics/cooking-logs/');
+
+    logRecipeCooking = (data: { recipe: string; canonical_recipe?: string; servings?: number; notes?: string }) =>
+        this.request('/analytics/cooking-logs/', {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
 }
 
 export default ApiService;
