@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
@@ -17,10 +18,11 @@ import toast from 'react-hot-toast';
  * - Create new recipes with AI builder wizard
  */
 const CanonicalRecipesPage: React.FC = () => {
+    const { t } = useTranslation();
     const { token, user, logout } = useAuth();
     const api = new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
-        alert('Your session has expired. Please log in again.');
+        alert(t('discover.sessionExpired'));
         logout();
     });
 
@@ -135,9 +137,9 @@ const CanonicalRecipesPage: React.FC = () => {
 
             // Show success message
             if (!recipeLiked) {
-                toast.success('Recipe added to your favorites!');
+                toast.success(t('discover.recipeAddedToFavorites'));
             } else {
-                toast.success('Recipe removed from favorites');
+                toast.success(t('discover.recipeRemovedFromFavorites'));
             }
 
             // Refresh recipes to update like count in the grid
@@ -145,7 +147,7 @@ const CanonicalRecipesPage: React.FC = () => {
 
         } catch (error: any) {
             console.error('Like error:', error);
-            toast.error(error.message || 'Failed to update like status');
+            toast.error(error.message || t('discover.failedToUpdateLike'));
         } finally {
             setLiking(false);
         }
@@ -153,7 +155,7 @@ const CanonicalRecipesPage: React.FC = () => {
 
     const handleBuilderComplete = (result: any) => {
         setShowBuilder(false);
-        alert(`Recipe "${result.recipe_summary.name}" created successfully!`);
+        alert(t('discover.recipeCreatedSuccessfully', { name: result.recipe_summary.name }));
         loadRecipes();
     };
 
@@ -189,7 +191,7 @@ const CanonicalRecipesPage: React.FC = () => {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
-                        Back to recipes
+                        {t('discover.backToRecipes')}
                     </button>
 
                     <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
@@ -208,13 +210,13 @@ const CanonicalRecipesPage: React.FC = () => {
                                 onClick={handleLikeAction}
                                 disabled={liking}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all font-medium ${recipeLiked
-                                        ? 'bg-red-600 text-white hover:bg-red-700'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-red-600 text-white hover:bg-red-700'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                     } ${liking ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                title={recipeLiked ? 'Remove from favorites' : 'Add to favorites'}
+                                title={recipeLiked ? t('discover.removeFromFavorites') : t('discover.addToFavorites')}
                             >
                                 <Heart className={`w-5 h-5 ${recipeLiked ? 'fill-current' : ''}`} />
-                                {liking ? 'Updating...' : recipeLiked ? 'Favorited' : 'Add to Favorites'}
+                                {liking ? t('discover.updating') : recipeLiked ? t('discover.favorited') : t('discover.addToFavorites')}
                             </button>
                         </div>
 
@@ -222,19 +224,19 @@ const CanonicalRecipesPage: React.FC = () => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                             <div className="text-center p-4 bg-gray-50 rounded-lg">
                                 <div className="text-2xl font-bold text-gray-900">{selectedRecipe.servings}</div>
-                                <div className="text-sm text-gray-600">Servings</div>
+                                <div className="text-sm text-gray-600">{t('discover.servings')}</div>
                             </div>
                             <div className="text-center p-4 bg-gray-50 rounded-lg">
                                 <div className="text-2xl font-bold text-gray-900">{selectedRecipe.total_time_minutes}</div>
-                                <div className="text-sm text-gray-600">Minutes</div>
+                                <div className="text-sm text-gray-600">{t('discover.minutes')}</div>
                             </div>
                             <div className="text-center p-4 bg-gray-50 rounded-lg">
                                 <div className="text-2xl font-bold text-gray-900">{selectedRecipe.difficulty}</div>
-                                <div className="text-sm text-gray-600">Difficulty</div>
+                                <div className="text-sm text-gray-600">{t('discover.difficulty')}</div>
                             </div>
                             <div className="text-center p-4 bg-gray-50 rounded-lg">
                                 <div className="text-2xl font-bold text-gray-900">{selectedRecipe.total_cooked}</div>
-                                <div className="text-sm text-gray-600">Times Cooked</div>
+                                <div className="text-sm text-gray-600">{t('discover.timesCooked')}</div>
                             </div>
                         </div>
 
@@ -244,7 +246,7 @@ const CanonicalRecipesPage: React.FC = () => {
                             <div>
                                 <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
                                     <span className="text-3xl">🥘</span>
-                                    Ingredients
+                                    {t('discover.ingredients')}
                                 </h3>
                                 {selectedRecipe.base_ingredients && selectedRecipe.base_ingredients.length > 0 ? (
                                     <div className="space-y-3">
@@ -267,7 +269,7 @@ const CanonicalRecipesPage: React.FC = () => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-gray-500 italic">No ingredients listed</p>
+                                    <p className="text-gray-500 italic">{t('discover.noIngredientsListed')}</p>
                                 )}
                             </div>
 
@@ -275,7 +277,7 @@ const CanonicalRecipesPage: React.FC = () => {
                             <div>
                                 <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
                                     <span className="text-3xl">📝</span>
-                                    Instructions
+                                    {t('discover.instructions')}
                                 </h3>
                                 {selectedRecipe.base_steps && selectedRecipe.base_steps.length > 0 ? (
                                     <div className="space-y-4">
@@ -290,7 +292,7 @@ const CanonicalRecipesPage: React.FC = () => {
                                                     </p>
                                                     {step.time_minutes && (
                                                         <p className="text-sm text-gray-500 mt-1">
-                                                            ⏱️ {step.time_minutes} minutes
+                                                            ⏱️ {t('discover.minutesLabel', { time: step.time_minutes })}
                                                         </p>
                                                     )}
                                                 </div>
@@ -298,7 +300,7 @@ const CanonicalRecipesPage: React.FC = () => {
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-gray-500 italic">No instructions listed</p>
+                                    <p className="text-gray-500 italic">{t('discover.noInstructionsListed')}</p>
                                 )}
                             </div>
                         </div>
@@ -328,10 +330,10 @@ const CanonicalRecipesPage: React.FC = () => {
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                            Discover Recipes
+                            {t('discover.title')}
                         </h1>
                         <p className="text-gray-600">
-                            Browse deduplicated, community-curated recipes
+                            {t('discover.subtitle')}
                         </p>
                     </div>
                     <button
@@ -341,7 +343,7 @@ const CanonicalRecipesPage: React.FC = () => {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                         </svg>
-                        Create Recipe
+                        {t('discover.createRecipe')}
                     </button>
                 </div>
 
@@ -353,7 +355,7 @@ const CanonicalRecipesPage: React.FC = () => {
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search recipes..."
+                            placeholder={t('discover.searchPlaceholder')}
                             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
 
@@ -363,13 +365,13 @@ const CanonicalRecipesPage: React.FC = () => {
                             onChange={(e) => setCuisine(e.target.value)}
                             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
-                            <option value="">All Cuisines</option>
-                            <option value="Italian">Italian</option>
-                            <option value="Mexican">Mexican</option>
-                            <option value="Chinese">Chinese</option>
-                            <option value="Indian">Indian</option>
-                            <option value="Japanese">Japanese</option>
-                            <option value="French">French</option>
+                            <option value="">{t('discover.allCuisines')}</option>
+                            <option value="Italian">{t('discover.cuisines.italian')}</option>
+                            <option value="Mexican">{t('discover.cuisines.mexican')}</option>
+                            <option value="Chinese">{t('discover.cuisines.chinese')}</option>
+                            <option value="Indian">{t('discover.cuisines.indian')}</option>
+                            <option value="Japanese">{t('discover.cuisines.japanese')}</option>
+                            <option value="French">{t('discover.cuisines.french')}</option>
                         </select>
 
                         {/* Difficulty */}
@@ -378,10 +380,10 @@ const CanonicalRecipesPage: React.FC = () => {
                             onChange={(e) => setDifficulty(e.target.value)}
                             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
-                            <option value="">All Difficulties</option>
-                            <option value="beginner">Beginner</option>
-                            <option value="intermediate">Intermediate</option>
-                            <option value="advanced">Advanced</option>
+                            <option value="">{t('discover.allDifficulties')}</option>
+                            <option value="beginner">{t('discover.difficulties.beginner')}</option>
+                            <option value="intermediate">{t('discover.difficulties.intermediate')}</option>
+                            <option value="advanced">{t('discover.difficulties.advanced')}</option>
                         </select>
 
                         {/* Sort */}
@@ -390,25 +392,32 @@ const CanonicalRecipesPage: React.FC = () => {
                             onChange={(e) => setSortBy(e.target.value)}
                             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
-                            <option value="popular">Most Popular</option>
-                            <option value="top_rated">Top Rated</option>
-                            <option value="most_cooked">Most Cooked</option>
-                            <option value="recent">Most Recent</option>
+                            <option value="popular">{t('discover.mostPopular')}</option>
+                            <option value="top_rated">{t('discover.topRated')}</option>
+                            <option value="most_cooked">{t('discover.mostCooked')}</option>
+                            <option value="recent">{t('discover.mostRecent')}</option>
                         </select>
                     </div>
 
                     {/* Diet Labels */}
                     <div className="flex flex-wrap gap-2">
-                        {['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo'].map((label) => (
+                        {[
+                            { key: 'vegetarian', label: t('discover.dietLabels.vegetarian') },
+                            { key: 'vegan', label: t('discover.dietLabels.vegan') },
+                            { key: 'gluten-free', label: t('discover.dietLabels.glutenFree') },
+                            { key: 'dairy-free', label: t('discover.dietLabels.dairyFree') },
+                            { key: 'keto', label: t('discover.dietLabels.keto') },
+                            { key: 'paleo', label: t('discover.dietLabels.paleo') }
+                        ].map((item) => (
                             <button
-                                key={label}
-                                onClick={() => toggleDietLabel(label)}
-                                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${dietLabels.includes(label)
+                                key={item.key}
+                                onClick={() => toggleDietLabel(item.key)}
+                                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${dietLabels.includes(item.key)
                                     ? 'bg-green-600 text-white'
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                     }`}
                             >
-                                {label}
+                                {item.label}
                             </button>
                         ))}
                     </div>
@@ -428,7 +437,7 @@ const CanonicalRecipesPage: React.FC = () => {
                     </div>
                 ) : recipes.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
-                        No recipes found. Try adjusting your filters.
+                        {t('discover.noRecipesFound')}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

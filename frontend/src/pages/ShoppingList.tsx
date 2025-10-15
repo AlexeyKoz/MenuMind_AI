@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useCollaboration } from '../contexts/CollaborationContext';
 import ApiService from '../services/api';
@@ -11,6 +12,7 @@ import { getUserFriendlyError } from '../utils/errorHandler';
 import { Package, X, Check } from 'lucide-react';
 
 const ShoppingList: React.FC = () => {
+    const { t } = useTranslation();
     const { token, user, logout } = useAuth();
     const {
         connectToList,
@@ -1645,7 +1647,7 @@ const ShoppingList: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto p-6">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold">🛒 Collaborative Shopping Lists</h2>
+                <h2 className="text-3xl font-bold">🛒 {t('shopping.title')}</h2>
                 {isConnected && (
                     <div className="flex items-center gap-2 text-green-600">
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -1657,12 +1659,12 @@ const ShoppingList: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <div className="bg-white rounded-lg shadow-lg p-4">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-semibold">My Lists</h3>
+                        <h3 className="text-xl font-semibold">{t('shopping.myLists')}</h3>
                         <button
                             onClick={() => setShowCreateForm(!showCreateForm)}
                             className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition"
                         >
-                            ➕ New
+                            ➕ {t('common.add')}
                         </button>
                     </div>
 
@@ -1674,7 +1676,7 @@ const ShoppingList: React.FC = () => {
                                 value={newListName}
                                 onChange={(e) => setNewListName(e.target.value)}
                                 onKeyPress={(e) => e.key === 'Enter' && handleCreateList()}
-                                placeholder="Enter list name..."
+                                placeholder={t('shopping.newListName')}
                                 className="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-green-500 mb-2"
                             />
                             <div className="flex gap-2">
@@ -1682,13 +1684,13 @@ const ShoppingList: React.FC = () => {
                                     onClick={handleCreateList}
                                     className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
                                 >
-                                    Create
+                                    {t('shopping.create')}
                                 </button>
                                 <button
                                     onClick={() => setShowCreateForm(false)}
                                     className="px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
                                 >
-                                    Cancel
+                                    {t('shopping.cancel')}
                                 </button>
                             </div>
                         </div>
@@ -1718,14 +1720,14 @@ const ShoppingList: React.FC = () => {
                                     >
                                         <div className="font-medium">{list.name}</div>
                                         <div className="text-sm opacity-75">
-                                            {activeList?.id === list.id ? items.length : (list.items?.length || 0)} items
+                                            {activeList?.id === list.id ? items.length : (list.items?.length || 0)} {t('shopping.items')}
                                             {(() => {
                                                 // Use real-time collaborator count for active list, fallback to stored count
                                                 const collaboratorCount = activeList?.id === list.id
                                                     ? collaborators.length
                                                     : (list.collaborators?.length || 0);
                                                 return collaboratorCount > 1 && (
-                                                    <span className="ml-2">• {collaboratorCount} people</span>
+                                                    <span className="ml-2">• {collaboratorCount} {t('shopping.people')}</span>
                                                 );
                                             })()}
                                         </div>
@@ -1749,7 +1751,7 @@ const ShoppingList: React.FC = () => {
                                                 ? 'hover:bg-blue-400 text-blue-100'
                                                 : 'hover:bg-red-100 text-red-600'
                                                 }`}
-                                            title="Delete list"
+                                            title={t('shopping.deleteList')}
                                         >
                                             🗑️
                                         </button>
@@ -1760,8 +1762,8 @@ const ShoppingList: React.FC = () => {
 
                         {lists.length === 0 && !showCreateForm && (
                             <div className="text-center py-8 text-gray-500">
-                                <p className="mb-2">No shopping lists yet</p>
-                                <p className="text-sm">Click "➕ New" to create your first collaborative list!</p>
+                                <p className="mb-2">{t('shopping.noLists')}</p>
+                                <p className="text-sm">{t('shopping.createFirstList')}</p>
                             </div>
                         )}
                     </div>
@@ -1774,7 +1776,7 @@ const ShoppingList: React.FC = () => {
 
                             <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
                                 <label className="block text-sm font-medium mb-2">
-                                    🤖 Add items with AI (Natural Language)
+                                    🤖 {t('shopping.aiAddLabel')}
                                 </label>
                                 <div className="flex gap-2">
                                     <input
@@ -1782,7 +1784,7 @@ const ShoppingList: React.FC = () => {
                                         value={aiInput}
                                         onChange={(e) => handleInputChange(e.target.value, setAiInput)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleAiAddItems()}
-                                        placeholder={!activeList ? "Select a list first..." : "e.g., 'Add milk, bread, and ingredients for pasta'"}
+                                        placeholder={!activeList ? t('shopping.selectListFirst') : t('shopping.aiPlaceholder')}
                                         className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                                         disabled={loading || !activeList}
                                     />
@@ -1791,7 +1793,7 @@ const ShoppingList: React.FC = () => {
                                         disabled={loading || !activeList}
                                         className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition"
                                     >
-                                        {loading ? 'Processing...' : 'AI Add'}
+                                        {loading ? t('shopping.processing') : t('shopping.aiAdd')}
                                     </button>
                                 </div>
 
@@ -1800,18 +1802,18 @@ const ShoppingList: React.FC = () => {
                                     <div className="mt-4 space-y-2 p-3 bg-blue-50/80 rounded-lg border border-blue-200">
                                         <div className="flex items-center justify-between mb-2">
                                             <p className="text-xs font-medium text-blue-800">
-                                                💬 AI Messages:
+                                                💬 {t('shopping.aiMessages')}:
                                             </p>
                                             <button
                                                 onClick={() => {
-                                                    if (window.confirm('Clear all AI messages?')) {
+                                                    if (window.confirm(t('shopping.clearAllMessages'))) {
                                                         setAiMessages([]);
                                                     }
                                                 }}
                                                 className="text-xs text-gray-500 hover:text-red-600 transition"
-                                                title="Clear AI messages"
+                                                title={t('shopping.clearMessages')}
                                             >
-                                                Clear
+                                                {t('shopping.clearMessages')}
                                             </button>
                                         </div>
                                         <div className="space-y-2 max-h-32 overflow-y-auto">
@@ -1840,11 +1842,11 @@ const ShoppingList: React.FC = () => {
                                     <div className="mt-4 space-y-2 p-3 bg-white/60 rounded-lg border border-purple-200">
                                         <div className="flex items-center justify-between mb-2">
                                             <p className="text-xs font-medium text-gray-700">
-                                                📚 Generated Recipes ({generatedRecipes.length}):
+                                                📚 {t('shopping.generatedRecipes')} ({generatedRecipes.length}):
                                             </p>
                                             <button
                                                 onClick={() => {
-                                                    if (window.confirm('Clear all recipe links for this list?')) {
+                                                    if (window.confirm(t('shopping.clearRecipeLinks'))) {
                                                         setGeneratedRecipes([]);
                                                         if (activeList?.id) {
                                                             localStorage.removeItem(`generatedRecipes_${activeList.id}`);
@@ -1852,9 +1854,9 @@ const ShoppingList: React.FC = () => {
                                                     }
                                                 }}
                                                 className="text-xs text-gray-500 hover:text-red-600 transition"
-                                                title="Clear recipe history for this list"
+                                                title={t('shopping.clearMessages')}
                                             >
-                                                Clear
+                                                {t('shopping.clearMessages')}
                                             </button>
                                         </div>
                                         <div className="space-y-1.5 max-h-40 overflow-y-auto">
@@ -1875,11 +1877,11 @@ const ShoppingList: React.FC = () => {
                                                             window.open(url, '_blank', 'noopener,noreferrer');
                                                         }}
                                                         className="text-purple-600 hover:text-purple-800 hover:underline flex-1 truncate text-left cursor-pointer"
-                                                        title={`View recipe: ${recipe.name}`}
+                                                        title={`${t('shopping.viewRecipe')}: ${recipe.name}`}
                                                     >
                                                         <span className="font-medium">{recipe.name}</span>
                                                         <span className="text-gray-500 ml-1 text-xs">
-                                                            (from "{recipe.query}")
+                                                            ({t('shopping.from')} "{recipe.query}")
                                                         </span>
                                                     </button>
                                                     <span className="text-xs text-gray-400 flex-shrink-0">
@@ -1890,7 +1892,7 @@ const ShoppingList: React.FC = () => {
                                         </div>
                                         {generatedRecipes.length > 10 && (
                                             <p className="text-xs text-gray-500 mt-2 text-center">
-                                                + {generatedRecipes.length - 10} more (scroll to see all)
+                                                + {generatedRecipes.length - 10} {t('shopping.more')} ({t('shopping.scrollToSeeAll')})
                                             </p>
                                         )}
                                     </div>
@@ -1904,7 +1906,7 @@ const ShoppingList: React.FC = () => {
                                         value={newItem}
                                         onChange={(e) => handleInputChange(e.target.value, setNewItem)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleAddItem()}
-                                        placeholder={!activeList ? "Select a list first..." : "Add item manually..."}
+                                        placeholder={!activeList ? t('shopping.selectListFirst') : t('shopping.addItemPlaceholder')}
                                         className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                                         disabled={!activeList}
                                     />
@@ -1913,7 +1915,7 @@ const ShoppingList: React.FC = () => {
                                         disabled={!activeList}
                                         className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
                                     >
-                                        Add Item
+                                        {t('shopping.addItem')}
                                     </button>
                                 </div>
                             </div>
@@ -1929,7 +1931,7 @@ const ShoppingList: React.FC = () => {
                                         </div>
                                         <span>
                                             {typingUsers.map(user => user.username).join(', ')}
-                                            {typingUsers.length === 1 ? ' is' : ' are'} typing...
+                                            {' '}{typingUsers.length === 1 ? t('shopping.isTyping') : t('shopping.areTyping')} {t('shopping.typing')}
                                         </span>
                                     </div>
                                 </div>
@@ -1986,23 +1988,23 @@ const ShoppingList: React.FC = () => {
                                                                         {/* Recent indicator */}
                                                                         {item.is_recent && (
                                                                             <span className="text-xs bg-green-100 text-green-700 px-1 py-0.5 rounded-full">
-                                                                                ✨ New
+                                                                                ✨ {t('shopping.new')}
                                                                             </span>
                                                                         )}
 
                                                                         {/* AI suggested */}
                                                                         {item.ai_suggested && (
                                                                             <span className="text-xs bg-purple-100 text-purple-700 px-1 py-0.5 rounded-full">
-                                                                                🤖 AI
+                                                                                🤖 {t('shopping.aiSuggested')}
                                                                             </span>
                                                                         )}
                                                                     </div>
 
                                                                     {/* Added by info */}
                                                                     <div className="text-xs text-gray-400 mt-1">
-                                                                        Added by {item.added_by_first_name || item.added_by_name}
+                                                                        {t('shopping.addedBy')} {item.added_by_first_name || item.added_by_name}
                                                                         {item.is_completed && item.completed_by_name && (
-                                                                            <span> • Completed by {item.completed_by_name}</span>
+                                                                            <span> • {t('shopping.completedBy')} {item.completed_by_name}</span>
                                                                         )}
                                                                     </div>
                                                                 </div>
@@ -2016,7 +2018,7 @@ const ShoppingList: React.FC = () => {
                                                                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                                                     : 'hover:bg-red-100 text-red-600 hover:text-red-700'
                                                                     }`}
-                                                                title="Remove item from list"
+                                                                title={t('shopping.removeItem')}
                                                             >
                                                                 {isDeleting.has(item.id) ? (
                                                                     <div className="w-4 h-4 flex items-center justify-center">
@@ -2039,7 +2041,7 @@ const ShoppingList: React.FC = () => {
                                                                     onClick={() => handleQuantityChange(item.id, -1, item.name)}
                                                                     disabled={isUpdatingQuantity.has(item.id) || isDeleting.has(item.id) || isUpdatingWeight.has(item.id) || isUpdatingLiquid.has(item.id) || item.quantity <= 1}
                                                                     className="w-4 h-4 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-300 text-gray-600 rounded border text-xs font-bold transition-colors"
-                                                                    title="Decrease quantity"
+                                                                    title={t('shopping.decreaseQuantity')}
                                                                 >
                                                                     −
                                                                 </button>
@@ -2058,7 +2060,7 @@ const ShoppingList: React.FC = () => {
                                                                     onClick={() => handleQuantityChange(item.id, 1, item.name)}
                                                                     disabled={isUpdatingQuantity.has(item.id) || isDeleting.has(item.id) || isUpdatingWeight.has(item.id) || isUpdatingLiquid.has(item.id)}
                                                                     className="w-4 h-4 flex items-center justify-center bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-300 text-gray-600 rounded border text-xs font-bold transition-colors"
-                                                                    title="Increase quantity"
+                                                                    title={t('shopping.increaseQuantity')}
                                                                 >
                                                                     +
                                                                 </button>
@@ -2078,13 +2080,13 @@ const ShoppingList: React.FC = () => {
                                                                             ? 'bg-orange-200 text-orange-700 hover:bg-orange-300'
                                                                             : 'bg-blue-200 text-blue-700 hover:bg-blue-300'
                                                                         }`}
-                                                                    title={`Toggle quantity type. Current: ${getActiveQuantityType(item.id)}`}
+                                                                    title={t('shopping.toggleQuantityType')}
                                                                 >
                                                                     {getActiveQuantityType(item.id) === 'none'
-                                                                        ? '🔢 Enable'
+                                                                        ? `🔢 ${t('shopping.enable')}`
                                                                         : getActiveQuantityType(item.id) === 'weight'
-                                                                            ? '📊 Weight'
-                                                                            : '🥤 Liquid'
+                                                                            ? `📊 ${t('shopping.weight')}`
+                                                                            : `🥤 ${t('shopping.liquid')}`
                                                                     }
                                                                 </button>
                                                             </div>
@@ -2098,7 +2100,7 @@ const ShoppingList: React.FC = () => {
                                                                         onClick={() => handleWeightQuantityChange(item.id, -1, item.name)}
                                                                         disabled={isUpdatingWeight.has(item.id) || isDeleting.has(item.id) || (item.weight_quantity || 0) <= 0}
                                                                         className="w-4 h-4 flex items-center justify-center bg-orange-100 hover:bg-orange-200 disabled:bg-gray-50 disabled:text-gray-300 text-orange-600 rounded border text-xs font-bold transition-colors"
-                                                                        title="Decrease weight"
+                                                                        title={t('shopping.decreaseWeight')}
                                                                     >
                                                                         −
                                                                     </button>
@@ -2115,14 +2117,14 @@ const ShoppingList: React.FC = () => {
                                                                         disabled={isUpdatingWeight.has(item.id) || isDeleting.has(item.id)}
                                                                         className="w-12 h-4 text-center text-xs border rounded focus:ring-1 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-50"
                                                                         placeholder={`0 ${userPreferences.weight_unit === 'kg' ? 'kg' : 'lbs'}`}
-                                                                        title="Weight quantity"
+                                                                        title={t('shopping.weightQuantity')}
                                                                     />
 
                                                                     <button
                                                                         onClick={() => handleWeightQuantityChange(item.id, 1, item.name)}
                                                                         disabled={isUpdatingWeight.has(item.id) || isDeleting.has(item.id)}
                                                                         className="w-4 h-4 flex items-center justify-center bg-orange-100 hover:bg-orange-200 disabled:bg-gray-50 disabled:text-gray-300 text-orange-600 rounded border text-xs font-bold transition-colors"
-                                                                        title="Increase weight"
+                                                                        title={t('shopping.increaseWeight')}
                                                                     >
                                                                         +
                                                                     </button>
@@ -2138,7 +2140,7 @@ const ShoppingList: React.FC = () => {
                                                                         onClick={() => handleLiquidQuantityChange(item.id, -1, item.name)}
                                                                         disabled={isUpdatingLiquid.has(item.id) || isDeleting.has(item.id) || (item.liquid_quantity || 0) <= 0}
                                                                         className="w-4 h-4 flex items-center justify-center bg-blue-100 hover:bg-blue-200 disabled:bg-gray-50 disabled:text-gray-300 text-blue-600 rounded border text-xs font-bold transition-colors"
-                                                                        title="Decrease liquid"
+                                                                        title={t('shopping.decreaseLiquid')}
                                                                     >
                                                                         −
                                                                     </button>
@@ -2155,14 +2157,14 @@ const ShoppingList: React.FC = () => {
                                                                         disabled={isUpdatingLiquid.has(item.id) || isDeleting.has(item.id)}
                                                                         className="w-12 h-4 text-center text-xs border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
                                                                         placeholder={`0 ${userPreferences.volume_unit === 'liters' ? 'L' : 'gal'}`}
-                                                                        title="Liquid quantity"
+                                                                        title={t('shopping.liquidQuantity')}
                                                                     />
 
                                                                     <button
                                                                         onClick={() => handleLiquidQuantityChange(item.id, 1, item.name)}
                                                                         disabled={isUpdatingLiquid.has(item.id) || isDeleting.has(item.id)}
                                                                         className="w-4 h-4 flex items-center justify-center bg-blue-100 hover:bg-blue-200 disabled:bg-gray-50 disabled:text-gray-300 text-blue-600 rounded border text-xs font-bold transition-colors"
-                                                                        title="Increase liquid"
+                                                                        title={t('shopping.increaseLiquid')}
                                                                     >
                                                                         +
                                                                     </button>
@@ -2190,10 +2192,10 @@ const ShoppingList: React.FC = () => {
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <h4 className="font-semibold text-gray-900 mb-1">
-                                                📦 Ready to Stock Up?
+                                                📦 {t('shopping.readyToStock')}
                                             </h4>
                                             <p className="text-sm text-gray-600">
-                                                Send {items.filter(item => item.is_completed).length} completed items to your inventory
+                                                {t('shopping.sendCompletedItems', { count: items.filter(item => item.is_completed).length })}
                                             </p>
                                         </div>
                                         <button
@@ -2202,35 +2204,35 @@ const ShoppingList: React.FC = () => {
                                             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 font-medium"
                                         >
                                             <Package className="w-5 h-5" />
-                                            {loadingInventory ? 'Processing...' : 'Send to Inventory'}
+                                            {loadingInventory ? t('shopping.processing') : t('shopping.sendToInventory')}
                                         </button>
                                     </div>
                                 </div>
                             )}
 
                             <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-                                <h4 className="font-semibold mb-3">Order from Store (Mock)</h4>
+                                <h4 className="font-semibold mb-3">{t('shopping.orderFromStore')}</h4>
                                 <div className="flex gap-3">
                                     <button
                                         onClick={() => handleMockOrder('wolt')}
                                         disabled={loading}
                                         className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50"
                                     >
-                                        🛵 Order via Wolt
+                                        🛵 {t('shopping.orderViaWolt')}
                                     </button>
                                     <button
                                         onClick={() => handleMockOrder('shufersal')}
                                         disabled={loading}
                                         className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                                     >
-                                        🛒 Check Shufersal Prices
+                                        🛒 {t('shopping.checkPrices')}
                                     </button>
                                 </div>
                             </div>
                         </>
                     ) : (
                         <div className="text-center text-gray-500 py-12">
-                            Select or create a shopping list to get started
+                            {t('shopping.selectList')}
                         </div>
                     )}
                 </div>
@@ -2269,7 +2271,7 @@ const ShoppingList: React.FC = () => {
                     <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
                             <h2 className="text-2xl font-bold text-gray-900">
-                                Review AI Categorization
+                                {t('shopping.reviewAI')}
                             </h2>
                             <button
                                 onClick={() => setShowInventoryModal(false)}
@@ -2281,7 +2283,7 @@ const ShoppingList: React.FC = () => {
 
                         <div className="p-6">
                             <p className="text-gray-600 mb-6">
-                                Our AI has categorized your items. Review and edit before adding to inventory.
+                                {t('shopping.reviewDescription')}
                             </p>
 
                             <div className="space-y-4 mb-6">
@@ -2292,24 +2294,24 @@ const ShoppingList: React.FC = () => {
                                     >
                                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                             <div>
-                                                <label className="text-xs text-gray-600">Item Name</label>
+                                                <label className="text-xs text-gray-600">{t('shopping.itemName')}</label>
                                                 <p className="font-semibold">{sugg.name}</p>
                                             </div>
                                             <div>
-                                                <label className="text-xs text-gray-600">Location</label>
+                                                <label className="text-xs text-gray-600">{t('shopping.location')}</label>
                                                 <p className="font-medium capitalize">{sugg.suggested_location}</p>
                                             </div>
                                             <div>
-                                                <label className="text-xs text-gray-600">Category</label>
+                                                <label className="text-xs text-gray-600">{t('shopping.category')}</label>
                                                 <p className="font-medium capitalize">{sugg.suggested_category}</p>
                                             </div>
                                             <div>
-                                                <label className="text-xs text-gray-600">Expires In</label>
-                                                <p className="font-medium">{sugg.suggested_expiration_days} days</p>
+                                                <label className="text-xs text-gray-600">{t('shopping.expiresIn')}</label>
+                                                <p className="font-medium">{sugg.suggested_expiration_days} {t('shopping.days')}</p>
                                             </div>
                                         </div>
                                         <div className="mt-2 text-xs text-gray-500">
-                                            AI Confidence: {(sugg.confidence * 100).toFixed(0)}%
+                                            {t('shopping.aiConfidence')}: {(sugg.confidence * 100).toFixed(0)}%
                                         </div>
                                     </div>
                                 ))}
@@ -2320,14 +2322,14 @@ const ShoppingList: React.FC = () => {
                                     onClick={() => setShowInventoryModal(false)}
                                     className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
                                 >
-                                    Cancel
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     onClick={confirmInventoryTransfer}
                                     className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
                                 >
                                     <Check className="w-4 h-4 mr-2" />
-                                    Add All to Inventory
+                                    {t('shopping.addAllToInventory')}
                                 </button>
                             </div>
                         </div>

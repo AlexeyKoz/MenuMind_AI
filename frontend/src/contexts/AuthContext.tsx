@@ -11,6 +11,8 @@ interface User {
     daily_protein_goal: number;
     daily_carbs_goal: number;
     daily_fat_goal: number;
+    preferred_language?: 'en' | 'ru' | 'he';
+    unit_system?: 'metric' | 'imperial';
 }
 
 interface AuthContextType {

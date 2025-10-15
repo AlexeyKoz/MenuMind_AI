@@ -6,3 +6,5 @@ class AnalyticsConfig(AppConfig):
     name = 'apps.analytics'
     verbose_name = 'Dashboard Analytics'
 
+
+

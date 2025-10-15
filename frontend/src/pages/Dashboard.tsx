@@ -4,6 +4,7 @@
  * Comprehensive analytics and AI insights for shopping, recipes, inventory, and nutrition.
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -30,12 +31,13 @@ interface DashboardData {
 }
 
 const Dashboard: React.FC = () => {
+    const { t } = useTranslation();
     const { user, token, logout } = useAuth();
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
-        toast.error('Your session has expired. Please log in again.');
+        toast.error(t('dashboard.sessionExpired'));
         logout();
-    }), [token, logout]);
+    }), [token, logout, t]);
 
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState<DashboardData | null>(null);
@@ -49,11 +51,11 @@ const Dashboard: React.FC = () => {
             setData(response);
         } catch (error) {
             console.error('Failed to load dashboard:', error);
-            toast.error('Failed to load dashboard data');
+            toast.error(t('dashboard.failedToLoadData'));
         } finally {
             setLoading(false);
         }
-    }, [api, period]);
+    }, [api, period, t]);
 
     useEffect(() => {
         loadDashboard();
@@ -72,13 +74,7 @@ const Dashboard: React.FC = () => {
     };
 
     const getPeriodLabel = () => {
-        const labels = {
-            '7days': 'Last 7 days',
-            '30days': 'Last 30 days',
-            '90days': 'Last 90 days',
-            '1year': 'Last year'
-        };
-        return labels[period];
+        return t(`dashboard.periods.${period}`);
     };
 
     if (loading && !data) {
@@ -86,7 +82,7 @@ const Dashboard: React.FC = () => {
             <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600 font-medium">Loading your dashboard...</p>
+                    <p className="mt-4 text-gray-600 font-medium">{t('dashboard.loadingDashboard')}</p>
                 </div>
             </div>
         );
@@ -96,12 +92,12 @@ const Dashboard: React.FC = () => {
         return (
             <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-red-600 font-medium">Failed to load dashboard</p>
+                    <p className="text-red-600 font-medium">{t('dashboard.failedToLoad')}</p>
                     <button
                         onClick={loadDashboard}
                         className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                     >
-                        Try Again
+                        {t('dashboard.tryAgain')}
                     </button>
                 </div>
             </div>
@@ -116,8 +112,8 @@ const Dashboard: React.FC = () => {
                     <div className="flex items-center justify-between flex-wrap gap-4">
                         <div>
                             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-                                🏠 Dashboard
-                                <span className="text-sm font-normal text-gray-500">Welcome back, {user?.first_name || user?.username}!</span>
+                                🏠 {t('dashboard.title')}
+                                <span className="text-sm font-normal text-gray-500">{t('dashboard.welcomeBack', { name: user?.first_name || user?.username })}</span>
                             </h1>
                         </div>
 
@@ -130,10 +126,10 @@ const Dashboard: React.FC = () => {
                                     onChange={(e) => setPeriod(e.target.value as any)}
                                     className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                 >
-                                    <option value="7days">Last 7 days</option>
-                                    <option value="30days">Last 30 days</option>
-                                    <option value="90days">Last 90 days</option>
-                                    <option value="1year">Last year</option>
+                                    <option value="7days">{t('dashboard.periods.7days')}</option>
+                                    <option value="30days">{t('dashboard.periods.30days')}</option>
+                                    <option value="90days">{t('dashboard.periods.90days')}</option>
+                                    <option value="1year">{t('dashboard.periods.1year')}</option>
                                 </select>
                             </div>
 
@@ -142,7 +138,7 @@ const Dashboard: React.FC = () => {
                                 onClick={loadDashboard}
                                 disabled={loading}
                                 className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
-                                title="Refresh"
+                                title={t('dashboard.refresh')}
                             >
                                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                             </button>
@@ -150,7 +146,7 @@ const Dashboard: React.FC = () => {
                             {/* AI Status */}
                             <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
                                 <Sparkles className="w-5 h-5" />
-                                <span className="font-medium">AI Active</span>
+                                <span className="font-medium">{t('dashboard.aiActive')}</span>
                             </div>
                         </div>
                     </div>
@@ -161,25 +157,25 @@ const Dashboard: React.FC = () => {
                     <QuickStatCard
                         icon={<DollarSign className="w-8 h-8" />}
                         value={`$${data.overview.total_spent.toFixed(0)}`}
-                        label="Spent on groceries"
+                        label={t('dashboard.overview.spentOnGroceries')}
                         color="green"
                     />
                     <QuickStatCard
                         icon={<ChefHat className="w-8 h-8" />}
                         value={data.overview.recipes_cooked}
-                        label="Recipes Cooked"
+                        label={t('dashboard.overview.recipesCooked')}
                         color="purple"
                     />
                     <QuickStatCard
                         icon={<Package className="w-8 h-8" />}
                         value={data.overview.inventory_items}
-                        label="Items in Inventory"
+                        label={t('dashboard.overview.itemsInInventory')}
                         color="blue"
                     />
                     <QuickStatCard
                         icon={<Activity className="w-8 h-8" />}
                         value={data.overview.nutrition_days_logged ?? 'N/A'}
-                        label="Days Logged"
+                        label={t('dashboard.overview.daysLogged')}
                         color="orange"
                     />
                 </div>
@@ -190,7 +186,7 @@ const Dashboard: React.FC = () => {
                         <div className="flex items-start gap-4">
                             <Sparkles className="w-8 h-8 flex-shrink-0 mt-1" />
                             <div>
-                                <h2 className="text-xl font-bold mb-2">💡 AI Insight of the Day</h2>
+                                <h2 className="text-xl font-bold mb-2">{t('dashboard.aiInsightTitle')}</h2>
                                 <p className="text-lg opacity-95">{data.ai_insight_of_day}</p>
                             </div>
                         </div>
@@ -273,6 +269,7 @@ const ShoppingInsightsSection: React.FC<{
     expanded: boolean;
     onToggle: () => void;
 }> = ({ data, period, expanded, onToggle }) => {
+    const { t } = useTranslation();
     if (!data) return null;
 
     return (
@@ -283,7 +280,7 @@ const ShoppingInsightsSection: React.FC<{
             >
                 <div className="flex items-center gap-3">
                     <ShoppingCart className="w-6 h-6 text-green-600" />
-                    <h2 className="text-2xl font-bold text-gray-900">🛒 Shopping Insights</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.shopping.title')}</h2>
                 </div>
                 <div className="text-gray-400">
                     {expanded ? '▼' : '▶'}
@@ -294,10 +291,10 @@ const ShoppingInsightsSection: React.FC<{
                 <div className="p-6 border-t border-gray-200 space-y-6">
                     {/* Budget Overview */}
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-3">💰 Budget Overview ({period})</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('dashboard.shopping.budgetOverview')} ({period})</h3>
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                                <span className="text-gray-700">Total spent:</span>
+                                <span className="text-gray-700">{t('dashboard.shopping.totalSpent')}</span>
                                 <span className="text-2xl font-bold text-gray-900">
                                     ${data.total_spent} / ${data.budget}
                                     <span className="text-sm text-gray-500 ml-2">({data.budget_percentage}%)</span>
@@ -311,15 +308,15 @@ const ShoppingInsightsSection: React.FC<{
                             </div>
                             <div className="grid grid-cols-2 gap-4 mt-4">
                                 <div className="bg-gray-50 p-3 rounded-lg">
-                                    <div className="text-sm text-gray-600">vs Last period</div>
+                                    <div className="text-sm text-gray-600">{t('dashboard.shopping.vsLastPeriod')}</div>
                                     <div className={`text-xl font-bold flex items-center gap-2 ${data.vs_last_period.difference < 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         {data.vs_last_period.difference < 0 ? <TrendingDown className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
                                         ${Math.abs(data.vs_last_period.difference).toFixed(2)}
-                                        {data.vs_last_period.difference < 0 && ' saved! 🎉'}
+                                        {data.vs_last_period.difference < 0 && ` ${t('dashboard.shopping.saved')}`}
                                     </div>
                                 </div>
                                 <div className="bg-gray-50 p-3 rounded-lg">
-                                    <div className="text-sm text-gray-600">Average per week</div>
+                                    <div className="text-sm text-gray-600">{t('dashboard.shopping.avgPerWeek')}</div>
                                     <div className="text-xl font-bold text-gray-900">${data.avg_per_week.toFixed(2)}</div>
                                 </div>
                             </div>
@@ -329,7 +326,7 @@ const ShoppingInsightsSection: React.FC<{
                     {/* Category Breakdown */}
                     {data.category_breakdown && data.category_breakdown.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-3">📊 Spending by Category</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('dashboard.shopping.categoryBreakdown')}</h3>
                             <div className="space-y-2">
                                 {data.category_breakdown.map((cat: any, index: number) => (
                                     <div key={index} className="flex items-center gap-3">
@@ -354,7 +351,7 @@ const ShoppingInsightsSection: React.FC<{
                     {/* Top Items */}
                     {data.top_items && data.top_items.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-3">🔄 Most Purchased Items</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('dashboard.shopping.topItems')}</h3>
                             <div className="space-y-2">
                                 {data.top_items.slice(0, 5).map((item: any, index: number) => (
                                     <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -362,7 +359,7 @@ const ShoppingInsightsSection: React.FC<{
                                             <span className="font-medium text-gray-900">{item.name}</span>
                                             <span className="text-sm text-gray-600 ml-2">({item.count}x)</span>
                                         </div>
-                                        <span className="text-sm text-gray-600">Every {item.frequency}</span>
+                                        <span className="text-sm text-gray-600">{t('dashboard.shopping.every')} {item.frequency}</span>
                                     </div>
                                 ))}
                             </div>
@@ -381,6 +378,7 @@ const RecipeInsightsSection: React.FC<{
     expanded: boolean;
     onToggle: () => void;
 }> = ({ data, period, expanded, onToggle }) => {
+    const { t } = useTranslation();
     if (!data) return null;
 
     return (
@@ -391,7 +389,7 @@ const RecipeInsightsSection: React.FC<{
             >
                 <div className="flex items-center gap-3">
                     <UtensilsCrossed className="w-6 h-6 text-purple-600" />
-                    <h2 className="text-2xl font-bold text-gray-900">🍳 Recipe Insights</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.recipes.title')}</h2>
                 </div>
                 <div className="text-gray-400">
                     {expanded ? '▼' : '▶'}
@@ -403,28 +401,28 @@ const RecipeInsightsSection: React.FC<{
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-purple-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-purple-600">{data.total_cooked}</div>
-                            <div className="text-sm text-gray-600">Total Cooked</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.recipes.totalCooked')}</div>
                         </div>
                         <div className="bg-indigo-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-indigo-600">{data.unique_recipes}</div>
-                            <div className="text-sm text-gray-600">Unique Recipes</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.recipes.uniqueRecipes')}</div>
                         </div>
                         <div className="bg-pink-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-pink-600">{data.reviews_written}</div>
-                            <div className="text-sm text-gray-600">Reviews Written</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.recipes.reviewsWritten')}</div>
                         </div>
                         <div className="bg-amber-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-amber-600">{data.avg_rating_given}⭐</div>
-                            <div className="text-sm text-gray-600">Avg Rating Given</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.recipes.avgRatingGiven')}</div>
                         </div>
                     </div>
 
                     {data.favorite && data.favorite.name && (
                         <div className="mt-6 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg">
-                            <div className="text-sm text-gray-600">Your Favorite Recipe</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.recipes.favoriteRecipe')}</div>
                             <div className="text-xl font-bold text-gray-900">
                                 {data.favorite.name}
-                                <span className="text-sm font-normal text-gray-600 ml-2">({data.favorite.count}x cooked)</span>
+                                <span className="text-sm font-normal text-gray-600 ml-2">({t('dashboard.recipes.cookedTimes', { count: data.favorite.count })})</span>
                             </div>
                         </div>
                     )}
@@ -440,6 +438,7 @@ const InventoryInsightsSection: React.FC<{
     expanded: boolean;
     onToggle: () => void;
 }> = ({ data, expanded, onToggle }) => {
+    const { t } = useTranslation();
     if (!data) return null;
 
     return (
@@ -450,10 +449,10 @@ const InventoryInsightsSection: React.FC<{
             >
                 <div className="flex items-center gap-3">
                     <Package className="w-6 h-6 text-blue-600" />
-                    <h2 className="text-2xl font-bold text-gray-900">📦 Inventory Insights</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.inventory.title')}</h2>
                     {(data.expiring_soon_count > 0 || data.low_stock_count > 0) && (
                         <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-semibold">
-                            {data.expiring_soon_count + data.low_stock_count} alerts
+                            {t('dashboard.inventory.alerts', { count: data.expiring_soon_count + data.low_stock_count })}
                         </span>
                     )}
                 </div>
@@ -467,15 +466,15 @@ const InventoryInsightsSection: React.FC<{
                     <div className="grid grid-cols-3 gap-4">
                         <div className="bg-blue-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-blue-600">{data.total_items}</div>
-                            <div className="text-sm text-gray-600">Total Items</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.inventory.totalItems')}</div>
                         </div>
                         <div className="bg-yellow-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-yellow-600">{data.low_stock_count}</div>
-                            <div className="text-sm text-gray-600">Low Stock</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.inventory.lowStock')}</div>
                         </div>
                         <div className="bg-red-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-red-600">{data.expiring_soon_count}</div>
-                            <div className="text-sm text-gray-600">Expiring Soon</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.inventory.expiringSoon')}</div>
                         </div>
                     </div>
 
@@ -484,12 +483,12 @@ const InventoryInsightsSection: React.FC<{
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
                                 <AlertTriangle className="w-5 h-5 text-red-600" />
-                                Immediate Attention Needed
+                                {t('dashboard.inventory.immediateAttention')}
                             </h3>
 
                             {data.expiring_items.tomorrow?.length > 0 && (
                                 <div className="mb-4">
-                                    <div className="text-sm font-semibold text-red-700 mb-2">🔴 Expires Tomorrow:</div>
+                                    <div className="text-sm font-semibold text-red-700 mb-2">{t('dashboard.inventory.expiresTomorrow')}</div>
                                     <div className="space-y-2">
                                         {data.expiring_items.tomorrow.map((item: any, index: number) => (
                                             <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
@@ -503,7 +502,7 @@ const InventoryInsightsSection: React.FC<{
 
                             {data.expiring_items.in_2_3_days?.length > 0 && (
                                 <div>
-                                    <div className="text-sm font-semibold text-yellow-700 mb-2">🟡 Expires in 2-3 days:</div>
+                                    <div className="text-sm font-semibold text-yellow-700 mb-2">{t('dashboard.inventory.expiresIn23Days')}</div>
                                     <div className="space-y-2">
                                         {data.expiring_items.in_2_3_days.map((item: any, index: number) => (
                                             <div key={index} className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -529,6 +528,7 @@ const NutritionCoachSection: React.FC<{
     expanded: boolean;
     onToggle: () => void;
 }> = ({ data, period, expanded, onToggle }) => {
+    const { t } = useTranslation();
     if (!data) return null;
 
     return (
@@ -539,11 +539,11 @@ const NutritionCoachSection: React.FC<{
             >
                 <div className="flex items-center gap-3">
                     <Activity className="w-6 h-6 text-orange-600" />
-                    <h2 className="text-2xl font-bold text-gray-900">🏋️ Nutrition Coach</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.nutrition.title')}</h2>
                     {data.current_streak > 0 && (
                         <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm font-semibold flex items-center gap-1">
                             <Flame className="w-4 h-4" />
-                            {data.current_streak} day streak!
+                            {t('dashboard.nutrition.dayStreak', { count: data.current_streak })}
                         </span>
                     )}
                 </div>
@@ -557,35 +557,35 @@ const NutritionCoachSection: React.FC<{
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-orange-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-orange-600">{data.days_logged}/{data.total_days}</div>
-                            <div className="text-sm text-gray-600">Days Logged ({data.logging_percentage}%)</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.nutrition.daysLoggedOf')} ({data.logging_percentage}%)</div>
                         </div>
                         <div className="bg-green-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-green-600">{data.goal_achievement.calories.percentage}%</div>
-                            <div className="text-sm text-gray-600">Calorie Goals Hit</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.nutrition.calorieGoalsHit')}</div>
                         </div>
                         <div className="bg-blue-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-blue-600">{data.goal_achievement.protein.percentage}%</div>
-                            <div className="text-sm text-gray-600">Protein Goals Hit</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.nutrition.proteinGoalsHit')}</div>
                         </div>
                         <div className="bg-red-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-red-600 flex items-center gap-1">
                                 <Flame className="w-8 h-8" />
                                 {data.current_streak}
                             </div>
-                            <div className="text-sm text-gray-600">Day Streak</div>
+                            <div className="text-sm text-gray-600">{t('dashboard.nutrition.dayStreakLabel')}</div>
                         </div>
                     </div>
 
                     {data.monthly_totals && (
                         <div className="p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-3">Monthly Summary</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('dashboard.nutrition.monthlySummary')}</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <div className="text-sm text-gray-600">Avg Calories/day</div>
-                                    <div className="text-2xl font-bold text-gray-900">{data.monthly_totals.avg_per_day.calories} kcal</div>
+                                    <div className="text-sm text-gray-600">{t('dashboard.nutrition.avgCaloriesPerDay')}</div>
+                                    <div className="text-2xl font-bold text-gray-900">{data.monthly_totals.avg_per_day.calories} {t('dashboard.nutrition.kcal')}</div>
                                 </div>
                                 <div>
-                                    <div className="text-sm text-gray-600">Avg Protein/day</div>
+                                    <div className="text-sm text-gray-600">{t('dashboard.nutrition.avgProteinPerDay')}</div>
                                     <div className="text-2xl font-bold text-gray-900">{data.monthly_totals.avg_per_day.protein}g</div>
                                 </div>
                             </div>
@@ -603,6 +603,7 @@ const AchievementsSection: React.FC<{
     expanded: boolean;
     onToggle: () => void;
 }> = ({ data, expanded, onToggle }) => {
+    const { t } = useTranslation();
     if (!data) return null;
 
     return (
@@ -613,10 +614,10 @@ const AchievementsSection: React.FC<{
             >
                 <div className="flex items-center gap-3">
                     <Trophy className="w-6 h-6 text-yellow-600" />
-                    <h2 className="text-2xl font-bold text-gray-900">🎊 Streaks & Achievements</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.achievements.title')}</h2>
                     {data.badges_earned?.length > 0 && (
                         <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-semibold">
-                            {data.badges_earned.length} badges
+                            {t('dashboard.achievements.badges', { count: data.badges_earned.length })}
                         </span>
                     )}
                 </div>
@@ -632,7 +633,7 @@ const AchievementsSection: React.FC<{
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
                                 <Flame className="w-5 h-5 text-orange-600" />
-                                Current Streaks
+                                {t('dashboard.achievements.currentStreaks')}
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {Object.entries(data.current_streaks).map(([type, count]: [string, any]) => (
@@ -651,7 +652,7 @@ const AchievementsSection: React.FC<{
                     {/* Badges Earned */}
                     {data.badges_earned && data.badges_earned.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-3">🏆 Badges Earned ({data.badges_earned.length} total)</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('dashboard.achievements.badgesEarned', { count: data.badges_earned.length })}</h3>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {data.badges_earned.map((badge: any) => (
                                     <div key={badge.id} className="p-4 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg border border-yellow-200 text-center">
@@ -667,7 +668,7 @@ const AchievementsSection: React.FC<{
                     {/* Next Goals */}
                     {data.next_goals && data.next_goals.length > 0 && (
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-3">🎯 Next Goals</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('dashboard.achievements.nextGoals')}</h3>
                             <div className="space-y-3">
                                 {data.next_goals.map((goal: any, index: number) => (
                                     <div key={index} className="p-4 bg-gray-50 rounded-lg">
@@ -682,7 +683,7 @@ const AchievementsSection: React.FC<{
                                             ></div>
                                         </div>
                                         <div className="text-xs text-gray-600 mt-1">
-                                            {goal.remaining} more to go!
+                                            {t('dashboard.achievements.moreToGo', { count: goal.remaining })}
                                         </div>
                                     </div>
                                 ))}

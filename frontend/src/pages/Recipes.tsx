@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import toast from 'react-hot-toast';
@@ -39,10 +40,11 @@ interface Recipe {
 }
 
 const Recipes: React.FC = () => {
+    const { t } = useTranslation();
     const { token, logout } = useAuth();
     const api = new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
-        alert('Your session has expired. Please log in again.');
+        alert(t('recipes.sessionExpired'));
         logout();
     });
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +136,7 @@ const Recipes: React.FC = () => {
             });
         } catch (error: any) {
             console.error('Load recipes error:', error);
-            toast.error(error.message || 'Failed to load recipes');
+            toast.error(error.message || t('recipes.failedToLoad'));
         } finally {
             setLoading(false);
         }
@@ -172,18 +174,18 @@ const Recipes: React.FC = () => {
         if (!file) return;
 
         if (!file.name.endsWith('.rcip')) {
-            toast.error('Please upload a .rcip file');
+            toast.error(t('recipes.pleaseUploadRcip'));
             return;
         }
 
         setLoading(true);
         try {
             const result = await api.uploadRCIP(file);
-            toast.success(result.message || 'Recipe imported successfully!');
+            toast.success(result.message || t('recipes.recipeImported'));
             loadRecipes();
         } catch (error: any) {
             console.error('Upload error:', error);
-            toast.error(error.message || 'Failed to upload recipe');
+            toast.error(error.message || t('recipes.failedToUpload'));
         } finally {
             setLoading(false);
             if (fileInputRef.current) {
@@ -195,21 +197,21 @@ const Recipes: React.FC = () => {
     const handleDownload = async (recipe: Recipe) => {
         try {
             await api.downloadRCIP(recipe.id, recipe.name);
-            toast.success(`Downloaded ${recipe.name}.rcip`);
+            toast.success(t('recipes.downloaded', { name: recipe.name }));
         } catch (error: any) {
             console.error('Download error:', error);
-            toast.error('Failed to download recipe');
+            toast.error(t('recipes.failedToDownload'));
         }
     };
 
     const handleSaveRecipe = async (recipe: Recipe) => {
         try {
             await api.saveRecipe(recipe.id);
-            toast.success('Recipe saved to your collection!');
+            toast.success(t('recipes.recipeSaved'));
             loadRecipes();
         } catch (error: any) {
             console.error('Save error:', error);
-            toast.error('Failed to save recipe');
+            toast.error(t('recipes.failedToSave'));
         }
     };
 
@@ -238,7 +240,7 @@ const Recipes: React.FC = () => {
 
         try {
             await api.unsaveRecipe(archiveConfirmation.recipe.id);
-            toast.success(`"${archiveConfirmation.recipe.name}" moved to archive`);
+            toast.success(t('recipes.movedToArchive', { name: archiveConfirmation.recipe.name }));
             setArchiveConfirmation({ show: false, recipe: null, countdown: 5 });
             loadRecipes();
             if (selectedRecipe?.id === archiveConfirmation.recipe.id) {
@@ -246,7 +248,7 @@ const Recipes: React.FC = () => {
             }
         } catch (error: any) {
             console.error('Archive error:', error);
-            toast.error('Failed to archive recipe');
+            toast.error(t('recipes.failedToArchive'));
         }
     };
 
@@ -258,17 +260,17 @@ const Recipes: React.FC = () => {
         try {
             const result = await api.markRecipeCooked(recipe.id);
             const action = result.cooked ? 'cooked' : 'uncooked';
-            toast.success(`Recipe marked as ${action}! ${result.cooked ? '🍳' : '↩️'}`);
+            toast.success(t('recipes.recipeMarked', { action, emoji: result.cooked ? '🍳' : '↩️' }));
             loadRecipes();
         } catch (error: any) {
             console.error('Mark cooked error:', error);
-            toast.error('Failed to mark as cooked');
+            toast.error(t('recipes.failedToMark'));
         }
     };
 
     const handleAISearch = async () => {
         if (!aiQuery.trim()) {
-            toast.error('Please enter a recipe to search for');
+            toast.error(t('recipes.pleaseEnterRecipe'));
             return;
         }
 
@@ -280,7 +282,7 @@ const Recipes: React.FC = () => {
             // The recipe is already created and saved by the backend
             // The response includes: canonical_recipe, user_recipe, created
             if (result.canonical_recipe) {
-                toast.success(`Recipe found: ${result.canonical_recipe.name}!`);
+                toast.success(t('recipes.recipeFound', { name: result.canonical_recipe.name }));
 
                 // The backend already creates a user_recipe (fork), but we also need to like the canonical
                 const canonicalId = result.canonical_recipe.id;
@@ -291,7 +293,7 @@ const Recipes: React.FC = () => {
                         console.log('[AI SEARCH] Like result:', likeResult);
 
                         if (likeResult.saved_to_my_recipes) {
-                            toast.success('✅ Recipe added to My Recipes!');
+                            toast.success(t('recipes.recipeAddedToMyRecipes'));
                             console.log('[AI SEARCH] ✅ Recipe saved to My Recipes');
                         }
                     } catch (likeError: any) {
@@ -303,14 +305,14 @@ const Recipes: React.FC = () => {
                 }
             } else {
                 console.warn('[AI SEARCH] ⚠️ No canonical_recipe in result:', result);
-                toast.success('Recipe found and saved!');
+                toast.success(t('recipes.recipeFoundAndSaved'));
             }
 
             setAiQuery('');
             await loadRecipes();
         } catch (error: any) {
             console.error('AI search error:', error);
-            toast.error(error.message || 'Failed to find recipe');
+            toast.error(error.message || t('recipes.failedToFind'));
         } finally {
             setAiLoading(false);
         }
@@ -324,7 +326,7 @@ const Recipes: React.FC = () => {
             setGeneratedRecipes(recipes);
 
             if (recipes.length > 0) {
-                toast.success(`Generated ${recipes.length} recipes from your inventory!`);
+                toast.success(t('recipes.generatedRecipes', { count: recipes.length }));
 
                 // Auto-like each generated recipe to add them to My Recipes
                 console.log('[AI GENERATOR] Auto-liking generated recipes...');
@@ -358,7 +360,10 @@ const Recipes: React.FC = () => {
                 console.log(`[AI GENERATOR] Finished liking. Total saved: ${savedCount}/${recipes.length}`);
 
                 if (savedCount > 0) {
-                    toast.success(`✅ ${savedCount} recipe${savedCount > 1 ? 's' : ''} added to My Recipes!`);
+                    toast.success(t('recipes.recipesAddedToMyRecipes', {
+                        count: savedCount,
+                        plural: savedCount > 1 ? 's' : ''
+                    }));
                 }
 
                 // Refresh recipes list to show the newly saved recipes
@@ -367,7 +372,7 @@ const Recipes: React.FC = () => {
             }
         } catch (error: any) {
             console.error('Generate recipes error:', error);
-            toast.error(error.message || 'Failed to generate recipes');
+            toast.error(error.message || t('recipes.failedToGenerate'));
         } finally {
             setGeneratorLoading(false);
         }
@@ -398,12 +403,12 @@ const Recipes: React.FC = () => {
                     <div className="flex justify-between items-start mb-6">
                         <div>
                             <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                                🍳 Recipes
+                                {t('recipes.title')}
                             </h1>
                             <p className="text-gray-600">
                                 {activeTab === 'library'
-                                    ? 'Browse and manage your recipe collection in RCIP format'
-                                    : 'Generate AI-powered recipes from your inventory'}
+                                    ? t('recipes.libraryDescription')
+                                    : t('recipes.generatorDescription')}
                             </p>
                         </div>
                     </div>
@@ -418,7 +423,7 @@ const Recipes: React.FC = () => {
                                 }`}
                         >
                             <BookOpen className="w-5 h-5" />
-                            Recipe Library
+                            {t('recipes.recipeLibrary')}
                         </button>
 
                         <button
@@ -429,7 +434,7 @@ const Recipes: React.FC = () => {
                                 }`}
                         >
                             <Zap className="w-5 h-5" />
-                            AI Generator
+                            {t('recipes.aiGenerator')}
                         </button>
                     </div>
 
@@ -445,7 +450,7 @@ const Recipes: React.FC = () => {
                                         value={aiQuery}
                                         onChange={(e) => setAiQuery(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleAISearch()}
-                                        placeholder="🤖 AI Search: Describe the recipe you want (e.g., 'Italian pasta carbonara')"
+                                        placeholder={t('recipes.aiSearchPlaceholder')}
                                         className="flex-1 px-4 py-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                                         disabled={aiLoading}
                                     />
@@ -454,11 +459,11 @@ const Recipes: React.FC = () => {
                                         disabled={aiLoading}
                                         className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 font-medium"
                                     >
-                                        {aiLoading ? 'Searching...' : 'Find Recipe'}
+                                        {aiLoading ? t('recipes.searching') : t('recipes.findRecipe')}
                                     </button>
                                 </div>
                                 <p className="text-sm text-purple-700 mt-2">
-                                    AI will search the web, find the recipe, convert it to RCIP format, and automatically save it to My Recipes
+                                    {t('recipes.aiSearchDescription')}
                                 </p>
                             </div>
 
@@ -469,7 +474,7 @@ const Recipes: React.FC = () => {
                                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
                                 >
                                     <Upload className="w-5 h-5" />
-                                    Upload .rcip
+                                    {t('recipes.uploadRcip')}
                                 </button>
 
                                 <input
@@ -485,15 +490,15 @@ const Recipes: React.FC = () => {
                             <div className="grid grid-cols-3 gap-4 mb-6">
                                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
                                     <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
-                                    <div className="text-sm text-blue-800">Total Recipes</div>
+                                    <div className="text-sm text-blue-800">{t('recipes.totalRecipes')}</div>
                                 </div>
                                 <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg">
                                     <div className="text-3xl font-bold text-green-600">{stats.ingredients}</div>
-                                    <div className="text-sm text-green-800">Ingredients</div>
+                                    <div className="text-sm text-green-800">{t('recipes.ingredients')}</div>
                                 </div>
                                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg">
                                     <div className="text-3xl font-bold text-purple-600">{stats.steps}</div>
-                                    <div className="text-sm text-purple-800">Cooking Steps</div>
+                                    <div className="text-sm text-purple-800">{t('recipes.cookingSteps')}</div>
                                 </div>
                             </div>
 
@@ -505,7 +510,7 @@ const Recipes: React.FC = () => {
                                         type="text"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Search recipes..."
+                                        placeholder={t('recipes.searchRecipes')}
                                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                     />
                                 </div>
@@ -515,7 +520,7 @@ const Recipes: React.FC = () => {
                                     className="flex items-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                                 >
                                     <Filter className="w-5 h-5" />
-                                    Filters
+                                    {t('recipes.filters')}
                                 </button>
                             </div>
 
@@ -523,26 +528,26 @@ const Recipes: React.FC = () => {
                             {showFilters && (
                                 <div className="mt-4 p-4 bg-gray-50 rounded-lg grid grid-cols-4 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Difficulty</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('recipes.difficulty')}</label>
                                         <select
                                             value={difficultyFilter}
                                             onChange={(e) => setDifficultyFilter(e.target.value)}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                         >
-                                            <option value="">All</option>
-                                            <option value="beginner">Beginner</option>
-                                            <option value="intermediate">Intermediate</option>
-                                            <option value="advanced">Advanced</option>
+                                            <option value="">{t('recipes.all')}</option>
+                                            <option value="beginner">{t('recipes.beginner')}</option>
+                                            <option value="intermediate">{t('recipes.intermediate')}</option>
+                                            <option value="advanced">{t('recipes.advanced')}</option>
                                         </select>
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Cuisine</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('recipes.cuisine')}</label>
                                         <input
                                             type="text"
                                             value={cuisineFilter}
                                             onChange={(e) => setCuisineFilter(e.target.value)}
-                                            placeholder="e.g., Italian"
+                                            placeholder={t('recipes.cuisinePlaceholder')}
                                             className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                         />
                                     </div>
@@ -555,7 +560,7 @@ const Recipes: React.FC = () => {
                                                 onChange={(e) => setSavedOnlyFilter(e.target.checked)}
                                                 className="w-4 h-4 text-indigo-600 rounded"
                                             />
-                                            <span className="text-sm font-medium text-gray-700">Saved Only</span>
+                                            <span className="text-sm font-medium text-gray-700">{t('recipes.savedOnly')}</span>
                                         </label>
                                     </div>
 
@@ -568,7 +573,7 @@ const Recipes: React.FC = () => {
                                             }}
                                             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                                         >
-                                            Clear Filters
+                                            {t('recipes.clearFilters')}
                                         </button>
                                     </div>
                                 </div>
@@ -585,13 +590,13 @@ const Recipes: React.FC = () => {
                     loading ? (
                         <div className="text-center py-12">
                             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                            <p className="mt-4 text-gray-600">Loading recipes...</p>
+                            <p className="mt-4 text-gray-600">{t('recipes.loadingRecipes')}</p>
                         </div>
                     ) : filteredRecipes.length === 0 ? (
                         <div className="text-center py-12 bg-white rounded-2xl shadow-xl">
                             <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                            <p className="text-gray-500 mb-2">No recipes found</p>
-                            <p className="text-sm text-gray-400">Try adjusting your filters or upload a new recipe</p>
+                            <p className="text-gray-500 mb-2">{t('recipes.noRecipesFound')}</p>
+                            <p className="text-sm text-gray-400">{t('recipes.noRecipesDescription')}</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -616,8 +621,8 @@ const Recipes: React.FC = () => {
                         <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
                             <div className="flex justify-between items-center">
                                 <div>
-                                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Generate Recipes from Inventory</h2>
-                                    <p className="text-gray-600">AI will analyze your inventory and suggest recipes you can make</p>
+                                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('recipes.generateRecipesFromInventory')}</h2>
+                                    <p className="text-gray-600">{t('recipes.generateRecipesDescription')}</p>
                                 </div>
                                 <button
                                     onClick={handleGenerateRecipes}
@@ -625,7 +630,7 @@ const Recipes: React.FC = () => {
                                     className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition shadow-lg flex items-center gap-2"
                                 >
                                     <Zap className="w-5 h-5" />
-                                    {generatorLoading ? 'Generating...' : 'Generate Recipes'}
+                                    {generatorLoading ? t('recipes.generating') : t('recipes.generateRecipes')}
                                 </button>
                             </div>
                         </div>
@@ -633,13 +638,13 @@ const Recipes: React.FC = () => {
                         {generatorLoading ? (
                             <div className="text-center py-12">
                                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-                                <p className="mt-4 text-gray-600">Generating recipes...</p>
+                                <p className="mt-4 text-gray-600">{t('recipes.generatingRecipes')}</p>
                             </div>
                         ) : generatedRecipes.length === 0 ? (
                             <div className="text-center py-12 bg-white rounded-2xl shadow-xl">
                                 <Zap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                                <p className="text-gray-500 mb-2">No recipes generated yet</p>
-                                <p className="text-sm text-gray-400">Click the button above to generate AI-powered recipes based on your inventory</p>
+                                <p className="text-gray-500 mb-2">{t('recipes.noRecipesGenerated')}</p>
+                                <p className="text-sm text-gray-400">{t('recipes.noRecipesGeneratedDescription')}</p>
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -657,19 +662,19 @@ const Recipes: React.FC = () => {
 
                                             {recipe.nutrition_per_serving && (
                                                 <div className="mb-4">
-                                                    <h4 className="font-medium mb-2">Nutrition per serving:</h4>
+                                                    <h4 className="font-medium mb-2">{t('recipes.nutritionPerServing')}</h4>
                                                     <div className="text-sm grid grid-cols-2 gap-2">
-                                                        <span>Calories: {recipe.nutrition_per_serving.calories}</span>
-                                                        <span>Protein: {recipe.nutrition_per_serving.protein}g</span>
-                                                        <span>Carbs: {recipe.nutrition_per_serving.carbs}g</span>
-                                                        <span>Fat: {recipe.nutrition_per_serving.fat}g</span>
+                                                        <span>{t('recipes.calories')}: {recipe.nutrition_per_serving.calories}</span>
+                                                        <span>{t('recipes.protein')}: {recipe.nutrition_per_serving.protein}g</span>
+                                                        <span>{t('recipes.carbs')}: {recipe.nutrition_per_serving.carbs}g</span>
+                                                        <span>{t('recipes.fat')}: {recipe.nutrition_per_serving.fat}g</span>
                                                     </div>
                                                 </div>
                                             )}
 
                                             {recipe.missing_ingredients && recipe.missing_ingredients.length > 0 && (
                                                 <div className="mb-4 p-2 bg-amber-50 border border-amber-200 rounded">
-                                                    <h4 className="font-medium text-amber-800 text-sm mb-1">Missing ingredients:</h4>
+                                                    <h4 className="font-medium text-amber-800 text-sm mb-1">{t('recipes.missingIngredients')}</h4>
                                                     <div className="text-xs text-amber-700">
                                                         {recipe.missing_ingredients.join(', ')}
                                                     </div>
@@ -680,7 +685,7 @@ const Recipes: React.FC = () => {
                                                 onClick={() => setSelectedRecipe(recipe)}
                                                 className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
                                             >
-                                                View Recipe
+                                                {t('recipes.viewRecipe')}
                                             </button>
                                         </div>
                                     </div>
@@ -713,13 +718,13 @@ const Recipes: React.FC = () => {
                             <AlertTriangle className="w-16 h-16 text-orange-500" />
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 mb-4 text-center">
-                            Archive Recipe?
+                            {t('recipes.archiveRecipe')}
                         </h2>
                         <p className="text-gray-600 mb-4 text-center">
-                            Are you sure you want to move <span className="font-semibold">"{archiveConfirmation.recipe.name}"</span> to the archive?
+                            {t('recipes.archiveConfirmation', { name: archiveConfirmation.recipe.name })}
                         </p>
                         <p className="text-sm text-gray-500 mb-6 text-center">
-                            You can restore it later from the Archive page, or you can find it again on the Discover page.
+                            {t('recipes.archiveDescription')}
                         </p>
 
                         {/* Countdown */}
@@ -728,11 +733,11 @@ const Recipes: React.FC = () => {
                                 <div className="flex items-center justify-center gap-2 text-orange-700">
                                     <Clock className="w-5 h-5" />
                                     <span className="font-semibold">
-                                        Auto-archiving in {archiveConfirmation.countdown} seconds
+                                        {t('recipes.autoArchiving', { count: archiveConfirmation.countdown })}
                                     </span>
                                 </div>
                                 <p className="text-xs text-orange-600 text-center mt-2">
-                                    Click "Archive Recipe" now to skip the wait
+                                    {t('recipes.archiveNow')}
                                 </p>
                             </div>
                         )}
@@ -742,13 +747,13 @@ const Recipes: React.FC = () => {
                                 onClick={cancelArchiveRecipe}
                                 className="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
                             >
-                                Cancel
+                                {t('recipes.cancel')}
                             </button>
                             <button
                                 onClick={confirmArchiveRecipe}
                                 className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium"
                             >
-                                Archive Recipe
+                                {t('recipes.archiveRecipe')}
                             </button>
                         </div>
                     </div>
@@ -773,6 +778,7 @@ interface RecipeCardProps {
 const RecipeCard: React.FC<RecipeCardProps> = ({
     recipe, onView, onDownload, onSave, onUnsave, onMarkCooked, getAllergens, getDifficultyColor
 }) => {
+    const { t } = useTranslation();
     const allergens = getAllergens(recipe);
 
     return (
@@ -817,7 +823,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                     <div className="mb-4 p-2 bg-amber-50 border border-amber-200 rounded-lg">
                         <div className="flex items-center gap-1 text-amber-800 text-xs font-medium mb-1">
                             <AlertTriangle className="w-3 h-3" />
-                            Allergens:
+                            {t('recipes.allergens')}
                         </div>
                         <div className="flex flex-wrap gap-1">
                             {allergens.slice(0, 3).map((allergen, idx) => (
@@ -836,8 +842,8 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
 
                 {/* Stats */}
                 <div className="flex gap-4 text-xs text-gray-500 mb-4">
-                    <span>🍳 Cooked {recipe.times_cooked}x</span>
-                    <span>📋 Used {recipe.times_added_to_lists}x</span>
+                    <span>🍳 {t('recipes.cooked', { count: recipe.times_cooked })}</span>
+                    <span>📋 {t('recipes.used', { count: recipe.times_added_to_lists })}</span>
                 </div>
 
                 {/* Actions */}
@@ -846,13 +852,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                         onClick={onView}
                         className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
                     >
-                        View Recipe
+                        {t('recipes.viewRecipe')}
                     </button>
 
                     <button
                         onClick={onDownload}
                         className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                        title="Download .rcip"
+                        title={t('recipes.downloadRcip')}
                     >
                         <Download className="w-4 h-4 text-gray-600" />
                     </button>
@@ -862,10 +868,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                             <button
                                 onClick={onUnsave}
                                 className="flex items-center gap-1.5 px-3 py-2 bg-orange-100 text-orange-700 border border-orange-300 rounded-lg hover:bg-orange-200 transition text-sm font-medium"
-                                title="Move recipe to archive"
+                                title={t('recipes.moveToArchive')}
                             >
                                 <Archive className="w-4 h-4" />
-                                Move to Archive
+                                {t('recipes.moveToArchive')}
                             </button>
                             <button
                                 onClick={onMarkCooked}
@@ -873,20 +879,20 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                                     ? 'bg-green-600 text-white border border-green-600 hover:bg-green-700'
                                     : 'border border-green-300 text-green-600 hover:bg-green-50'
                                     }`}
-                                title={recipe.last_cooked ? 'Unmark as cooked' : 'Mark as cooked'}
+                                title={recipe.last_cooked ? t('recipes.cooked') : t('recipes.markAsCooked')}
                             >
                                 <ChefHat className="w-4 h-4" />
-                                {recipe.last_cooked ? 'Cooked' : 'Mark as Cooked'}
+                                {recipe.last_cooked ? t('recipes.cooked') : t('recipes.markAsCooked')}
                             </button>
                         </>
                     ) : (
                         <button
                             onClick={onSave}
                             className="px-4 py-2 border border-blue-300 rounded-lg hover:bg-blue-50 transition text-sm font-medium text-blue-700"
-                            title="Save to collection"
+                            title={t('recipes.saveToCollection')}
                         >
                             <Heart className="w-4 h-4 text-blue-600 inline mr-1" />
-                            Save
+                            {t('recipes.save')}
                         </button>
                     )}
                 </div>
@@ -910,6 +916,7 @@ interface RecipeDetailModalProps {
 const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
     recipe, onClose, onDownload, onSave, onUnsave, onMarkCooked, getAllergens, getDifficultyColor
 }) => {
+    const { t } = useTranslation();
     const { token, logout } = useAuth();
     const allergens = getAllergens(recipe);
     const [showJSON, setShowJSON] = useState(false);
@@ -952,12 +959,12 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
 
     const handleAddToShoppingList = async () => {
         if (!selectedListId) {
-            toast.error('Please select a shopping list');
+            toast.error(t('recipes.pleaseSelectShoppingList'));
             return;
         }
 
         if (checkedIngredients.size === 0) {
-            toast.error('Please select at least one ingredient');
+            toast.error(t('recipes.pleaseSelectIngredients'));
             return;
         }
 
@@ -985,15 +992,18 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
             }
 
             if (successCount > 0) {
-                toast.success(`Added ${successCount} ingredient${successCount > 1 ? 's' : ''} to shopping list!`);
+                toast.success(t('recipes.addedIngredients', {
+                    count: successCount,
+                    plural: successCount > 1 ? 's' : ''
+                }));
                 setCheckedIngredients(new Set()); // Clear checkboxes
                 setShowListSelector(false);
             } else {
-                toast.error('Failed to add ingredients to shopping list');
+                toast.error(t('recipes.failedToAddIngredients'));
             }
         } catch (error) {
             console.error('Error adding to shopping list:', error);
-            toast.error('Failed to add ingredients to shopping list');
+            toast.error(t('recipes.failedToAddIngredients'));
         } finally {
             setAddingToList(false);
         }
@@ -1022,14 +1032,14 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         {recipe.total_time_minutes && (
                             <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4" />
-                                {recipe.total_time_minutes} minutes
+                                {recipe.total_time_minutes} {t('recipes.minutes')}
                             </div>
                         )}
 
                         {recipe.servings && (
                             <div className="flex items-center gap-2">
                                 <Users className="w-4 h-4" />
-                                {recipe.servings} servings
+                                {recipe.servings} {t('recipes.servings')}
                             </div>
                         )}
 
@@ -1048,7 +1058,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                     <div className="p-4 bg-amber-50 border-b border-amber-200">
                         <div className="flex items-center gap-2 text-amber-900">
                             <AlertTriangle className="w-5 h-5" />
-                            <strong>Contains allergens:</strong>
+                            <strong>{t('recipes.containsAllergens')}</strong>
                             {allergens.map((allergen, idx) => (
                                 <span key={idx} className="px-2 py-1 bg-amber-200 rounded text-sm">
                                     {allergen}
@@ -1064,7 +1074,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         {/* Ingredients */}
                         <div>
                             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                🥘 Ingredients
+                                {t('recipes.ingredients')}
                             </h3>
                             <div className="space-y-2">
                                 {recipe.ingredients?.map((ing: any, idx: number) => (
@@ -1093,16 +1103,19 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                             {recipe.is_saved && checkedIngredients.size > 0 && (
                                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                     <div className="text-sm text-blue-700 mb-2 font-medium">
-                                        {checkedIngredients.size} ingredient{checkedIngredients.size > 1 ? 's' : ''} selected
+                                        {t('recipes.ingredientsSelected', {
+                                            count: checkedIngredients.size,
+                                            plural: checkedIngredients.size > 1 ? 's' : ''
+                                        })}
                                     </div>
 
                                     {shoppingLists.length === 0 ? (
                                         <div className="text-center py-3">
                                             <p className="text-sm text-gray-600 mb-2">
-                                                You don't have any shopping lists yet.
+                                                {t('recipes.noShoppingLists')}
                                             </p>
                                             <p className="text-xs text-gray-500">
-                                                Please create a shopping list first to add ingredients.
+                                                {t('recipes.createShoppingListFirst')}
                                             </p>
                                         </div>
                                     ) : !showListSelector ? (
@@ -1111,7 +1124,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                                             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                                         >
                                             <ShoppingCart className="w-4 h-4" />
-                                            Add to Shopping List
+                                            {t('recipes.addToShoppingList')}
                                         </button>
                                     ) : (
                                         <div className="space-y-2">
@@ -1132,13 +1145,13 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                                                     disabled={addingToList}
                                                     className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50"
                                                 >
-                                                    {addingToList ? 'Adding...' : 'Confirm'}
+                                                    {addingToList ? t('recipes.adding') : t('recipes.confirm')}
                                                 </button>
                                                 <button
                                                     onClick={() => setShowListSelector(false)}
                                                     className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition"
                                                 >
-                                                    Cancel
+                                                    {t('recipes.cancel')}
                                                 </button>
                                             </div>
                                         </div>
@@ -1150,7 +1163,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         {/* Steps */}
                         <div>
                             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                📝 Instructions
+                                {t('recipes.instructions')}
                             </h3>
                             <div className="space-y-4">
                                 {recipe.steps?.map((step: any, idx: number) => (
@@ -1186,7 +1199,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                             <div className="flex items-center gap-2">
                                 <ExternalLink className="w-4 h-4 text-gray-600" />
-                                <strong className="text-sm text-gray-700">Source:</strong>
+                                <strong className="text-sm text-gray-700">{t('recipes.source')}</strong>
                                 <a
                                     href={recipe.source_url}
                                     target="_blank"
@@ -1204,7 +1217,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         <div className="mt-6">
                             <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
                                 <FileJson className="w-5 h-5" />
-                                RCIP Format (JSON)
+                                {t('recipes.rcipFormat')}
                             </h3>
                             <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-xs">
                                 {JSON.stringify(recipe, null, 2)}
@@ -1220,7 +1233,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                     >
                         <FileJson className="w-4 h-4" />
-                        {showJSON ? 'Hide' : 'Show'} JSON
+                        {showJSON ? t('recipes.hide') : t('recipes.show')} {t('recipes.json')}
                     </button>
 
                     <button
@@ -1228,7 +1241,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                     >
                         <Download className="w-4 h-4" />
-                        Download .rcip
+                        {t('recipes.downloadRcip')}
                     </button>
 
                     <button
@@ -1241,12 +1254,12 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         {recipe.last_cooked ? (
                             <>
                                 <Check className="w-4 h-4" />
-                                Cooked ✓
+                                {t('recipes.cookedCheck')}
                             </>
                         ) : (
                             <>
                                 <ChefHat className="w-4 h-4" />
-                                Mark as Cooked
+                                {t('recipes.markAsCooked')}
                             </>
                         )}
                     </button>
@@ -1257,7 +1270,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
                         >
                             <Archive className="w-4 h-4" />
-                            Move to Archive
+                            {t('recipes.moveToArchive')}
                         </button>
                     ) : (
                         <button
@@ -1265,7 +1278,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
                         >
                             <Heart className="w-4 h-4" />
-                            Save to Collection
+                            {t('recipes.saveToCollection')}
                         </button>
                     )}
 
@@ -1273,7 +1286,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         onClick={onClose}
                         className="ml-auto px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
                     >
-                        Close
+                        {t('recipes.close')}
                     </button>
                 </div>
             </div>

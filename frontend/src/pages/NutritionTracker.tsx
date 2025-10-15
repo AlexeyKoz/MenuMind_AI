@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -44,6 +45,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
     selectedDate,
     selectedMealType
 }) => {
+    const { t } = useTranslation();
     const [formData, setFormData] = useState({
         date: selectedDate,
         meal_type: selectedMealType || 'lunch',
@@ -93,7 +95,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
 
         // Validate required fields
         if (!formData.food_name || !formData.calories || !formData.protein) {
-            toast.error('Please fill in food name, calories, and protein');
+            toast.error(t('nutrition.validationError'));
             return;
         }
 
@@ -119,7 +121,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
             <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">
-                        {editEntry ? 'Edit Entry' : 'Add Manual Entry'}
+                        {editEntry ? t('nutrition.editEntry') : t('nutrition.addManualEntry')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -134,7 +136,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Date *
+                                {t('nutrition.date')}
                             </label>
                             <input
                                 type="date"
@@ -146,7 +148,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Meal Type *
+                                {t('nutrition.mealType')}
                             </label>
                             <select
                                 value={formData.meal_type}
@@ -154,10 +156,10 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                                 required
                             >
-                                <option value="breakfast">🌅 Breakfast</option>
-                                <option value="lunch">☀️ Lunch</option>
-                                <option value="dinner">🌙 Dinner</option>
-                                <option value="snack">🍪 Snack</option>
+                                <option value="breakfast">{t('nutrition.meals.breakfast')}</option>
+                                <option value="lunch">{t('nutrition.meals.lunch')}</option>
+                                <option value="dinner">{t('nutrition.meals.dinner')}</option>
+                                <option value="snack">{t('nutrition.meals.snack')}</option>
                             </select>
                         </div>
                     </div>
@@ -165,7 +167,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     {/* Time (optional) */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Time (optional)
+                            {t('nutrition.timeOptional')}
                         </label>
                         <input
                             type="time"
@@ -178,7 +180,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     {/* Food Name */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Food Name *
+                            {t('nutrition.foodName')}
                         </label>
                         <input
                             type="text"
@@ -194,7 +196,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Portion Size
+                                {t('nutrition.portionSize')}
                             </label>
                             <input
                                 type="number"
@@ -207,20 +209,20 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Unit
+                                {t('nutrition.unit')}
                             </label>
                             <select
                                 value={formData.portion_unit}
                                 onChange={(e) => setFormData({ ...formData, portion_unit: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                             >
-                                <option value="grams">grams (g)</option>
-                                <option value="ml">milliliters (ml)</option>
-                                <option value="pieces">pieces</option>
-                                <option value="serving">serving</option>
-                                <option value="cup">cup</option>
-                                <option value="tbsp">tablespoon</option>
-                                <option value="tsp">teaspoon</option>
+                                <option value="grams">{t('nutrition.units.grams')}</option>
+                                <option value="ml">{t('nutrition.units.ml')}</option>
+                                <option value="pieces">{t('nutrition.units.pieces')}</option>
+                                <option value="serving">{t('nutrition.units.serving')}</option>
+                                <option value="cup">{t('nutrition.units.cup')}</option>
+                                <option value="tbsp">{t('nutrition.units.tbsp')}</option>
+                                <option value="tsp">{t('nutrition.units.tsp')}</option>
                             </select>
                         </div>
                     </div>
@@ -228,12 +230,12 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     {/* Main Macros (Required) */}
                     <div className="bg-indigo-50 p-4 rounded-lg">
                         <h3 className="font-medium text-indigo-900 mb-3">
-                            Nutrition Info (Required)
+                            {t('nutrition.nutritionInfoRequired')}
                         </h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Calories (kcal) *
+                                    {t('nutrition.caloriesKcal')}
                                 </label>
                                 <input
                                     type="number"
@@ -247,7 +249,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Protein (g) *
+                                    {t('nutrition.proteinG')}
                                 </label>
                                 <input
                                     type="number"
@@ -261,7 +263,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Carbs (g)
+                                    {t('nutrition.carbsG')}
                                 </label>
                                 <input
                                     type="number"
@@ -274,7 +276,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Fat (g)
+                                    {t('nutrition.fatG')}
                                 </label>
                                 <input
                                     type="number"
@@ -291,12 +293,12 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     {/* Optional Nutrients */}
                     <div>
                         <h3 className="font-medium text-gray-900 mb-2">
-                            Additional Nutrients (Optional)
+                            {t('nutrition.additionalNutrients')}
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Fiber (g)
+                                    {t('nutrition.fiberG')}
                                 </label>
                                 <input
                                     type="number"
@@ -308,7 +310,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Sugar (g)
+                                    {t('nutrition.sugarG')}
                                 </label>
                                 <input
                                     type="number"
@@ -320,7 +322,7 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Sodium (mg)
+                                    {t('nutrition.sodiumMg')}
                                 </label>
                                 <input
                                     type="number"
@@ -336,12 +338,12 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                     {/* Notes */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Notes (Optional)
+                            {t('nutrition.notesOptional')}
                         </label>
                         <textarea
                             value={formData.notes}
                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            placeholder="Any additional notes..."
+                            placeholder={t('nutrition.notesPlaceholder')}
                             rows={3}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                         />
@@ -354,13 +356,13 @@ const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
                             onClick={onClose}
                             className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
                         >
-                            Cancel
+                            {t('nutrition.cancel')}
                         </button>
                         <button
                             type="submit"
                             className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
                         >
-                            {editEntry ? 'Update Entry' : 'Add Entry'}
+                            {editEntry ? t('nutrition.updateEntry') : t('nutrition.addEntry')}
                         </button>
                     </div>
                 </form>
@@ -378,12 +380,13 @@ const toNumber = (value: any): number => {
 
 // Main Nutrition Tracker Component
 const NutritionTracker: React.FC = () => {
+    const { t } = useTranslation();
     const { token, logout } = useAuth();
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
-        toast.error('Your session has expired. Please log in again.');
+        toast.error(t('nutrition.sessionExpired'));
         logout();
-    }), [token, logout]);
+    }), [token, logout, t]);
 
     // State
     const [selectedDate, setSelectedDate] = useState<string>(
@@ -423,7 +426,7 @@ const NutritionTracker: React.FC = () => {
             }
         } catch (error) {
             console.error('Failed to load nutrition data:', error);
-            toast.error('Failed to load nutrition data');
+            toast.error(t('nutrition.failedToLoad'));
         } finally {
             setLoading(false);
         }
@@ -433,10 +436,10 @@ const NutritionTracker: React.FC = () => {
         try {
             if (editingEntry) {
                 await api.updateNutritionEntry(editingEntry.id, entry);
-                toast.success('Entry updated!');
+                toast.success(t('nutrition.entryUpdated'));
             } else {
                 await api.createNutritionEntry(entry);
-                toast.success('Entry added!');
+                toast.success(t('nutrition.entryAdded'));
             }
             setShowManualModal(false);
             setEditingEntry(null);
@@ -444,20 +447,20 @@ const NutritionTracker: React.FC = () => {
             loadData();
         } catch (error) {
             console.error('Failed to save entry:', error);
-            toast.error('Failed to save entry');
+            toast.error(t('nutrition.failedToSave'));
         }
     };
 
     const handleDeleteEntry = async (id: string) => {
-        if (!window.confirm('Delete this entry?')) return;
+        if (!window.confirm(t('nutrition.deleteEntry'))) return;
 
         try {
             await api.deleteNutritionEntry(id);
-            toast.success('Entry deleted');
+            toast.success(t('nutrition.entryDeleted'));
             loadData();
         } catch (error) {
             console.error('Failed to delete entry:', error);
-            toast.error('Failed to delete entry');
+            toast.error(t('nutrition.failedToDelete'));
         }
     };
 
@@ -472,13 +475,7 @@ const NutritionTracker: React.FC = () => {
     };
 
     const getMealLabel = (mealType: string) => {
-        const labels: Record<string, string> = {
-            breakfast: '🌅 Breakfast',
-            lunch: '☀️ Lunch',
-            dinner: '🌙 Dinner',
-            snack: '🍪 Snack'
-        };
-        return labels[mealType] || mealType;
+        return t(`nutrition.meals.${mealType}`);
     };
 
     const ProgressBar: React.FC<{ label: string; current: number; goal: number; color: string }> = ({
@@ -508,7 +505,7 @@ const NutritionTracker: React.FC = () => {
                     />
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
-                    Remaining: {remaining.toFixed(0)}
+                    {t('nutrition.remaining', { value: remaining.toFixed(0) })}
                 </div>
             </div>
         );
@@ -528,16 +525,16 @@ const NutritionTracker: React.FC = () => {
         <div className="max-w-7xl mx-auto p-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold text-gray-900">🍽️ Nutrition Tracker</h1>
+                <h1 className="text-3xl font-bold text-gray-900">{t('nutrition.title')}</h1>
                 <div className="flex items-center gap-3">
                     {settings && !settings.ai_coach_enabled && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 flex items-center gap-2">
-                            <span className="text-amber-800 text-sm">⚠️ AI Coach: Disabled</span>
+                            <span className="text-amber-800 text-sm">{t('nutrition.aiCoachDisabled')}</span>
                             <a
                                 href="/settings"
                                 className="text-amber-600 hover:text-amber-700 text-sm font-medium"
                             >
-                                Enable →
+                                {t('nutrition.enableAICoach')}
                             </a>
                         </div>
                     )}
@@ -546,7 +543,7 @@ const NutritionTracker: React.FC = () => {
                         className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
                     >
                         <Settings className="w-4 h-4" />
-                        Settings
+                        {t('nutrition.settings')}
                     </a>
                 </div>
             </div>
@@ -576,7 +573,7 @@ const NutritionTracker: React.FC = () => {
                         onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
                         className="px-4 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition font-medium"
                     >
-                        Today
+                        {t('nutrition.today')}
                     </button>
                 </div>
 
@@ -599,9 +596,9 @@ const NutritionTracker: React.FC = () => {
                     {/* Progress Card */}
                     <div className="bg-white rounded-lg shadow-sm p-6">
                         <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">Today's Progress</h2>
+                            <h2 className="text-xl font-bold text-gray-900">{t('nutrition.todaysProgress')}</h2>
                             <div className="text-sm text-gray-600">
-                                {summary?.goals.source === 'ai_calculated' ? '🤖 AI Calculated' : '✏️ Manual Goals'}
+                                {summary?.goals.source === 'ai_calculated' ? t('nutrition.aiCalculated') : t('nutrition.manualGoals')}
                             </div>
                         </div>
 
@@ -673,12 +670,12 @@ const NutritionTracker: React.FC = () => {
                                             className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
                                         >
                                             <Plus className="w-4 h-4" />
-                                            Add
+                                            {t('nutrition.add')}
                                         </button>
                                     </div>
 
                                     {mealEntries.length === 0 ? (
-                                        <p className="text-gray-500 text-sm italic">No entries yet</p>
+                                        <p className="text-gray-500 text-sm italic">{t('nutrition.noEntriesYet')}</p>
                                     ) : (
                                         <div className="space-y-2">
                                             {mealEntries.map((entry) => (
@@ -693,12 +690,12 @@ const NutritionTracker: React.FC = () => {
                                                             </h4>
                                                             {entry.entry_type === 'recipe' && (
                                                                 <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
-                                                                    Recipe
+                                                                    {t('nutrition.recipe')}
                                                                 </span>
                                                             )}
                                                             {entry.entry_type === 'product' && (
                                                                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">
-                                                                    Inventory
+                                                                    {t('nutrition.inventory')}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -743,7 +740,7 @@ const NutritionTracker: React.FC = () => {
                         <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow-sm p-6 border border-purple-200">
                             <div className="flex items-center gap-2 mb-4">
                                 <Sparkles className="w-5 h-5 text-purple-600" />
-                                <h3 className="text-lg font-bold text-purple-900">AI Coach</h3>
+                                <h3 className="text-lg font-bold text-purple-900">{t('nutrition.aiCoach')}</h3>
                             </div>
                             <p className="text-sm text-purple-800 mb-4">
                                 {aiSuggestions.message}
@@ -751,7 +748,7 @@ const NutritionTracker: React.FC = () => {
                             {aiSuggestions.suggestions && aiSuggestions.suggestions.length > 0 && (
                                 <div className="space-y-2">
                                     <h4 className="font-medium text-purple-900 text-sm mb-2">
-                                        Suggested Meals:
+                                        {t('nutrition.suggestedMeals')}
                                     </h4>
                                     {aiSuggestions.suggestions.map((suggestion, index) => (
                                         <div
@@ -777,22 +774,22 @@ const NutritionTracker: React.FC = () => {
                     {/* Quick Stats */}
                     {summary && (
                         <div className="bg-white rounded-lg shadow-sm p-6">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">Summary</h3>
+                            <h3 className="text-lg font-bold text-gray-900 mb-4">{t('nutrition.summary')}</h3>
                             <div className="space-y-3">
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Calories</span>
+                                    <span className="text-gray-600">{t('nutrition.calories')}</span>
                                     <span className="font-medium">
                                         {toNumber(summary.consumed.calories).toFixed(0)} / {toNumber(summary.goals.calories).toFixed(0)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Protein</span>
+                                    <span className="text-gray-600">{t('nutrition.protein')}</span>
                                     <span className="font-medium">
                                         {toNumber(summary.consumed.protein).toFixed(0)}g / {toNumber(summary.goals.protein).toFixed(0)}g
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600">Entries</span>
+                                    <span className="text-gray-600">{t('nutrition.entries')}</span>
                                     <span className="font-medium">{summary.meals.length}</span>
                                 </div>
                             </div>

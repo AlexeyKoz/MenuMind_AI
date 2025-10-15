@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useCollaboration } from '../contexts/CollaborationContext';
 import { Collaborator } from '../types';
 
@@ -8,6 +9,7 @@ interface CollaboratorManagerProps {
 }
 
 const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canInvite }) => {
+    const { t } = useTranslation();
     const {
         collaborators,
         myCollaborationKey,
@@ -87,7 +89,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
         <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-semibold">
-                    {listId ? `👥 Collaborators (${collaborators.length})` : '🤝 Collaboration'}
+                    {listId ? `👥 ${t('collaboration.titleWithCount', { count: collaborators.length })}` : `🤝 ${t('collaboration.collaboration')}`}
                 </h3>
                 {listId && canInvite && (
                     <button
@@ -97,7 +99,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                         }}
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
                     >
-                        ➕ Add Friend
+                        ➕ {t('collaboration.addFriend')}
                     </button>
                 )}
             </div>
@@ -105,13 +107,13 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
             {/* My Collaboration Key Section */}
             <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                 <div className="flex justify-between items-center mb-3">
-                    <h4 className="font-medium text-gray-700">🔑 My Collaboration Key</h4>
+                    <h4 className="font-medium text-gray-700">🔑 {t('collaboration.myKey')}</h4>
                     <div className="flex gap-2">
                         <button
                             onClick={() => setShowMyKey(!showMyKey)}
                             className="px-2 py-1 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-100 rounded transition"
                         >
-                            {showMyKey ? '👁️ Hide' : '👁️ Show'}
+                            {showMyKey ? `👁️ ${t('collaboration.hide')}` : `👁️ ${t('collaboration.show')}`}
                         </button>
                     </div>
                 </div>
@@ -121,7 +123,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                         {/* Key display - full width */}
                         <div className="w-full">
                             <code className="bg-white px-3 py-2 rounded border text-base font-mono tracking-wider block w-full break-all">
-                                {myCollaborationKey || 'Loading...'}
+                                {myCollaborationKey || t('collaboration.loading')}
                             </code>
                         </div>
 
@@ -130,21 +132,21 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                             <button
                                 onClick={() => myCollaborationKey && copyToClipboard(myCollaborationKey)}
                                 className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition"
-                                title="Copy to clipboard"
+                                title={t('collaboration.copy')}
                             >
-                                📋 Copy
+                                📋 {t('collaboration.copy')}
                             </button>
                             <button
                                 onClick={generateNewCollaborationKey}
                                 className="px-4 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 transition"
-                                title="Generate new key"
+                                title={t('collaboration.generateNew')}
                             >
-                                🔄 Generate New
+                                🔄 {t('collaboration.generateNew')}
                             </button>
                         </div>
 
                         <p className="text-xs text-gray-600 text-center">
-                            Share this key with friends so they can add you to their shopping lists
+                            {t('collaboration.shareKeyDescription')}
                         </p>
                     </div>
                 )}
@@ -154,28 +156,28 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
             {listId && showAddForm && (
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg">
                     <form onSubmit={handleAddCollaborator}>
-                        <h4 className="font-medium mb-3">Add New Collaborator</h4>
+                        <h4 className="font-medium mb-3">{t('collaboration.addNewCollaborator')}</h4>
 
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Friend's Name</label>
+                                <label className="block text-sm font-medium mb-1">{t('collaboration.friendsName')}</label>
                                 <input
                                     type="text"
                                     value={friendName}
                                     onChange={(e) => setFriendName(e.target.value)}
-                                    placeholder="Enter friend's name"
+                                    placeholder={t('collaboration.enterFriendsName')}
                                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Friend's Collaboration Key</label>
+                                <label className="block text-sm font-medium mb-1">{t('collaboration.friendsKey')}</label>
                                 <input
                                     type="text"
                                     value={collaborationKey}
                                     onChange={(e) => setCollaborationKey(e.target.value)}
-                                    placeholder="Enter 6-digit key"
+                                    placeholder={t('collaboration.enter6DigitKey')}
                                     maxLength={6}
                                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono"
                                     required
@@ -191,7 +193,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                                     className="w-4 h-4 text-blue-600"
                                 />
                                 <label htmlFor="canEdit" className="ml-2 text-sm">
-                                    Allow editing the list (can add/modify items)
+                                    {t('collaboration.allowEditing')}
                                 </label>
                             </div>
                         </div>
@@ -202,14 +204,14 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                                 disabled={isSubmitting}
                                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                             >
-                                {isSubmitting ? 'Adding...' : 'Add Collaborator'}
+                                {isSubmitting ? t('collaboration.adding') : t('collaboration.addCollaborator')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setShowAddForm(false)}
                                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
                             >
-                                Cancel
+                                {t('collaboration.cancel')}
                             </button>
                         </div>
                     </form>
@@ -237,12 +239,12 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                                         <span className="text-gray-500">@{collaborator.username}</span>
                                         {collaborator.is_creator && (
                                             <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                                                👑 Creator
+                                                👑 {t('collaboration.creator')}
                                             </span>
                                         )}
                                     </div>
                                     <div className="text-sm text-gray-500">
-                                        Joined {new Date(collaborator.joined_at).toLocaleDateString()}
+                                        {t('collaboration.joined')} {new Date(collaborator.joined_at).toLocaleDateString()}
                                     </div>
                                 </div>
                             </div>
@@ -250,7 +252,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                             {/* Permission Controls (only for creator) */}
                             {!collaborator.is_creator && canInvite && (
                                 <div className="mt-3 pt-3 border-t border-gray-100">
-                                    <div className="text-xs font-medium text-gray-500 mb-2">Permissions</div>
+                                    <div className="text-xs font-medium text-gray-500 mb-2">{t('collaboration.permissions')}</div>
                                     <div className="space-y-2">
                                         <label className="flex items-center text-sm cursor-pointer">
                                             <input
@@ -259,7 +261,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                                                 onChange={(e) => handlePermissionChange(collaborator, 'can_edit', e.target.checked)}
                                                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 mr-2"
                                             />
-                                            <span className="text-gray-700">Can edit items</span>
+                                            <span className="text-gray-700">{t('collaboration.canEditItems')}</span>
                                         </label>
                                         <label className="flex items-center text-sm cursor-pointer">
                                             <input
@@ -268,7 +270,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                                                 onChange={(e) => handlePermissionChange(collaborator, 'can_add_items', e.target.checked)}
                                                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 mr-2"
                                             />
-                                            <span className="text-gray-700">Can add items</span>
+                                            <span className="text-gray-700">{t('collaboration.canAddItems')}</span>
                                         </label>
                                         <label className="flex items-center text-sm cursor-pointer">
                                             <input
@@ -277,7 +279,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
                                                 onChange={(e) => handlePermissionChange(collaborator, 'can_invite_others', e.target.checked)}
                                                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 mr-2"
                                             />
-                                            <span className="text-gray-700">Can invite others</span>
+                                            <span className="text-gray-700">{t('collaboration.canInviteOthers')}</span>
                                         </label>
                                     </div>
                                 </div>
@@ -287,8 +289,8 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
 
                     {collaborators.length === 0 && (
                         <div className="text-center py-8 text-gray-500">
-                            <p>No collaborators yet</p>
-                            <p className="text-sm">Add friends to start collaborative shopping!</p>
+                            <p>{t('collaboration.noCollaborators')}</p>
+                            <p className="text-sm">{t('collaboration.addFriendsToStart')}</p>
                         </div>
                     )}
                 </div>
@@ -297,8 +299,8 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
             {/* Show message when no list is selected */}
             {!listId && (
                 <div className="text-center py-6 text-gray-500">
-                    <p className="text-sm mb-2">Select a list to manage collaborators</p>
-                    <p className="text-xs text-gray-400">Your collaboration key is always available above</p>
+                    <p className="text-sm mb-2">{t('collaboration.selectListToManage')}</p>
+                    <p className="text-xs text-gray-400">{t('collaboration.keyAlwaysAvailable')}</p>
                 </div>
             )}
         </div>

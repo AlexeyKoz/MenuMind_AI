@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
 interface RegistrationProps {
@@ -7,6 +8,7 @@ interface RegistrationProps {
 }
 
 const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSwitchToLogin }) => {
+    const { t } = useTranslation();
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -27,22 +29,24 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
         if (result.success) {
             onRegistrationSuccess();
         } else {
-            setError(result.error || 'Registration failed');
+            setError(result.error || t('auth.registerError'));
         }
     };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center">
             <div className="bg-white rounded-lg shadow-xl p-8 w-96">
-                <h2 className="text-3xl font-bold text-center mb-6">Join MenuMind AI</h2>
+                <h2 className="text-3xl font-bold text-center mb-2">{t('auth.welcomeMessage')}</h2>
+                <p className="text-center text-gray-600 mb-6">{t('auth.registerSubtitle')}</p>
 
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">Username</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.username')}</label>
                         <input
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
+                            placeholder={t('auth.enterUsername')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                             disabled={isLoading}
@@ -50,11 +54,12 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
                     </div>
 
                     <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">Email</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.email')}</label>
                         <input
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
+                            placeholder={t('auth.enterEmail')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                             disabled={isLoading}
@@ -62,11 +67,12 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
                     </div>
 
                     <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">First Name</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.firstName')}</label>
                         <input
                             type="text"
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
+                            placeholder={t('auth.enterFirstName')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                             disabled={isLoading}
@@ -74,11 +80,12 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
                     </div>
 
                     <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">Last Name</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.lastName')}</label>
                         <input
                             type="text"
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
+                            placeholder={t('auth.enterLastName')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                             disabled={isLoading}
@@ -86,11 +93,12 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
                     </div>
 
                     <div className="mb-6">
-                        <label className="block text-sm font-medium mb-2">Password</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.password')}</label>
                         <input
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            placeholder={t('auth.enterPassword')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                             disabled={isLoading}
@@ -108,19 +116,19 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
                         className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={isLoading}
                     >
-                        {isLoading ? 'Creating Account...' : 'Create Account'}
+                        {isLoading ? t('auth.registering') : t('auth.registerButton')}
                     </button>
                 </form>
 
                 <div className="mt-6 text-center">
                     <p className="text-sm text-gray-600">
-                        Already have an account?{' '}
+                        {t('auth.hasAccount')}{' '}
                         <button
                             onClick={onSwitchToLogin}
                             className="text-blue-600 hover:text-blue-700 font-medium"
                             disabled={isLoading}
                         >
-                            Sign in here
+                            {t('auth.signIn')}
                         </button>
                     </p>
                 </div>

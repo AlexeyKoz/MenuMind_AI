@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import toast from 'react-hot-toast';
@@ -121,6 +122,7 @@ const clearRecipeHistoryFromStorage = () => {
 };
 
 const Inventory: React.FC = () => {
+    const { t } = useTranslation();
     const { token, logout } = useAuth();
     const [locationData, setLocationData] = useState<LocationGroup>({});
     const [loading, setLoading] = useState(true);
@@ -712,7 +714,7 @@ const Inventory: React.FC = () => {
     };
 
     const getLocationLabel = (location: string) => {
-        return location.toUpperCase();
+        return t(`inventory.locations.${location}`);
     };
 
     // Filter items by search query
@@ -745,12 +747,12 @@ const Inventory: React.FC = () => {
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
                             <Package className="w-8 h-8" />
-                            My Inventory
+                            {t('inventory.title')}
                         </h1>
                         <p className="text-gray-600 mt-1">
-                            {totalItems} items · {totalExpiring > 0 && (
+                            {totalItems} {t('inventory.items')} · {totalExpiring > 0 && (
                                 <span className="text-red-600 font-medium">
-                                    ⚠️ {totalExpiring} expiring soon
+                                    ⚠️ {totalExpiring} {t('inventory.expiringSoon')}
                                 </span>
                             )}
                         </p>
@@ -763,7 +765,7 @@ const Inventory: React.FC = () => {
                             title={cachedRecipes.length > 0 ? 'Show previous recipe suggestions' : 'Generate recipe suggestions from your inventory'}
                         >
                             <ChefHat className="w-5 h-5" />
-                            {generatingRecipes ? 'Generating...' : cachedRecipes.length > 0 ? 'View Recipes' : 'Get Recipes'}
+                            {generatingRecipes ? t('inventory.generating') : cachedRecipes.length > 0 ? t('inventory.viewRecipes') : t('inventory.getRecipes')}
                         </button>
                         <button
                             onClick={() => {
@@ -773,7 +775,7 @@ const Inventory: React.FC = () => {
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
                         >
                             <Plus className="w-5 h-5" />
-                            Add Item
+                            {t('inventory.addItem')}
                         </button>
                     </div>
                 </div>
@@ -785,7 +787,7 @@ const Inventory: React.FC = () => {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search inventory..."
+                        placeholder={t('inventory.searchPlaceholder')}
                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
@@ -812,10 +814,10 @@ const Inventory: React.FC = () => {
                                             {getLocationLabel(location)}
                                         </h2>
                                         <p className="text-sm text-gray-600">
-                                            {locData.count} items
+                                            {locData.count} {t('inventory.items')}
                                             {locData.expiring_count > 0 && (
                                                 <span className="ml-2 text-red-600 font-medium">
-                                                    ⚠️ {locData.expiring_count} expiring
+                                                    ⚠️ {locData.expiring_count} {t('inventory.expiring')}
                                                 </span>
                                             )}
                                         </p>
@@ -833,7 +835,7 @@ const Inventory: React.FC = () => {
                                 <div className="border-t border-gray-200 p-4">
                                     {filteredItems.length === 0 ? (
                                         <p className="text-center text-gray-500 py-8">
-                                            {searchQuery ? 'No matching items' : 'No items in this location'}
+                                            {searchQuery ? t('inventory.noMatchingItems') : t('inventory.noItemsInLocation')}
                                         </p>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -848,14 +850,14 @@ const Inventory: React.FC = () => {
                                                             <button
                                                                 onClick={() => startEdit(item)}
                                                                 className="p-1 hover:bg-white/50 rounded transition"
-                                                                title="Edit"
+                                                                title={t('inventory.edit')}
                                                             >
                                                                 <Edit className="w-4 h-4" />
                                                             </button>
                                                             <button
                                                                 onClick={() => handleDelete(item.id)}
                                                                 className="p-1 hover:bg-white/50 rounded transition"
-                                                                title="Delete"
+                                                                title={t('inventory.delete')}
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
@@ -879,7 +881,7 @@ const Inventory: React.FC = () => {
                                                     )}
                                                     {item.is_low_stock && (
                                                         <p className="text-xs text-orange-600 mt-2 font-medium">
-                                                            ⚠️ Low stock
+                                                            ⚠️ {t('inventory.lowStock')}
                                                         </p>
                                                     )}
                                                 </div>

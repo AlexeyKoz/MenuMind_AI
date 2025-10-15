@@ -172,6 +172,42 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             'message': 'Failed to update settings'
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=False, methods=['get', 'patch'], url_path='preferences')
+    def preferences(self, request):
+        """Get or update user language and unit preferences"""
+        if request.method == 'GET':
+            return Response({
+                'preferred_language': request.user.preferred_language,
+                'unit_system': 'metric' if request.user.weight_unit == 'kg' else 'imperial',
+                'weight_unit': request.user.weight_unit,
+                'volume_unit': request.user.volume_unit,
+                'time_format': request.user.time_format
+            })
+
+        # PATCH method
+        if 'preferred_language' in request.data:
+            lang = request.data['preferred_language']
+            if lang in ['en', 'ru', 'he']:
+                request.user.preferred_language = lang
+
+        if 'unit_system' in request.data:
+            system = request.data['unit_system']
+            if system == 'metric':
+                request.user.weight_unit = 'kg'
+                request.user.volume_unit = 'liters'
+            elif system == 'imperial':
+                request.user.weight_unit = 'lbs'
+                request.user.volume_unit = 'gallons'
+
+        request.user.save()
+
+        return Response({
+            'success': True,
+            'message': 'Preferences updated successfully',
+            'preferred_language': request.user.preferred_language,
+            'unit_system': 'metric' if request.user.weight_unit == 'kg' else 'imperial'
+        })
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

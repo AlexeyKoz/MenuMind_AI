@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -46,6 +47,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     message,
     changes
 }) => {
+    const { t } = useTranslation();
+
     if (!isOpen) return null;
 
     return (
@@ -55,7 +58,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 <p className="text-gray-600 mb-4">{message}</p>
 
                 <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                    <h4 className="font-medium text-gray-900 mb-2">Changes to be made:</h4>
+                    <h4 className="font-medium text-gray-900 mb-2">{t('settings.changesToBeMade')}</h4>
                     <ul className="text-sm text-gray-700 space-y-1">
                         {Object.entries(changes).map(([key, value]) => (
                             <li key={key}>
@@ -70,13 +73,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         onClick={onCancel}
                         className="px-4 py-2 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
                     >
-                        Cancel
+                        {t('common.cancel')}
                     </button>
                     <button
                         onClick={onConfirm}
                         className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                     >
-                        Confirm Changes
+                        {t('common.confirm')}
                     </button>
                 </div>
             </div>
@@ -85,6 +88,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 };
 
 const SettingsPage: React.FC = () => {
+    const { t, i18n } = useTranslation();
     const { token, logout } = useAuth();
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
@@ -101,38 +105,38 @@ const SettingsPage: React.FC = () => {
     const [pendingChanges, setPendingChanges] = useState<{ [key: string]: any }>({});
 
     const activityLevels = [
-        { value: 'sedentary', label: 'Sedentary' },
-        { value: 'light', label: 'Lightly Active' },
-        { value: 'moderate', label: 'Moderately Active' },
-        { value: 'very', label: 'Very Active' },
-        { value: 'extra', label: 'Extra Active' }
+        { value: 'sedentary', label: t('settings.activityLevels.sedentary') },
+        { value: 'light', label: t('settings.activityLevels.light') },
+        { value: 'moderate', label: t('settings.activityLevels.moderate') },
+        { value: 'active', label: t('settings.activityLevels.active') },
+        { value: 'extra', label: t('settings.activityLevels.extra') }
     ];
 
     const languages = [
-        { value: 'en', label: 'English' },
-        { value: 'he', label: 'Hebrew' },
-        { value: 'ru', label: 'Russian' }
+        { value: 'en', label: t('languages.en') },
+        { value: 'he', label: t('languages.he') },
+        { value: 'ru', label: t('languages.ru') }
     ];
 
     const weightUnits = [
-        { value: 'kg', label: 'Kilograms' },
-        { value: 'lbs', label: 'Pounds' }
+        { value: 'kg', label: t('settings.weightUnits.kg') },
+        { value: 'lbs', label: t('settings.weightUnits.lbs') }
     ];
 
     const volumeUnits = [
-        { value: 'liters', label: 'Liters' },
-        { value: 'gallons', label: 'Gallons' }
+        { value: 'liters', label: t('settings.volumeUnits.liters') },
+        { value: 'gallons', label: t('settings.volumeUnits.gallons') }
     ];
 
     const timeFormats = [
-        { value: '24h', label: '24 Hour' },
-        { value: '12h', label: '12 Hour (AM/PM)' }
+        { value: '24h', label: t('settings.timeFormats.24h') },
+        { value: '12h', label: t('settings.timeFormats.12h') }
     ];
 
     const shoppingRoles = [
-        { value: 'creator', label: 'List Creator' },
-        { value: 'collaborator', label: 'Collaborator' },
-        { value: 'both', label: 'Both Creator and Collaborator' }
+        { value: 'creator', label: t('settings.shoppingRoles.creator') },
+        { value: 'collaborator', label: t('settings.shoppingRoles.collaborator') },
+        { value: 'both', label: t('settings.shoppingRoles.both') }
     ];
 
     useEffect(() => {
@@ -147,7 +151,7 @@ const SettingsPage: React.FC = () => {
             setFormData(response);
         } catch (error) {
             console.error('Failed to load settings:', error);
-            toast.error('Failed to load settings');
+            toast.error(t('settings.error'));
         } finally {
             setLoading(false);
         }
@@ -192,13 +196,13 @@ const SettingsPage: React.FC = () => {
                 setFormData(response.data);
                 setHasChanges(false);
                 setPendingChanges({});
-                toast.success('Settings updated successfully!');
+                toast.success(t('settings.saved'));
             } else {
-                toast.error('Failed to update settings');
+                toast.error(t('settings.error'));
             }
         } catch (error) {
             console.error('Failed to save settings:', error);
-            toast.error('Failed to save settings');
+            toast.error(t('settings.error'));
         } finally {
             setSaving(false);
         }
@@ -217,7 +221,7 @@ const SettingsPage: React.FC = () => {
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading settings...</p>
+                    <p className="mt-4 text-gray-600">{t('common.loading')}</p>
                 </div>
             </div>
         );
@@ -227,12 +231,12 @@ const SettingsPage: React.FC = () => {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
-                    <p className="text-red-600">Failed to load settings</p>
+                    <p className="text-red-600">{t('settings.error')}</p>
                     <button
                         onClick={loadSettings}
                         className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                     >
-                        Try Again
+                        {t('errors.tryAgain')}
                     </button>
                 </div>
             </div>
@@ -244,18 +248,18 @@ const SettingsPage: React.FC = () => {
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="bg-white shadow rounded-lg">
                     <div className="px-6 py-4 border-b border-gray-200">
-                        <h1 className="text-2xl font-bold text-gray-900">⚙️ Settings & Preferences</h1>
-                        <p className="mt-1 text-gray-600">Customize your account and application preferences</p>
+                        <h1 className="text-2xl font-bold text-gray-900">⚙️ {t('settings.title')}</h1>
+                        <p className="mt-1 text-gray-600">{t('settings.subtitle')}</p>
                     </div>
 
                     <div className="p-6 space-y-8">
                         {/* Personal Information */}
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">👤 Personal Information</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">👤 {t('settings.personalInfo')}</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        First Name
+                                        {t('auth.firstName')}
                                     </label>
                                     <input
                                         type="text"
@@ -266,7 +270,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Last Name
+                                        {t('auth.lastName')}
                                     </label>
                                     <input
                                         type="text"
@@ -277,7 +281,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Email
+                                        {t('auth.email')}
                                     </label>
                                     <input
                                         type="email"
@@ -288,8 +292,8 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Birth Date
-                                        <span className="text-xs text-gray-500 ml-1">(for AI goal calculation)</span>
+                                        {t('settings.birthDate')}
+                                        <span className="text-xs text-gray-500 ml-1">{t('settings.forAICalculation')}</span>
                                     </label>
                                     <input
                                         type="date"
@@ -300,18 +304,18 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Gender
-                                        <span className="text-xs text-gray-500 ml-1">(for AI goal calculation)</span>
+                                        {t('settings.gender')}
+                                        <span className="text-xs text-gray-500 ml-1">{t('settings.forAICalculation')}</span>
                                     </label>
                                     <select
                                         value={formData.gender || ''}
                                         onChange={(e) => handleInputChange('gender', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                     >
-                                        <option value="">Select...</option>
-                                        <option value="male">Male</option>
-                                        <option value="female">Female</option>
-                                        <option value="other">Other</option>
+                                        <option value="">{t('settings.selectGender')}</option>
+                                        <option value="male">{t('settings.male')}</option>
+                                        <option value="female">{t('settings.female')}</option>
+                                        <option value="other">{t('settings.other')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -319,11 +323,11 @@ const SettingsPage: React.FC = () => {
 
                         {/* Physical Information */}
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">📏 Physical Information</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">📏 {t('settings.physicalInfo')}</h2>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Height (cm)
+                                        {t('settings.heightCm')}
                                     </label>
                                     <input
                                         type="number"
@@ -336,7 +340,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Weight (kg)
+                                        {t('settings.weightKg')}
                                     </label>
                                     <input
                                         type="number"
@@ -350,7 +354,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Activity Level
+                                        {t('settings.activityLevel')}
                                     </label>
                                     <select
                                         value={formData.activity_level || 'moderate'}
@@ -369,12 +373,12 @@ const SettingsPage: React.FC = () => {
 
                         {/* Dietary Information */}
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">🥗 Dietary Information</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">🥗 {t('settings.dietaryInfo')}</h2>
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Dietary Restrictions
-                                        <span className="text-xs text-gray-500 ml-1">(comma-separated)</span>
+                                        {t('settings.dietaryRestrictions')}
+                                        <span className="text-xs text-gray-500 ml-1">{t('settings.commaSeparated')}</span>
                                     </label>
                                     <input
                                         type="text"
@@ -385,16 +389,16 @@ const SettingsPage: React.FC = () => {
                                             handleInputChange('dietary_restrictions', restrictions);
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g., Vegetarian, Gluten-free, Halal"
+                                        placeholder={t('settings.dietaryPlaceholder')}
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Examples: Vegetarian, Vegan, Gluten-free, Dairy-free, Kosher, Halal, Low-carb, Keto
+                                        {t('settings.dietaryExamples')}
                                     </p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Allergies
-                                        <span className="text-xs text-gray-500 ml-1">(comma-separated)</span>
+                                        {t('settings.allergies')}
+                                        <span className="text-xs text-gray-500 ml-1">{t('settings.commaSeparated')}</span>
                                     </label>
                                     <input
                                         type="text"
@@ -405,10 +409,10 @@ const SettingsPage: React.FC = () => {
                                             handleInputChange('allergies', allergyList);
                                         }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g., Peanuts, Shellfish, Dairy"
+                                        placeholder={t('settings.allergiesPlaceholder')}
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Examples: Peanuts, Tree nuts, Shellfish, Fish, Eggs, Dairy, Soy, Wheat, Sesame
+                                        {t('settings.allergiesExamples')}
                                     </p>
                                 </div>
                             </div>
@@ -416,11 +420,11 @@ const SettingsPage: React.FC = () => {
 
                         {/* Unit Preferences */}
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">📐 Unit Preferences</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">📐 {t('settings.unitPreferences')}</h2>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Weight Unit
+                                        {t('settings.weightUnit')}
                                     </label>
                                     <select
                                         value={formData.weight_unit || 'kg'}
@@ -436,7 +440,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Volume Unit
+                                        {t('settings.volumeUnit')}
                                     </label>
                                     <select
                                         value={formData.volume_unit || 'liters'}
@@ -452,7 +456,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Time Format
+                                        {t('settings.timeFormat')}
                                     </label>
                                     <select
                                         value={formData.time_format || '24h'}
@@ -471,15 +475,18 @@ const SettingsPage: React.FC = () => {
 
                         {/* Application Preferences */}
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">🎨 Application Preferences</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">🎨 {t('settings.preferences')}</h2>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Language
+                                        {t('settings.language')}
                                     </label>
                                     <select
-                                        value={formData.preferred_language || 'en'}
-                                        onChange={(e) => handleInputChange('preferred_language', e.target.value)}
+                                        value={i18n.language}
+                                        onChange={(e) => {
+                                            i18n.changeLanguage(e.target.value);
+                                            handleInputChange('preferred_language', e.target.value);
+                                        }}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         {languages.map(lang => (
@@ -491,7 +498,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Personal Color
+                                        {t('settings.personalColor')}
                                     </label>
                                     <div className="flex items-center space-x-2">
                                         <input
@@ -511,7 +518,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Shopping Role
+                                        {t('settings.shoppingRole')}
                                     </label>
                                     <select
                                         value={formData.shopping_role || 'both'}
@@ -530,11 +537,11 @@ const SettingsPage: React.FC = () => {
 
                         {/* Nutrition Goals */}
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">🥗 Nutrition Goals</h2>
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">🥗 {t('settings.nutritionGoals')}</h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Daily Calories
+                                        {t('settings.calories')}
                                     </label>
                                     <input
                                         type="number"
@@ -547,7 +554,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Protein (g)
+                                        {t('settings.protein')}
                                     </label>
                                     <input
                                         type="number"
@@ -560,7 +567,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Carbs (g)
+                                        {t('settings.carbs')}
                                     </label>
                                     <input
                                         type="number"
@@ -573,7 +580,7 @@ const SettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Fat (g)
+                                        {t('settings.fat')}
                                     </label>
                                     <input
                                         type="number"
@@ -595,7 +602,7 @@ const SettingsPage: React.FC = () => {
                             disabled={!hasChanges || saving}
                             className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                            Reset
+                            {t('common.reset')}
                         </button>
                         <button
                             onClick={handleSave}
@@ -605,7 +612,7 @@ const SettingsPage: React.FC = () => {
                             {saving && (
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                             )}
-                            {saving ? 'Saving...' : 'Save Changes'}
+                            {saving ? t('settings.saving') : t('settings.saveChanges')}
                         </button>
                     </div>
                 </div>
@@ -613,9 +620,9 @@ const SettingsPage: React.FC = () => {
                 {/* AI Nutrition Coach Settings */}
                 <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
                     <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50">
-                        <h2 className="text-2xl font-bold text-gray-900">🤖 AI Nutrition Coach</h2>
+                        <h2 className="text-2xl font-bold text-gray-900">🤖 {t('settings.aiNutritionCoach')}</h2>
                         <p className="text-sm text-gray-600 mt-1">
-                            Privacy-first nutrition tracking with optional AI coaching
+                            {t('settings.aiNutritionDescription')}
                         </p>
                     </div>
                     <div className="p-6">
@@ -628,8 +635,8 @@ const SettingsPage: React.FC = () => {
                 isOpen={showConfirmation}
                 onConfirm={confirmSave}
                 onCancel={() => setShowConfirmation(false)}
-                title="Confirm Settings Changes"
-                message="Are you sure you want to save these changes to your settings?"
+                title={t('settings.confirmChangesTitle')}
+                message={t('settings.confirmChangesMessage')}
                 changes={pendingChanges}
             />
         </div>

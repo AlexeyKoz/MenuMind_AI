@@ -252,3 +252,5 @@ class RecipeCookingLogViewSet(viewsets.ModelViewSet):
         )
         streak.increment(log.cooked_at.date())
 
+
+

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -10,7 +10,12 @@ interface NavigationProps {
 
 const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) => {
     const { user, logout } = useAuth();
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+
+    // Update HTML dir attribute for RTL support
+    useEffect(() => {
+        document.documentElement.dir = i18n.language === 'he' ? 'rtl' : 'ltr';
+    }, [i18n.language]);
 
     const navItems = [
         { id: 'shopping', translationKey: 'nav.shopping', icon: '🛒' },

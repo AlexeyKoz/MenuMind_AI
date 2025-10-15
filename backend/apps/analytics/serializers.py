@@ -52,3 +52,5 @@ class AIInsightsSerializer(serializers.Serializer):
     nutrition_coaching = serializers.DictField(allow_null=True)
     generated_at = serializers.DateTimeField()
 
+
+

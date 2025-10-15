@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -31,6 +32,7 @@ interface ArchivedRecipe {
 }
 
 const ArchivePage: React.FC = () => {
+    const { t } = useTranslation();
     const { token, logout } = useAuth();
     const [activeTab, setActiveTab] = useState<'lists' | 'recipes'>('lists');
     const [archivedLists, setArchivedLists] = useState<ArchivedList[]>([]);
@@ -42,9 +44,9 @@ const ArchivePage: React.FC = () => {
     // Create API service with useMemo to prevent recreation on every render
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
-        alert('Your session has expired. Please log in again.');
+        alert(t('archive.sessionExpired'));
         logout();
-    }), [token, logout]);
+    }), [token, logout, t]);
 
     const loadArchivedLists = async () => {
         try {
@@ -53,7 +55,7 @@ const ArchivePage: React.FC = () => {
             setArchivedLists(response.results || response);
         } catch (error) {
             console.error('Failed to load archived lists:', error);
-            toast.error('Failed to load archived lists');
+            toast.error(t('archive.failedToLoadArchivedLists'));
         } finally {
             setLoading(false);
         }
@@ -66,7 +68,7 @@ const ArchivePage: React.FC = () => {
             setArchivedRecipes(response.recipes || []);
         } catch (error) {
             console.error('Failed to load archived recipes:', error);
-            toast.error('Failed to load archived recipes');
+            toast.error(t('archive.failedToLoadArchivedRecipes'));
         } finally {
             setLoading(false);
         }
@@ -126,17 +128,17 @@ const ArchivePage: React.FC = () => {
     const handleRestore = async (listId: string) => {
         try {
             await api.restoreList(listId);
-            toast.success('List restored successfully!');
+            toast.success(t('archive.listRestored'));
             await loadArchivedLists();
         } catch (error) {
             console.error('Failed to restore list:', error);
-            toast.error('Failed to restore list');
+            toast.error(t('archive.failedToRestoreList'));
         }
     };
 
 
     const handlePermanentDelete = async (listId: string) => {
-        if (!window.confirm('Are you sure you want to remove this list from your archive? (Creators will permanently delete, participants will remove from their view)')) {
+        if (!window.confirm(t('archive.confirmDeleteList'))) {
             return;
         }
 
@@ -152,11 +154,11 @@ const ArchivePage: React.FC = () => {
 
             // Show appropriate success message based on action
             if (response.action === 'permanent_delete') {
-                toast.success('List permanently deleted');
+                toast.success(t('archive.listPermanentlyDeleted'));
             } else if (response.action === 'removed_from_view') {
-                toast.success('List removed from your archive');
+                toast.success(t('archive.listRemovedFromArchive'));
             } else {
-                toast.success(response.message || 'List removed');
+                toast.success(response.message || t('archive.listRemoved'));
             }
 
             await loadArchivedLists();
@@ -164,12 +166,12 @@ const ArchivePage: React.FC = () => {
             console.error('Failed to delete/remove list:', error);
 
             // Show specific error message
-            let errorMessage = 'Failed to remove list';
+            let errorMessage = t('archive.failedToRemoveList');
             if (error.message) {
                 if (error.message.includes('not found')) {
-                    errorMessage = 'List not found or already deleted';
+                    errorMessage = t('archive.listNotFound');
                 } else if (error.message.includes('permission')) {
-                    errorMessage = 'You do not have permission to delete this list';
+                    errorMessage = t('archive.noPermission');
                 } else {
                     errorMessage = error.message;
                 }
@@ -181,11 +183,11 @@ const ArchivePage: React.FC = () => {
 
     const handleBulkPermanentDelete = async () => {
         if (selectedItems.size === 0) {
-            toast.error('Please select items to delete');
+            toast.error(t('archive.pleaseSelectItems'));
             return;
         }
 
-        if (!window.confirm(`Are you sure you want to remove ${selectedItems.size} list(s) from your archive? (Creators will permanently delete, participants will remove from their view)`)) {
+        if (!window.confirm(t('archive.confirmBulkDeleteLists', { count: selectedItems.size }))) {
             return;
         }
 
@@ -207,9 +209,9 @@ const ArchivePage: React.FC = () => {
                 let errorMessage = 'Unknown error';
                 if (error.message) {
                     if (error.message.includes('not found')) {
-                        errorMessage = 'List not found (may have been already deleted)';
+                        errorMessage = t('archive.listNotFound');
                     } else if (error.message.includes('permission')) {
-                        errorMessage = 'No permission to delete this list';
+                        errorMessage = t('archive.noPermission');
                     } else {
                         errorMessage = error.message;
                     }
@@ -226,22 +228,22 @@ const ArchivePage: React.FC = () => {
 
         // Show appropriate feedback based on results
         if (results.successful > 0 && results.failed === 0) {
-            toast.success(`${results.successful} list(s) removed from archive`);
+            toast.success(t('archive.listsRemovedFromArchive', { count: results.successful }));
         } else if (results.successful > 0 && results.failed > 0) {
-            toast.success(`${results.successful} list(s) removed successfully`);
-            toast.error(`${results.failed} list(s) could not be removed`);
+            toast.success(t('archive.listsRemovedSuccessfully', { count: results.successful }));
+            toast.error(t('archive.listsCouldNotBeRemoved', { count: results.failed }));
         } else if (results.failed > 0) {
-            toast.error(`Failed to remove ${results.failed} list(s)`);
+            toast.error(t('archive.failedToRemoveLists', { count: results.failed }));
 
             // Show specific errors if there are permission issues
             const permissionErrors = results.errors.filter(err => err.includes('permission')).length;
             const notFoundErrors = results.errors.filter(err => err.includes('not found')).length;
 
             if (permissionErrors > 0) {
-                toast.error(`${permissionErrors} list(s) could not be removed (no access)`);
+                toast.error(t('archive.listsCouldNotBeRemovedNoAccess', { count: permissionErrors }));
             }
             if (notFoundErrors > 0) {
-                toast.error(`${notFoundErrors} list(s) were already deleted`);
+                toast.error(t('archive.listsAlreadyDeleted', { count: notFoundErrors }));
             }
         }
     };
@@ -250,16 +252,16 @@ const ArchivePage: React.FC = () => {
     const handleRestoreRecipe = async (recipeId: string) => {
         try {
             await api.restoreRecipe(recipeId);
-            toast.success('Recipe restored to My Recipes!');
+            toast.success(t('archive.recipeRestored'));
             await loadArchivedRecipes();
         } catch (error) {
             console.error('Failed to restore recipe:', error);
-            toast.error('Failed to restore recipe');
+            toast.error(t('archive.failedToRestoreRecipe'));
         }
     };
 
     const handlePermanentDeleteRecipe = async (recipeId: string) => {
-        if (!window.confirm('Are you sure you want to permanently remove this recipe from your collection? (The recipe will still be available on the Discover page)')) {
+        if (!window.confirm(t('archive.confirmDeleteRecipe'))) {
             return;
         }
 
@@ -273,11 +275,11 @@ const ArchivePage: React.FC = () => {
                 setSelectedRecipes(newSelection);
             }
 
-            toast.success('Recipe permanently removed from your collection');
+            toast.success(t('archive.recipePermanentlyDeleted'));
             await loadArchivedRecipes();
         } catch (error: any) {
             console.error('Failed to delete recipe:', error);
-            toast.error(error.message || 'Failed to delete recipe');
+            toast.error(error.message || t('archive.failedToDeleteRecipe'));
         }
     };
 
@@ -319,11 +321,12 @@ const ArchivePage: React.FC = () => {
 
     const handleBulkDeleteRecipes = async () => {
         if (selectedRecipes.size === 0) {
-            toast.error('Please select recipes to delete');
+            toast.error(t('archive.pleaseSelectRecipes'));
             return;
         }
 
-        if (!window.confirm(`Are you sure you want to permanently delete ${selectedRecipes.size} recipe${selectedRecipes.size > 1 ? 's' : ''} from your collection? (The recipe${selectedRecipes.size > 1 ? 's' : ''} will still be available on the Discover page)`)) {
+        const plural = selectedRecipes.size > 1 ? 's' : '';
+        if (!window.confirm(t('archive.confirmBulkDeleteRecipes', { count: selectedRecipes.size, plural }))) {
             return;
         }
 
@@ -348,13 +351,16 @@ const ArchivePage: React.FC = () => {
         await loadArchivedRecipes();
 
         // Show appropriate feedback
+        const successPlural = results.successful > 1 ? 's' : '';
+        const failedPlural = results.failed > 1 ? 's' : '';
+
         if (results.successful > 0 && results.failed === 0) {
-            toast.success(`${results.successful} recipe${results.successful > 1 ? 's' : ''} permanently deleted`);
+            toast.success(t('archive.recipesPermanentlyDeleted', { count: results.successful, plural: successPlural }));
         } else if (results.successful > 0 && results.failed > 0) {
-            toast.success(`${results.successful} recipe${results.successful > 1 ? 's' : ''} deleted`);
-            toast.error(`${results.failed} recipe${results.failed > 1 ? 's' : ''} could not be deleted`);
+            toast.success(t('archive.recipesDeleted', { count: results.successful, plural: successPlural }));
+            toast.error(t('archive.recipesCouldNotBeDeleted', { count: results.failed, plural: failedPlural }));
         } else if (results.failed > 0) {
-            toast.error(`Failed to delete ${results.failed} recipe${results.failed > 1 ? 's' : ''}`);
+            toast.error(t('archive.failedToDeleteRecipes', { count: results.failed, plural: failedPlural }));
         }
     };
 
@@ -365,9 +371,9 @@ const ArchivePage: React.FC = () => {
         const daysLeft = Math.ceil((autoDeleteDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
 
         if (daysLeft <= 0) {
-            return 'Scheduled for deletion';
+            return t('archive.scheduledForDeletion');
         }
-        return `Auto-delete in ${daysLeft} days`;
+        return t(daysLeft === 1 ? 'archive.autoDeleteIn_one' : 'archive.autoDeleteIn', { days: daysLeft });
     };
 
     return (
@@ -378,12 +384,12 @@ const ArchivePage: React.FC = () => {
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                                🗃️ Archive
+                                🗃️ {t('archive.title')}
                             </h1>
                             <p className="text-gray-600 mt-1">
                                 {activeTab === 'lists'
-                                    ? 'Manage your deleted shopping lists. Lists are automatically removed after 60 days.'
-                                    : 'Manage your archived recipes. You can restore them anytime or permanently remove them.'}
+                                    ? t('archive.listsDescription')
+                                    : t('archive.recipesDescription')}
                             </p>
                         </div>
                         <div className="flex gap-2">
@@ -392,7 +398,7 @@ const ArchivePage: React.FC = () => {
                                     onClick={handleBulkPermanentDelete}
                                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                                 >
-                                    🗑️ Delete {selectedItems.size} permanently
+                                    🗑️ {t('archive.deleteSelected', { count: selectedItems.size })}
                                 </button>
                             )}
                             {activeTab === 'recipes' && selectedRecipes.size > 0 && (
@@ -400,7 +406,7 @@ const ArchivePage: React.FC = () => {
                                     onClick={handleBulkDeleteRecipes}
                                     className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                                 >
-                                    🗑️ Delete {selectedRecipes.size} permanently
+                                    🗑️ {t('archive.deleteSelected', { count: selectedRecipes.size })}
                                 </button>
                             )}
                         </div>
@@ -415,7 +421,7 @@ const ArchivePage: React.FC = () => {
                                 : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
-                            🛒 Shopping Lists ({archivedLists.length})
+                            🛒 {t('archive.shoppingLists')} ({archivedLists.length})
                         </button>
                         <button
                             onClick={() => setActiveTab('recipes')}
@@ -424,7 +430,7 @@ const ArchivePage: React.FC = () => {
                                 : 'text-gray-600 hover:text-gray-900'
                                 }`}
                         >
-                            📖 Recipes ({archivedRecipes.length})
+                            📖 {t('archive.recipes')} ({archivedRecipes.length})
                         </button>
                     </div>
                 </div>
@@ -434,15 +440,15 @@ const ArchivePage: React.FC = () => {
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                            <span className="ml-2 text-gray-600">Loading archived {activeTab}...</span>
+                            <span className="ml-2 text-gray-600">{t('archive.loading')} {activeTab}...</span>
                         </div>
                     ) : activeTab === 'lists' ? (
                         // Shopping Lists Tab
                         archivedLists.length === 0 ? (
                             <div className="text-center py-12">
                                 <div className="text-6xl mb-4">🎉</div>
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">No deleted lists</h3>
-                                <p className="text-gray-600">You haven't deleted any shopping lists yet.</p>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">{t('archive.noDeletedLists')}</h3>
+                                <p className="text-gray-600">{t('archive.noDeletedListsDesc')}</p>
                             </div>
                         ) : (
                             <div className="p-6">
@@ -456,12 +462,12 @@ const ArchivePage: React.FC = () => {
                                             className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                                         />
                                         <span className="text-sm text-gray-700">
-                                            Select all ({archivedLists.length} items)
+                                            {t('archive.selectAll')} ({archivedLists.length} {t('archive.items')})
                                         </span>
                                     </label>
 
                                     <div className="text-sm text-gray-500">
-                                        {selectedItems.size > 0 && `${selectedItems.size} selected`}
+                                        {selectedItems.size > 0 && `${selectedItems.size} ${t('archive.selected')}`}
                                     </div>
                                 </div>
 
@@ -487,11 +493,11 @@ const ArchivePage: React.FC = () => {
                                                     <div>
                                                         <h3 className="font-medium text-gray-900">{list.name}</h3>
                                                         <div className="text-sm text-gray-500 flex items-center gap-4">
-                                                            <span>Created by {list.creator.first_name} (@{list.creator.username})</span>
+                                                            <span>{t('archive.createdBy')} {list.creator.first_name} (@{list.creator.username})</span>
                                                             <span>•</span>
-                                                            <span>{list.items_count} items</span>
+                                                            <span>{list.items_count} {t('archive.items')}</span>
                                                             <span>•</span>
-                                                            <span>Deleted {new Date(list.deleted_at).toLocaleDateString()}</span>
+                                                            <span>{t('archive.deleted')} {new Date(list.deleted_at).toLocaleDateString()}</span>
                                                         </div>
                                                         <div className="text-xs text-orange-600 mt-1">
                                                             {getTimeUntilAutoDelete(list.deleted_at)}
@@ -507,17 +513,17 @@ const ArchivePage: React.FC = () => {
                                                             onClick={() => handleRestore(list.id)}
                                                             className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
                                                         >
-                                                            ↩️ Restore
+                                                            ↩️ {t('archive.restore')}
                                                         </button>
                                                     ) : list.is_permanently_deleted ? (
                                                         // List is permanently deleted - no action available
                                                         <span className="px-3 py-1 text-sm bg-gray-100 text-gray-500 rounded-md">
-                                                            Permanently Deleted
+                                                            {t('archive.permanentlyDeleted')}
                                                         </span>
                                                     ) : (
                                                         // Fallback for other cases
                                                         <span className="px-3 py-1 text-sm bg-gray-100 text-gray-500 rounded-md">
-                                                            No Actions Available
+                                                            {t('archive.noActionsAvailable')}
                                                         </span>
                                                     )}
 
@@ -527,7 +533,7 @@ const ArchivePage: React.FC = () => {
                                                             onClick={() => handlePermanentDelete(list.id)}
                                                             className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
                                                         >
-                                                            🗑️ Delete permanently
+                                                            🗑️ {t('archive.deletePerm')}
                                                         </button>
                                                     )}
 
@@ -537,7 +543,7 @@ const ArchivePage: React.FC = () => {
                                                             onClick={() => handlePermanentDelete(list.id)}
                                                             className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
                                                         >
-                                                            🚫 Remove from view
+                                                            🚫 {t('archive.removeFromView')}
                                                         </button>
                                                     )}
                                                 </div>
@@ -552,8 +558,8 @@ const ArchivePage: React.FC = () => {
                         archivedRecipes.length === 0 ? (
                             <div className="text-center py-12">
                                 <div className="text-6xl mb-4">📖</div>
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">No archived recipes</h3>
-                                <p className="text-gray-600">You haven't archived any recipes yet.</p>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">{t('archive.noArchivedRecipes')}</h3>
+                                <p className="text-gray-600">{t('archive.noArchivedRecipesDesc')}</p>
                             </div>
                         ) : (
                             <div className="p-6">
@@ -567,12 +573,12 @@ const ArchivePage: React.FC = () => {
                                             className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                                         />
                                         <span className="text-sm text-gray-700">
-                                            Select all ({archivedRecipes.length} recipes)
+                                            {t('archive.selectAll')} ({archivedRecipes.length} {t('archive.recipes')})
                                         </span>
                                     </label>
 
                                     <div className="text-sm text-gray-500">
-                                        {selectedRecipes.size > 0 && `${selectedRecipes.size} selected`}
+                                        {selectedRecipes.size > 0 && `${selectedRecipes.size} ${t('archive.selected')}`}
                                     </div>
                                 </div>
 
@@ -601,14 +607,14 @@ const ArchivePage: React.FC = () => {
                                                         <div className="text-sm text-gray-500 flex items-center gap-4 mt-2">
                                                             <span>🍳 {item.cuisine}</span>
                                                             <span>•</span>
-                                                            <span>⏱️ {item.total_time_minutes} min</span>
+                                                            <span>⏱️ {item.total_time_minutes} {t('archive.min')}</span>
                                                             <span>•</span>
-                                                            <span>👥 {item.servings} servings</span>
+                                                            <span>👥 {item.servings} {t('archive.servings')}</span>
                                                             <span>•</span>
                                                             <span>📊 {item.difficulty}</span>
                                                         </div>
                                                         <div className="text-xs text-gray-500 mt-2">
-                                                            Archived {new Date(item.archived_at).toLocaleDateString()} • Cooked {item.times_cooked} times
+                                                            {t('archive.archived')} {new Date(item.archived_at).toLocaleDateString()} • {t('archive.cooked')} {item.times_cooked} {t('archive.times')}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -618,13 +624,13 @@ const ArchivePage: React.FC = () => {
                                                         onClick={() => handleRestoreRecipe(item.id)}
                                                         className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
                                                     >
-                                                        ↩️ Restore
+                                                        ↩️ {t('archive.restore')}
                                                     </button>
                                                     <button
                                                         onClick={() => handlePermanentDeleteRecipe(item.id)}
                                                         className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
                                                     >
-                                                        🗑️ Delete
+                                                        🗑️ {t('archive.deletePermanently')}
                                                     </button>
                                                 </div>
                                             </div>
@@ -641,21 +647,21 @@ const ArchivePage: React.FC = () => {
                     <div className="flex items-start gap-3">
                         <div className="text-blue-600 text-xl">ℹ️</div>
                         <div>
-                            <h4 className="font-medium text-blue-900 mb-1">Archive Policy</h4>
+                            <h4 className="font-medium text-blue-900 mb-1">{t('archive.archivePolicy')}</h4>
                             <ul className="text-sm text-blue-800 space-y-1">
                                 {activeTab === 'lists' ? (
                                     <>
-                                        <li>• Deleted lists are stored here for up to 60 days</li>
-                                        <li>• You can restore lists anytime during this period</li>
-                                        <li>• After 60 days, lists are automatically and permanently deleted</li>
-                                        <li>• You can manually delete lists permanently at any time</li>
+                                        <li>• {t('archive.policyLists1')}</li>
+                                        <li>• {t('archive.policyLists2')}</li>
+                                        <li>• {t('archive.policyLists3')}</li>
+                                        <li>• {t('archive.policyLists4')}</li>
                                     </>
                                 ) : (
                                     <>
-                                        <li>• Archived recipes remain here until you delete them</li>
-                                        <li>• You can restore recipes to "My Recipes" anytime</li>
-                                        <li>• Permanently deleting removes the recipe from your personal collection only</li>
-                                        <li>• Recipes remain available on the Discover page for other users</li>
+                                        <li>• {t('archive.policyRecipes1')}</li>
+                                        <li>• {t('archive.policyRecipes2')}</li>
+                                        <li>• {t('archive.policyRecipes3')}</li>
+                                        <li>• {t('archive.policyRecipes4')}</li>
                                     </>
                                 )}
                             </ul>

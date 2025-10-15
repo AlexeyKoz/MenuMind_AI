@@ -528,7 +528,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
         try:
             print(f"[RECIPE AGENT] Searching for: {query}")
-            success, recipe_data, message = async_to_sync(agent.find_and_convert_recipe)(
+            success, recipe_data, message = async_to_sync(agent.process_recipe_query)(
                 query, request.user, user_preferences
             )
 

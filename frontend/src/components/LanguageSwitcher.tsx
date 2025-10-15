@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
+import ApiService from '../services/api';
+import { toast } from 'react-hot-toast';
 
 const LanguageSwitcher: React.FC = () => {
     const { i18n } = useTranslation();
+    const { user, token } = useAuth();
 
     const languages = [
         { code: 'en', label: 'English', flag: '🇬🇧' },
@@ -10,52 +14,46 @@ const LanguageSwitcher: React.FC = () => {
         { code: 'he', label: 'עברית', flag: '🇮🇱' }
     ];
 
-    const changeLanguage = async (langCode: string) => {
-        await i18n.changeLanguage(langCode);
+    // Load user's saved language on mount
+    useEffect(() => {
+        if (user?.preferred_language && i18n.language !== user.preferred_language) {
+            i18n.changeLanguage(user.preferred_language);
+            console.log(`🌍 Language set to: ${user.preferred_language}`);
+        }
+    }, [user?.preferred_language, i18n]);
 
-        // Update HTML dir attribute for RTL support
-        document.documentElement.dir = langCode === 'he' ? 'rtl' : 'ltr';
+    const handleLanguageChange = async (langCode: string) => {
+        try {
+            // Change language in i18n
+            await i18n.changeLanguage(langCode);
+            console.log(`🌍 Language changed to: ${langCode}`);
 
-        // Store preference in localStorage
-        localStorage.setItem('preferred_language', langCode);
-
-        // TODO: Update backend UserPreferences
-        // await api.patch('/users/profile/preferences/', {
-        //     preferred_language: langCode
-        // });
+            // Save to backend if user is logged in
+            if (token) {
+                const api = new ApiService(token);
+                await api.updateUserPreferences({ preferred_language: langCode as 'en' | 'ru' | 'he' });
+                toast.success(`Language changed to ${langCode.toUpperCase()}`);
+            }
+        } catch (error: any) {
+            console.error('Failed to save language preference:', error);
+            toast.error('Failed to save language preference');
+        }
     };
 
-    const currentLanguage = languages.find(lang => lang.code === i18n.language) || languages[0];
-
     return (
-        <div className="relative group">
-            <button
-                className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-white hover:bg-opacity-10 transition"
-                title="Change Language"
-            >
-                <span className="text-xl">{currentLanguage.flag}</span>
-                <span className="hidden md:inline">{currentLanguage.label}</span>
-                <span className="text-xs">▼</span>
-            </button>
-
-            {/* Dropdown menu */}
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
-                {languages.map((lang) => (
-                    <button
-                        key={lang.code}
-                        onClick={() => changeLanguage(lang.code)}
-                        className={`w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-3 ${i18n.language === lang.code ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
-                            }`}
-                    >
-                        <span className="text-xl">{lang.flag}</span>
-                        <span className="font-medium">{lang.label}</span>
-                        {i18n.language === lang.code && (
-                            <span className="ml-auto text-blue-600">✓</span>
-                        )}
-                    </button>
-                ))}
-            </div>
-        </div>
+        <select
+            value={i18n.language}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            className="bg-white bg-opacity-20 backdrop-blur-sm border border-white border-opacity-30 rounded-md px-3 py-2 text-sm text-white font-medium hover:bg-opacity-30 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 cursor-pointer transition-all"
+            aria-label="Select language"
+            style={{ minWidth: '140px' }}
+        >
+            {languages.map((lang) => (
+                <option key={lang.code} value={lang.code} className="bg-gray-800 text-white">
+                    {lang.flag} {lang.label}
+                </option>
+            ))}
+        </select>
     );
 };
 

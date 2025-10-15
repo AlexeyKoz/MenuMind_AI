@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LoginProps {
@@ -7,6 +8,7 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration }) => {
+    const { t } = useTranslation();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -19,7 +21,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
         if (result.success) {
             onLoginSuccess();
         } else {
-            setError(result.error || 'Login failed');
+            setError(result.error || t('auth.loginError'));
         }
     };
 
@@ -33,24 +35,27 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center">
             <div className="bg-white rounded-lg shadow-xl p-8 w-96">
-                <h2 className="text-3xl font-bold text-center mb-6">MenuMind AI</h2>
+                <h2 className="text-3xl font-bold text-center mb-2">{t('auth.welcomeMessage')}</h2>
+                <p className="text-center text-gray-600 mb-6">{t('auth.loginSubtitle')}</p>
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">Username</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.username')}</label>
                         <input
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
+                            placeholder={t('auth.enterUsername')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                         />
                     </div>
                     <div className="mb-6">
-                        <label className="block text-sm font-medium mb-2">Password</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.password')}</label>
                         <input
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            placeholder={t('auth.enterPassword')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                         />
@@ -64,7 +69,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                         type="submit"
                         className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                     >
-                        Login
+                        {t('auth.loginButton')}
                     </button>
                 </form>
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
@@ -107,12 +112,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                 {onSwitchToRegistration && (
                     <div className="mt-6 text-center">
                         <p className="text-sm text-gray-600">
-                            Don't have an account?{' '}
+                            {t('auth.noAccount')}{' '}
                             <button
                                 onClick={onSwitchToRegistration}
                                 className="text-green-600 hover:text-green-700 font-medium"
                             >
-                                Create account
+                                {t('auth.signUp')}
                             </button>
                         </p>
                     </div>

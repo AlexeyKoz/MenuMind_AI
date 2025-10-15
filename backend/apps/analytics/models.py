@@ -200,3 +200,5 @@ class RecipeCookingLog(models.Model):
     def __str__(self):
         return f"{self.user.username} cooked {self.recipe.name} on {self.cooked_at.date()}"
 
+
+

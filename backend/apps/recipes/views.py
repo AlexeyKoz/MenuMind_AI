@@ -105,7 +105,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         agent = RecipeAgentService()
 
         # Use async_to_sync to properly handle async function
-        success, result, message = async_to_sync(agent.find_and_convert_recipe)(
+        success, result, message = async_to_sync(agent.process_recipe_query)(
             user_query, request.user, user_preferences
         )
 
@@ -688,7 +688,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
             agent = RecipeAgentService()
 
             # Use async_to_sync to properly handle async function
-            success, result, message = async_to_sync(agent.find_and_convert_recipe)(
+            success, result, message = async_to_sync(agent.process_recipe_query)(
                 query, request.user, preferences
             )
 
