@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div style="padding: 20px;">
+    <h1>Delete All Ingredients</h1>
+
+    <div style="margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-left: 4px solid #ba2121;">
+        <h3>Current Database Status:</h3>
+        <ul>
+            <li><strong>Ingredients:</strong> {{ ingredient_count }}</li>
+            <li><strong>Translations:</strong> {{ translation_count }}</li>
+        </ul>
+    </div>
+
+    <div style="margin: 20px 0; padding: 15px; background-color: #f8d7da; border-left: 4px solid #dc3545;">
+        <p><strong>🚨 DANGER:</strong></p>
+        <p>This will permanently delete <strong>ALL {{ ingredient_count }} ingredients</strong> and <strong>{{
+                translation_count }} translations</strong> from the database.</p>
+        <p><strong>This action cannot be undone!</strong></p>
+        <p>You can re-sync from SQLite afterwards using the "Sync from SQLite" button.</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div style="margin-top: 20px;">
+            <a href="../" class="button"
+                style="background-color: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+                Cancel
+            </a>
+            <button type="submit" class="button"
+                style="background-color: #ba2121; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                🗑️ Yes, Delete All
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

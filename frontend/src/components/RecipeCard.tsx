@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import LikeButton from './LikeButton';
 import StarRating from './StarRating';
 
@@ -46,6 +47,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     onClick,
     showStats = true
 }) => {
+    const { t } = useTranslation();
     const difficultyColors = {
         beginner: 'bg-green-100 text-green-800',
         intermediate: 'bg-yellow-100 text-yellow-800',
@@ -60,10 +62,10 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     };
 
     const sourceTypeLabels = {
-        ai_generated: 'AI Generated',
-        user_created: 'User Created',
-        community_curated: 'Community Curated',
-        web_scraped: 'From Web'
+        ai_generated: t('discover.recipeCard.sourceTypes.aiGenerated'),
+        user_created: t('discover.recipeCard.sourceTypes.userCreated'),
+        community_curated: t('discover.recipeCard.sourceTypes.communityCurated'),
+        web_scraped: t('discover.recipeCard.sourceTypes.fromWeb')
     };
 
     return (
@@ -109,13 +111,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
 
                     {recipe.total_time_minutes && (
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            ⏱️ {recipe.total_time_minutes} min
+                            ⏱️ {recipe.total_time_minutes} {t('discover.recipeCard.min')}
                         </span>
                     )}
 
                     {recipe.servings && (
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            🍽️ {recipe.servings} servings
+                            🍽️ {recipe.servings} {t('discover.recipeCard.servings')}
                         </span>
                     )}
                 </div>
@@ -133,7 +135,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                         ))}
                         {recipe.diet_labels.length > 4 && (
                             <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded text-xs font-medium">
-                                +{recipe.diet_labels.length - 4} more
+                                +{recipe.diet_labels.length - 4} {t('discover.recipeCard.more')}
                             </span>
                         )}
                     </div>
@@ -169,13 +171,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                             </svg>
-                            <span>{recipe.total_saves} saved</span>
+                            <span>{recipe.total_saves} {t('discover.recipeCard.saved')}</span>
                         </div>
                         <div className="flex items-center gap-1">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <span>{recipe.total_cooked} cooked</span>
+                            <span>{recipe.total_cooked} {t('discover.recipeCard.cooked')}</span>
                         </div>
                     </div>
                 )}
@@ -183,7 +185,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                 {/* Attribution */}
                 {recipe.original_creator_username && recipe.source_type === 'user_created' && (
                     <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
-                        Created by <span className="font-medium">{recipe.original_creator_username}</span>
+                        {t('discover.recipeCard.createdBy')} <span className="font-medium">{recipe.original_creator_username}</span>
                     </div>
                 )}
             </div>

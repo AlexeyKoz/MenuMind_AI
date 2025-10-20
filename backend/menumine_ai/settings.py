@@ -107,7 +107,8 @@ else:
     }
 
     # IML Integration
-IML_DB_PATH = os.getenv('IML_DB_PATH', '../ingredient-master-list/data/iml.db')
+IML_DB_PATH = os.getenv(
+    'IML_DB_PATH', r'C:\Users\al7ko\Desktop\ingredients-master-list-new\ingredient-master-list\data\iml.db')
 
 # Multilingual
 LANGUAGES = [

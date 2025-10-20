@@ -718,7 +718,7 @@ const Recipes: React.FC = () => {
                             <AlertTriangle className="w-16 h-16 text-orange-500" />
                         </div>
                         <h2 className="text-2xl font-bold text-gray-900 mb-4 text-center">
-                            {t('recipes.archiveRecipe')}
+                            {t('recipes.archiveRecipeTitle')}
                         </h2>
                         <p className="text-gray-600 mb-4 text-center">
                             {t('recipes.archiveConfirmation', { name: archiveConfirmation.recipe.name })}
@@ -753,7 +753,7 @@ const Recipes: React.FC = () => {
                                 onClick={confirmArchiveRecipe}
                                 className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition font-medium"
                             >
-                                {t('recipes.archiveRecipe')}
+                                {t('recipes.archiveRecipeButton')}
                             </button>
                         </div>
                     </div>
@@ -842,7 +842,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
 
                 {/* Stats */}
                 <div className="flex gap-4 text-xs text-gray-500 mb-4">
-                    <span>🍳 {t('recipes.cooked', { count: recipe.times_cooked })}</span>
+                    <span>🍳 {t('recipes.cookedCount', { count: recipe.times_cooked })}</span>
                     <span>📋 {t('recipes.used', { count: recipe.times_added_to_lists })}</span>
                 </div>
 
@@ -1074,7 +1074,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                         {/* Ingredients */}
                         <div>
                             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                                {t('recipes.ingredients')}
+                                {t('recipes.ingredientsTitle')}
                             </h3>
                             <div className="space-y-2">
                                 {recipe.ingredients?.map((ing: any, idx: number) => (

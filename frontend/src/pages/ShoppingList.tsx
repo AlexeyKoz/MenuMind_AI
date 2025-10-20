@@ -1941,7 +1941,7 @@ const ShoppingList: React.FC = () => {
                                 {Object.entries(categorizedItems).map(([category, categoryItems]) => (
                                     <div key={category}>
                                         <h4 className="font-medium text-gray-700 capitalize mb-2">
-                                            {category.replace('_', ' ')}
+                                            {t(`shopping.categories.${category.toLowerCase()}`, category.replace('_', ' '))}
                                         </h4>
                                         <div className="space-y-2">
                                             {(categoryItems as any[]).map(item => (

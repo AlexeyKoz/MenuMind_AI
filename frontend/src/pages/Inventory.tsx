@@ -1110,7 +1110,7 @@ const Inventory: React.FC = () => {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl max-w-md w-full">
                         <div className="border-b p-6 flex items-center justify-between">
-                            <h2 className="text-xl font-bold text-gray-900">Add New Item</h2>
+                            <h2 className="text-xl font-bold text-gray-900">{t('inventory.addNewItem')}</h2>
                             <button
                                 onClick={() => setShowAddModal(false)}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition"
@@ -1122,21 +1122,21 @@ const Inventory: React.FC = () => {
                         <div className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Item Name *
+                                    {t('inventory.itemName')} *
                                 </label>
                                 <input
                                     type="text"
                                     value={formData.name}
                                     onChange={(e) => handleInputChange('name', e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="e.g., Milk, Chicken breast"
+                                    placeholder={t('inventory.itemNamePlaceholder')}
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Quantity *
+                                        {t('inventory.quantity')} *
                                     </label>
                                     <input
                                         type="number"
@@ -1150,21 +1150,21 @@ const Inventory: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Unit
+                                        {t('inventory.unit')}
                                     </label>
                                     <select
                                         value={formData.unit}
                                         onChange={(e) => handleInputChange('unit', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        <option value="pieces">Pieces</option>
-                                        <option value="g">Grams (g)</option>
-                                        <option value="kg">Kilograms (kg)</option>
-                                        <option value="ml">Milliliters (ml)</option>
-                                        <option value="L">Liters (L)</option>
-                                        <option value="cups">Cups</option>
-                                        <option value="tbsp">Tablespoons</option>
-                                        <option value="tsp">Teaspoons</option>
+                                        <option value="pieces">{t('inventory.units.pieces')}</option>
+                                        <option value="g">{t('inventory.units.g')}</option>
+                                        <option value="kg">{t('inventory.units.kg')}</option>
+                                        <option value="ml">{t('inventory.units.ml')}</option>
+                                        <option value="L">{t('inventory.units.L')}</option>
+                                        <option value="cups">{t('inventory.units.cups')}</option>
+                                        <option value="tbsp">{t('inventory.units.tbsp')}</option>
+                                        <option value="tsp">{t('inventory.units.tsp')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -1172,46 +1172,46 @@ const Inventory: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Location
+                                        {t('inventory.location')}
                                     </label>
                                     <select
                                         value={formData.location}
                                         onChange={(e) => handleInputChange('location', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        <option value="pantry">Pantry</option>
-                                        <option value="fridge">Fridge</option>
-                                        <option value="freezer">Freezer</option>
-                                        <option value="counter">Counter</option>
+                                        <option value="pantry">{t('inventory.locations.pantry')}</option>
+                                        <option value="fridge">{t('inventory.locations.fridge')}</option>
+                                        <option value="freezer">{t('inventory.locations.freezer')}</option>
+                                        <option value="counter">{t('inventory.locations.counter')}</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Category
+                                        {t('inventory.category')}
                                     </label>
                                     <select
                                         value={formData.category}
                                         onChange={(e) => handleInputChange('category', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        <option value="other">Other</option>
-                                        <option value="dairy">Dairy</option>
-                                        <option value="meat">Meat & Protein</option>
-                                        <option value="vegetables">Vegetables</option>
-                                        <option value="fruits">Fruits</option>
-                                        <option value="grains">Grains & Pasta</option>
-                                        <option value="canned">Canned Goods</option>
-                                        <option value="spices">Spices & Condiments</option>
-                                        <option value="snacks">Snacks</option>
-                                        <option value="beverages">Beverages</option>
-                                        <option value="frozen">Frozen Foods</option>
+                                        <option value="other">{t('inventory.categories.other')}</option>
+                                        <option value="dairy">{t('inventory.categories.dairy')}</option>
+                                        <option value="meat">{t('inventory.categories.meat')}</option>
+                                        <option value="vegetables">{t('inventory.categories.vegetables')}</option>
+                                        <option value="fruits">{t('inventory.categories.fruits')}</option>
+                                        <option value="grains">{t('inventory.categories.grains')}</option>
+                                        <option value="canned">{t('inventory.categories.canned')}</option>
+                                        <option value="spices">{t('inventory.categories.spices')}</option>
+                                        <option value="snacks">{t('inventory.categories.snacks')}</option>
+                                        <option value="beverages">{t('inventory.categories.beverages')}</option>
+                                        <option value="frozen">{t('inventory.categories.frozen')}</option>
                                     </select>
                                 </div>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Expiration Date (Optional)
+                                    {t('inventory.expirationDate')}
                                 </label>
                                 <input
                                     type="date"
@@ -1223,14 +1223,14 @@ const Inventory: React.FC = () => {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Notes (Optional)
+                                    {t('inventory.notes')}
                                 </label>
                                 <textarea
                                     value={formData.notes}
                                     onChange={(e) => handleInputChange('notes', e.target.value)}
                                     rows={3}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Any additional notes..."
+                                    placeholder={t('inventory.notesPlaceholder')}
                                 />
                             </div>
 
@@ -1239,14 +1239,14 @@ const Inventory: React.FC = () => {
                                     onClick={() => setShowAddModal(false)}
                                     className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
                                 >
-                                    Cancel
+                                    {t('inventory.cancel')}
                                 </button>
                                 <button
                                     onClick={handleCreateItem}
                                     disabled={submitting}
                                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 font-medium"
                                 >
-                                    {submitting ? 'Adding...' : 'Add Item'}
+                                    {submitting ? t('inventory.adding') : t('inventory.addItem')}
                                 </button>
                             </div>
                         </div>
@@ -1259,7 +1259,7 @@ const Inventory: React.FC = () => {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-xl max-w-md w-full">
                         <div className="border-b p-6 flex items-center justify-between">
-                            <h2 className="text-xl font-bold text-gray-900">Edit Item</h2>
+                            <h2 className="text-xl font-bold text-gray-900">{t('inventory.editItem')}</h2>
                             <button
                                 onClick={() => setShowEditModal(false)}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition"
@@ -1284,7 +1284,7 @@ const Inventory: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Quantity *
+                                        {t('inventory.quantity')} *
                                     </label>
                                     <input
                                         type="number"
@@ -1297,21 +1297,21 @@ const Inventory: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Unit
+                                        {t('inventory.unit')}
                                     </label>
                                     <select
                                         value={formData.unit}
                                         onChange={(e) => handleInputChange('unit', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        <option value="pieces">Pieces</option>
-                                        <option value="g">Grams (g)</option>
-                                        <option value="kg">Kilograms (kg)</option>
-                                        <option value="ml">Milliliters (ml)</option>
-                                        <option value="L">Liters (L)</option>
-                                        <option value="cups">Cups</option>
-                                        <option value="tbsp">Tablespoons</option>
-                                        <option value="tsp">Teaspoons</option>
+                                        <option value="pieces">{t('inventory.units.pieces')}</option>
+                                        <option value="g">{t('inventory.units.g')}</option>
+                                        <option value="kg">{t('inventory.units.kg')}</option>
+                                        <option value="ml">{t('inventory.units.ml')}</option>
+                                        <option value="L">{t('inventory.units.L')}</option>
+                                        <option value="cups">{t('inventory.units.cups')}</option>
+                                        <option value="tbsp">{t('inventory.units.tbsp')}</option>
+                                        <option value="tsp">{t('inventory.units.tsp')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -1319,46 +1319,46 @@ const Inventory: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Location
+                                        {t('inventory.location')}
                                     </label>
                                     <select
                                         value={formData.location}
                                         onChange={(e) => handleInputChange('location', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        <option value="pantry">Pantry</option>
-                                        <option value="fridge">Fridge</option>
-                                        <option value="freezer">Freezer</option>
-                                        <option value="counter">Counter</option>
+                                        <option value="pantry">{t('inventory.locations.pantry')}</option>
+                                        <option value="fridge">{t('inventory.locations.fridge')}</option>
+                                        <option value="freezer">{t('inventory.locations.freezer')}</option>
+                                        <option value="counter">{t('inventory.locations.counter')}</option>
                                     </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Category
+                                        {t('inventory.category')}
                                     </label>
                                     <select
                                         value={formData.category}
                                         onChange={(e) => handleInputChange('category', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        <option value="other">Other</option>
-                                        <option value="dairy">Dairy</option>
-                                        <option value="meat">Meat & Protein</option>
-                                        <option value="vegetables">Vegetables</option>
-                                        <option value="fruits">Fruits</option>
-                                        <option value="grains">Grains & Pasta</option>
-                                        <option value="canned">Canned Goods</option>
-                                        <option value="spices">Spices & Condiments</option>
-                                        <option value="snacks">Snacks</option>
-                                        <option value="beverages">Beverages</option>
-                                        <option value="frozen">Frozen Foods</option>
+                                        <option value="other">{t('inventory.categories.other')}</option>
+                                        <option value="dairy">{t('inventory.categories.dairy')}</option>
+                                        <option value="meat">{t('inventory.categories.meat')}</option>
+                                        <option value="vegetables">{t('inventory.categories.vegetables')}</option>
+                                        <option value="fruits">{t('inventory.categories.fruits')}</option>
+                                        <option value="grains">{t('inventory.categories.grains')}</option>
+                                        <option value="canned">{t('inventory.categories.canned')}</option>
+                                        <option value="spices">{t('inventory.categories.spices')}</option>
+                                        <option value="snacks">{t('inventory.categories.snacks')}</option>
+                                        <option value="beverages">{t('inventory.categories.beverages')}</option>
+                                        <option value="frozen">{t('inventory.categories.frozen')}</option>
                                     </select>
                                 </div>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Expiration Date (Optional)
+                                    {t('inventory.expirationDate')}
                                 </label>
                                 <input
                                     type="date"
@@ -1370,7 +1370,7 @@ const Inventory: React.FC = () => {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Notes (Optional)
+                                    {t('inventory.notes')}
                                 </label>
                                 <textarea
                                     value={formData.notes}
@@ -1385,7 +1385,7 @@ const Inventory: React.FC = () => {
                                     onClick={() => setShowEditModal(false)}
                                     className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
                                 >
-                                    Cancel
+                                    {t('inventory.cancel')}
                                 </button>
                                 <button
                                     onClick={handleEditItem}
@@ -1393,7 +1393,7 @@ const Inventory: React.FC = () => {
                                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 font-medium"
                                 >
                                     <Save className="w-4 h-4 mr-2" />
-                                    {submitting ? 'Updating...' : 'Update Item'}
+                                    {submitting ? t('inventory.updating') : t('inventory.updateItem')}
                                 </button>
                             </div>
                         </div>

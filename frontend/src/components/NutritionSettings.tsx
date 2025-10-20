@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'react-hot-toast';
 import type { UserNutritionSettings } from '../types';
 import ApiService from '../services/api';
@@ -9,6 +10,7 @@ interface NutritionSettingsProps {
 }
 
 const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
+    const { t } = useTranslation();
     const [settings, setSettings] = useState<UserNutritionSettings | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -93,12 +95,12 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                     <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                             <Sparkles className="w-6 h-6 text-purple-600" />
-                            <h3 className="text-xl font-bold text-gray-900">AI Nutrition Coach</h3>
+                            <h3 className="text-xl font-bold text-gray-900">{t('settings.nutritionSettings.aiCoachTitle')}</h3>
                         </div>
                         <p className="text-gray-700 text-sm">
                             {settings.ai_coach_enabled
-                                ? '✅ AI Coach is currently ON - You\'ll get personalized meal suggestions and coaching'
-                                : '⚠️ AI Coach is currently OFF - Manual logging only'}
+                                ? t('settings.nutritionSettings.aiCoachOn')
+                                : t('settings.nutritionSettings.aiCoachOff')}
                         </p>
                     </div>
                     <Toggle
@@ -111,7 +113,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                 {!settings.ai_coach_enabled && (
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-4">
                         <p className="text-amber-800 text-sm">
-                            💡 <strong>Enable AI Coach</strong> to get smart meal suggestions based on your recipes, inventory, and goals!
+                            {t('settings.nutritionSettings.enableAiCoach')}
                         </p>
                     </div>
                 )}
@@ -121,21 +123,21 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
             <div className={`bg-white rounded-xl border-2 p-6 ${!settings.ai_coach_enabled ? 'opacity-50' : ''}`}>
                 <div className="flex items-center gap-3 mb-4">
                     <Shield className="w-5 h-5 text-indigo-600" />
-                    <h3 className="text-lg font-bold text-gray-900">AI Data Access Permissions</h3>
+                    <h3 className="text-lg font-bold text-gray-900">{t('settings.nutritionSettings.dataAccessTitle')}</h3>
                 </div>
                 <p className="text-gray-600 text-sm mb-6">
-                    Control what data the AI can access to provide suggestions
+                    {t('settings.nutritionSettings.dataAccessDescription')}
                 </p>
 
                 <div className="space-y-4">
                     {/* Content Permissions */}
                     <div className="bg-gray-50 rounded-lg p-4">
-                        <h4 className="font-medium text-gray-900 mb-3">Your Content</h4>
+                        <h4 className="font-medium text-gray-900 mb-3">{t('settings.nutritionSettings.yourContent')}</h4>
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">View my Recipes</label>
-                                    <p className="text-xs text-gray-500">AI can suggest meals from your saved recipes</p>
+                                    <label className="text-sm font-medium text-gray-700">{t('settings.nutritionSettings.viewRecipes')}</label>
+                                    <p className="text-xs text-gray-500">{t('settings.nutritionSettings.viewRecipesDescription')}</p>
                                 </div>
                                 <Toggle
                                     enabled={settings.allow_recipes_access}
@@ -146,8 +148,8 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
 
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">View my Inventory</label>
-                                    <p className="text-xs text-gray-500">AI can suggest meals from available ingredients</p>
+                                    <label className="text-sm font-medium text-gray-700">{t('settings.nutritionSettings.viewInventory')}</label>
+                                    <p className="text-xs text-gray-500">{t('settings.nutritionSettings.viewInventoryDescription')}</p>
                                 </div>
                                 <Toggle
                                     enabled={settings.allow_inventory_access}
@@ -158,8 +160,8 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
 
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700">View my Shopping Lists</label>
-                                    <p className="text-xs text-gray-500">AI can understand your shopping patterns</p>
+                                    <label className="text-sm font-medium text-gray-700">{t('settings.nutritionSettings.viewShoppingLists')}</label>
+                                    <p className="text-xs text-gray-500">{t('settings.nutritionSettings.viewShoppingListsDescription')}</p>
                                 </div>
                                 <Toggle
                                     enabled={settings.allow_shopping_access}
@@ -174,10 +176,10 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                     <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
                         <div className="flex items-center justify-between mb-3">
                             <div>
-                                <h4 className="font-medium text-gray-900">Personal Profile Data</h4>
+                                <h4 className="font-medium text-gray-900">{t('settings.nutritionSettings.personalProfileData')}</h4>
                                 <p className="text-xs text-gray-600 mt-1">
-                                    ℹ️ When OFF: You set goals manually<br />
-                                    ℹ️ When ON: AI calculates optimal goals for you
+                                    {t('settings.nutritionSettings.personalProfileOff')}<br />
+                                    {t('settings.nutritionSettings.personalProfileOn')}
                                 </p>
                             </div>
                             <Toggle
@@ -201,7 +203,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
 
                         {settings.allow_personal_data_access && settings.ai_coach_enabled && (
                             <div className="mt-4 bg-white rounded-lg p-3 space-y-2">
-                                <p className="text-xs font-medium text-gray-700 mb-2">AI can see:</p>
+                                <p className="text-xs font-medium text-gray-700 mb-2">{t('settings.nutritionSettings.aiCanSee')}</p>
                                 <label className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
@@ -209,7 +211,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                         onChange={(e) => updateSettings({ allow_weight_data: e.target.checked })}
                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     />
-                                    <span className="text-sm text-gray-700">Weight & Height</span>
+                                    <span className="text-sm text-gray-700">{t('settings.nutritionSettings.weightHeight')}</span>
                                 </label>
                                 <label className="flex items-center gap-2">
                                     <input
@@ -218,7 +220,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                         onChange={(e) => updateSettings({ allow_age_data: e.target.checked })}
                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     />
-                                    <span className="text-sm text-gray-700">Age & Gender</span>
+                                    <span className="text-sm text-gray-700">{t('settings.nutritionSettings.ageGender')}</span>
                                 </label>
                                 <label className="flex items-center gap-2">
                                     <input
@@ -227,7 +229,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                         onChange={(e) => updateSettings({ allow_gender_data: e.target.checked })}
                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     />
-                                    <span className="text-sm text-gray-700">Gender</span>
+                                    <span className="text-sm text-gray-700">{t('settings.nutritionSettings.gender')}</span>
                                 </label>
                                 <label className="flex items-center gap-2">
                                     <input
@@ -236,7 +238,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                         onChange={(e) => updateSettings({ allow_activity_level: e.target.checked })}
                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     />
-                                    <span className="text-sm text-gray-700">Activity Level</span>
+                                    <span className="text-sm text-gray-700">{t('settings.nutritionSettings.activityLevel')}</span>
                                 </label>
                                 <label className="flex items-center gap-2">
                                     <input
@@ -245,7 +247,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                         onChange={(e) => updateSettings({ allow_health_conditions: e.target.checked })}
                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     />
-                                    <span className="text-sm text-gray-700">Health Conditions & Allergies</span>
+                                    <span className="text-sm text-gray-700">{t('settings.nutritionSettings.healthConditions')}</span>
                                 </label>
                             </div>
                         )}
@@ -257,12 +259,12 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
             <div className="bg-white rounded-xl border-2 p-6">
                 <div className="flex items-center gap-3 mb-4">
                     <Target className="w-5 h-5 text-green-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Nutrition Goals</h3>
+                    <h3 className="text-lg font-bold text-gray-900">{t('settings.nutritionSettings.nutritionGoals')}</h3>
                 </div>
 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Goal Setting Mode</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.nutritionSettings.goalSettingMode')}</label>
                         <div className="space-y-2">
                             <label className="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition">
                                 <input
@@ -274,9 +276,9 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                     className="mt-0.5"
                                 />
                                 <div className="flex-1">
-                                    <div className="font-medium text-gray-900">✏️ Manual - I set my own goals</div>
+                                    <div className="font-medium text-gray-900">{t('settings.nutritionSettings.manualGoals')}</div>
                                     <div className="text-xs text-gray-600 mt-1">
-                                        You manually enter your daily calorie and macro goals below
+                                        {t('settings.nutritionSettings.manualGoalsDescription')}
                                     </div>
                                 </div>
                             </label>
@@ -293,12 +295,12 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                 />
                                 <div className="flex-1">
                                     <div className="font-medium text-gray-900">
-                                        🤖 AI Calculated - Based on my profile
+                                        {t('settings.nutritionSettings.aiCalculatedGoals')}
                                     </div>
                                     <div className="text-xs text-gray-600 mt-1">
                                         {settings.allow_personal_data_access
-                                            ? 'AI calculates optimal goals using BMR/TDEE formulas'
-                                            : '⚠️ Requires "Personal Profile Data" access to be enabled'}
+                                            ? t('settings.nutritionSettings.aiCalculatedDescription')
+                                            : t('settings.nutritionSettings.aiCalculatedRequires')}
                                     </div>
                                 </div>
                             </label>
@@ -308,12 +310,12 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                     {/* Manual Goals Input */}
                     <div className="bg-gray-50 rounded-lg p-4">
                         <h4 className="font-medium text-gray-900 mb-3">
-                            {settings.goal_mode === 'manual' ? 'Your Goals' : 'Manual Goals (used as fallback)'}
+                            {settings.goal_mode === 'manual' ? t('settings.nutritionSettings.yourGoals') : t('settings.nutritionSettings.manualGoalsFallback')}
                         </h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Daily Calories (kcal)
+                                    {t('settings.nutritionSettings.dailyCalories')}
                                 </label>
                                 <input
                                     type="number"
@@ -326,7 +328,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Daily Protein (g)
+                                    {t('settings.nutritionSettings.dailyProtein')}
                                 </label>
                                 <input
                                     type="number"
@@ -339,7 +341,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Daily Carbs (g) <span className="text-gray-500 text-xs">optional</span>
+                                    {t('settings.nutritionSettings.dailyCarbs')} <span className="text-gray-500 text-xs">{t('settings.nutritionSettings.optional')}</span>
                                 </label>
                                 <input
                                     type="number"
@@ -352,7 +354,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Daily Fat (g) <span className="text-gray-500 text-xs">optional</span>
+                                    {t('settings.nutritionSettings.dailyFat')} <span className="text-gray-500 text-xs">{t('settings.nutritionSettings.optional')}</span>
                                 </label>
                                 <input
                                     type="number"
@@ -368,7 +370,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                         {settings.goal_mode === 'ai_calculated' && settings.allow_personal_data_access && (
                             <div className="mt-3 bg-blue-50 border border-blue-200 rounded p-3">
                                 <p className="text-xs text-blue-800">
-                                    💡 With AI mode, these values are used as fallback if we don't have enough profile data
+                                    {t('settings.nutritionSettings.aiModeFallback')}
                                 </p>
                             </div>
                         )}
@@ -380,26 +382,26 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
             <div className={`bg-white rounded-xl border-2 p-6 ${!settings.ai_coach_enabled ? 'opacity-50' : ''}`}>
                 <div className="flex items-center gap-3 mb-4">
                     <MessageCircle className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-bold text-gray-900">Coaching Preferences</h3>
+                    <h3 className="text-lg font-bold text-gray-900">{t('settings.nutritionSettings.coachingPreferences')}</h3>
                 </div>
 
                 <div className="space-y-4">
                     {/* Frequency */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Frequency</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.nutritionSettings.frequency')}</label>
                         <div className="grid grid-cols-3 gap-2">
                             {[
-                                { value: 'daily', label: 'Daily' },
-                                { value: 'weekly', label: 'Weekly' },
-                                { value: 'never', label: 'Never' }
+                                { value: 'daily', label: t('settings.nutritionSettings.daily') },
+                                { value: 'weekly', label: t('settings.nutritionSettings.weekly') },
+                                { value: 'never', label: t('settings.nutritionSettings.never') }
                             ].map((option) => (
                                 <button
                                     key={option.value}
                                     onClick={() => updateSettings({ coaching_frequency: option.value as any })}
                                     disabled={!settings.ai_coach_enabled}
                                     className={`px-4 py-2 rounded-lg font-medium transition ${settings.coaching_frequency === option.value
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         } ${!settings.ai_coach_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     {option.label}
@@ -410,20 +412,20 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
 
                     {/* Style */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Coaching Style</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.nutritionSettings.coachingStyle')}</label>
                         <div className="grid grid-cols-3 gap-2">
                             {[
-                                { value: 'supportive', label: '😊 Supportive' },
-                                { value: 'strict', label: '💪 Strict' },
-                                { value: 'balanced', label: '⚖️ Balanced' }
+                                { value: 'supportive', label: t('settings.nutritionSettings.supportive') },
+                                { value: 'strict', label: t('settings.nutritionSettings.strict') },
+                                { value: 'balanced', label: t('settings.nutritionSettings.balanced') }
                             ].map((option) => (
                                 <button
                                     key={option.value}
                                     onClick={() => updateSettings({ coaching_style: option.value as any })}
                                     disabled={!settings.ai_coach_enabled}
                                     className={`px-4 py-2 rounded-lg font-medium transition ${settings.coaching_style === option.value
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                         } ${!settings.ai_coach_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     {option.label}
@@ -434,7 +436,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
 
                     {/* What to Track */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">What to Track</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('settings.nutritionSettings.whatToTrack')}</label>
                         <div className="grid grid-cols-2 gap-3">
                             <label className="flex items-center gap-2">
                                 <input
@@ -444,7 +446,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                     disabled={!settings.ai_coach_enabled}
                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
-                                <span className="text-sm text-gray-700">Calories</span>
+                                <span className="text-sm text-gray-700">{t('settings.nutritionSettings.calories')}</span>
                             </label>
                             <label className="flex items-center gap-2">
                                 <input
@@ -454,7 +456,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                     disabled={!settings.ai_coach_enabled}
                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
-                                <span className="text-sm text-gray-700">Protein</span>
+                                <span className="text-sm text-gray-700">{t('settings.nutritionSettings.protein')}</span>
                             </label>
                             <label className="flex items-center gap-2">
                                 <input
@@ -464,7 +466,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                     disabled={!settings.ai_coach_enabled}
                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
-                                <span className="text-sm text-gray-700">Carbs</span>
+                                <span className="text-sm text-gray-700">{t('settings.nutritionSettings.carbs')}</span>
                             </label>
                             <label className="flex items-center gap-2">
                                 <input
@@ -474,7 +476,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                     disabled={!settings.ai_coach_enabled}
                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
-                                <span className="text-sm text-gray-700">Fat</span>
+                                <span className="text-sm text-gray-700">{t('settings.nutritionSettings.fat')}</span>
                             </label>
                             <label className="flex items-center gap-2">
                                 <input
@@ -484,7 +486,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                                     disabled={!settings.ai_coach_enabled}
                                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
-                                <span className="text-sm text-gray-700">Meal Timing</span>
+                                <span className="text-sm text-gray-700">{t('settings.nutritionSettings.mealTiming')}</span>
                             </label>
                         </div>
                     </div>
@@ -496,7 +498,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
                 <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2">
                         <Eye className="w-4 h-4 text-green-600" />
-                        <h4 className="font-medium text-green-900">Active Permissions:</h4>
+                        <h4 className="font-medium text-green-900">{t('settings.nutritionSettings.activePermissions')}</h4>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {settings.active_permissions.map((perm) => (
@@ -514,7 +516,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
             {saving && (
                 <div className="fixed bottom-4 right-4 bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Saving...
+                    {t('settings.nutritionSettings.saving')}
                 </div>
             )}
         </div>
@@ -522,6 +524,7 @@ const NutritionSettings: React.FC<NutritionSettingsProps> = ({ api }) => {
 };
 
 export default NutritionSettings;
+
 
 
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
-import { Heart } from 'lucide-react';
+import { Heart, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 /**
@@ -33,6 +33,12 @@ const CanonicalRecipesPage: React.FC = () => {
     const [showBuilder, setShowBuilder] = useState(false);
     const [recipeLiked, setRecipeLiked] = useState(false);
     const [liking, setLiking] = useState(false);
+
+    // AI Search
+    const [aiQuery, setAiQuery] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [failedQuery, setFailedQuery] = useState('');
 
     // Filters
     const [search, setSearch] = useState('');
@@ -167,6 +173,130 @@ const CanonicalRecipesPage: React.FC = () => {
         );
     };
 
+    const handleAISearch = async () => {
+        if (!aiQuery.trim()) {
+            toast.error(t('discover.aiPleaseEnterRecipe'));
+            return;
+        }
+
+        setAiLoading(true);
+        try {
+            const result = await api.findRecipe(aiQuery);
+            console.log('[AI SEARCH] Find recipe result:', result);
+
+            if (result.canonical_recipe) {
+                toast.success(t('discover.aiFoundRecipe', { name: result.canonical_recipe.name }));
+
+                // Reload recipes to show the newly added one
+                await loadRecipes();
+
+                // Auto-like to save to collection
+                const canonicalId = result.canonical_recipe.id;
+                if (canonicalId) {
+                    try {
+                        console.log(`[AI SEARCH] Auto-liking canonical recipe ID: ${canonicalId}`);
+                        await api.likeCanonicalRecipe(canonicalId);
+                        toast.success(t('discover.aiRecipeAdded'));
+                    } catch (likeError: any) {
+                        console.error('[AI SEARCH] Failed to auto-like recipe:', likeError);
+                    }
+                }
+            }
+
+            setAiQuery('');
+        } catch (error: any) {
+            console.error('AI search error:', error);
+
+            // Show suggestions modal instead of just an error
+            setFailedQuery(aiQuery);
+            setShowSuggestions(true);
+            setAiQuery('');
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const handleSuggestionClick = async (suggestion: string) => {
+        setShowSuggestions(false);
+        setAiQuery(suggestion);
+
+        // Perform search with the suggestion
+        setAiLoading(true);
+        try {
+            const result = await api.findRecipe(suggestion);
+            console.log('[AI SEARCH] Find recipe result:', result);
+
+            if (result.canonical_recipe) {
+                toast.success(t('discover.aiFoundRecipe', { name: result.canonical_recipe.name }));
+
+                // Reload recipes to show the newly added one
+                await loadRecipes();
+
+                // Auto-like to save to collection
+                const canonicalId = result.canonical_recipe.id;
+                if (canonicalId) {
+                    try {
+                        console.log(`[AI SEARCH] Auto-liking canonical recipe ID: ${canonicalId}`);
+                        await api.likeCanonicalRecipe(canonicalId);
+                        toast.success(t('discover.aiRecipeAdded'));
+                    } catch (likeError: any) {
+                        console.error('[AI SEARCH] Failed to auto-like recipe:', likeError);
+                    }
+                }
+            }
+
+            setAiQuery('');
+        } catch (error: any) {
+            console.error('AI search error:', error);
+            toast.error(error.message || t('discover.aiFailedToFind'));
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const generateSuggestions = (query: string): string[] => {
+        const lower = query.toLowerCase();
+        const suggestions: string[] = [];
+
+        // Common typos and corrections
+        const corrections: Record<string, string[]> = {
+            'pasta': ['spaghetti carbonara', 'pasta bolognese', 'penne arrabbiata', 'fettuccine alfredo'],
+            'chicken': ['chicken curry', 'grilled chicken', 'chicken soup', 'roasted chicken'],
+            'beef': ['beef stew', 'beef stir fry', 'roast beef', 'beef tacos'],
+            'fish': ['grilled salmon', 'fish and chips', 'baked cod', 'tuna salad'],
+            'soup': ['tomato soup', 'chicken soup', 'vegetable soup', 'lentil soup'],
+            'salad': ['caesar salad', 'greek salad', 'garden salad', 'pasta salad'],
+            'pizza': ['margherita pizza', 'pepperoni pizza', 'vegetarian pizza', 'bbq chicken pizza'],
+            'burger': ['beef burger', 'veggie burger', 'chicken burger', 'mushroom burger'],
+            'cake': ['chocolate cake', 'vanilla cake', 'carrot cake', 'red velvet cake'],
+            'cookie': ['chocolate chip cookies', 'oatmeal cookies', 'sugar cookies', 'peanut butter cookies'],
+            'bread': ['sourdough bread', 'banana bread', 'french bread', 'whole wheat bread'],
+            'rice': ['fried rice', 'risotto', 'rice pilaf', 'biryani'],
+        };
+
+        // Find relevant suggestions
+        for (const [keyword, options] of Object.entries(corrections)) {
+            if (lower.includes(keyword)) {
+                suggestions.push(...options);
+            }
+        }
+
+        // If no specific matches, provide popular general suggestions
+        if (suggestions.length === 0) {
+            suggestions.push(
+                'spaghetti carbonara',
+                'chicken curry',
+                'beef stew',
+                'chocolate cake',
+                'caesar salad',
+                'margherita pizza'
+            );
+        }
+
+        // Return up to 6 unique suggestions
+        return [...new Set(suggestions)].slice(0, 6);
+    };
+
     if (showBuilder) {
         return (
             <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -284,11 +414,11 @@ const CanonicalRecipesPage: React.FC = () => {
                                         {selectedRecipe.base_steps.map((step: any, idx: number) => (
                                             <div key={idx} className="flex items-start gap-3">
                                                 <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-green-100 text-green-700 rounded-full font-bold">
-                                                    {idx + 1}
+                                                    {step.step_number || idx + 1}
                                                 </div>
                                                 <div className="flex-1 pt-1">
                                                     <p className="text-gray-900 leading-relaxed">
-                                                        {step.instruction || step.text || step}
+                                                        {step.text || step.instruction || step}
                                                     </p>
                                                     {step.time_minutes && (
                                                         <p className="text-sm text-gray-500 mt-1">
@@ -345,6 +475,32 @@ const CanonicalRecipesPage: React.FC = () => {
                         </svg>
                         {t('discover.createRecipe')}
                     </button>
+                </div>
+
+                {/* AI Search Panel */}
+                <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-3">
+                        <Sparkles className="w-6 h-6 text-purple-600" />
+                        <input
+                            type="text"
+                            value={aiQuery}
+                            onChange={(e) => setAiQuery(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleAISearch()}
+                            placeholder={t('discover.aiSearchPlaceholder')}
+                            className="flex-1 px-4 py-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            disabled={aiLoading}
+                        />
+                        <button
+                            onClick={handleAISearch}
+                            disabled={aiLoading}
+                            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 font-medium"
+                        >
+                            {aiLoading ? t('discover.aiSearching') : t('discover.aiFindRecipe')}
+                        </button>
+                    </div>
+                    <p className="text-sm text-purple-700 mt-2">
+                        {t('discover.aiSearchDescription')}
+                    </p>
                 </div>
 
                 {/* Filters */}
@@ -454,6 +610,73 @@ const CanonicalRecipesPage: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Suggestions Modal */}
+            {showSuggestions && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg max-w-2xl w-full p-6 shadow-xl">
+                        <div className="flex items-start mb-4">
+                            <div className="flex-shrink-0 w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <div className="ml-4 flex-1">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                    {t('discover.suggestions.title')}
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    {t('discover.suggestions.description', { query: failedQuery })}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowSuggestions(false)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="mb-4">
+                            <h4 className="text-sm font-medium text-gray-700 mb-3">
+                                {t('discover.suggestions.tryThese')}:
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                {generateSuggestions(failedQuery).map((suggestion, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => handleSuggestionClick(suggestion)}
+                                        className="px-4 py-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg text-left hover:from-purple-100 hover:to-pink-100 hover:border-purple-300 transition-all duration-200 group"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-gray-800 capitalize">
+                                                {suggestion}
+                                            </span>
+                                            <svg className="w-4 h-4 text-purple-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t">
+                            <p className="text-xs text-gray-500">
+                                {t('discover.suggestions.hint')}
+                            </p>
+                            <button
+                                onClick={() => setShowSuggestions(false)}
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                            >
+                                {t('discover.suggestions.close')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -54,3 +54,7 @@ class AIInsightsSerializer(serializers.Serializer):
 
 
 
+
+
+
+

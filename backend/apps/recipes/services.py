@@ -160,7 +160,135 @@ class RecipeAgentService:
         rcip_recipe['meta']['nutrition_total'] = nutrition['total']
         rcip_recipe['meta']['nutrition_coverage'] = nutrition['coverage']
 
+        # Step 4: Prepare base_ingredients for frontend (translated)
+        base_ingredients = self._prepare_base_ingredients(
+            enriched_ingredients, user_language
+        )
+        rcip_recipe['base_ingredients'] = base_ingredients
+
+        # Step 5: Prepare base_steps (clean, translated)
+        base_steps = self._prepare_base_steps(
+            rcip_recipe.get('steps', []), user_language
+        )
+        rcip_recipe['base_steps'] = base_steps
+
         return rcip_recipe
+
+    def _prepare_base_ingredients(self, enriched_ingredients: List[Dict], language: str) -> List[Dict]:
+        """
+        Convert enriched ingredients to frontend-friendly format with translations
+
+        Args:
+            enriched_ingredients: Ingredients enriched with IML data
+            language: User's preferred language
+
+        Returns:
+            List of ingredients in format: {amount, unit, name}
+        """
+        base_ingredients = []
+
+        for ing in enriched_ingredients:
+            # Get translated name if available
+            display_name = ing.get('display_name', {})
+            if isinstance(display_name, dict):
+                name = display_name.get(language, ing.get('name', ''))
+            else:
+                name = ing.get('name', '')
+
+            # Skip empty or very short names
+            if not name or len(name.strip()) < 2:
+                continue
+
+            # Skip "as needed" without actual ingredient
+            name_lower = name.lower()
+            if name_lower in ['as needed', 'to taste', 'optional']:
+                continue
+
+            # Format quantity
+            quantity = ing.get('quantity')
+            if quantity:
+                if isinstance(quantity, (int, float)):
+                    amount = str(int(quantity)) if quantity == int(
+                        quantity) else str(quantity)
+                else:
+                    amount = str(quantity)
+            else:
+                amount = ''
+
+            base_ingredients.append({
+                'amount': amount,
+                'unit': ing.get('unit', ''),
+                'name': name,
+                'ingredient_key': ing.get('ingredient_key'),
+                'original': ing.get('original', name)
+            })
+
+        return base_ingredients
+
+    def _prepare_base_steps(self, steps: List[Dict], language: str) -> List[Dict]:
+        """
+        Convert steps to frontend-friendly format, filtering out non-cooking content
+
+        Args:
+            steps: Recipe steps from RCIP
+            language: User's preferred language
+
+        Returns:
+            List of clean cooking steps
+        """
+        base_steps = []
+        step_number = 1
+
+        # Obvious non-cooking phrases to filter out
+        skip_phrases = [
+            'subscribe', 'click here', 'visit', 'follow me', 'instagram',
+            'facebook', 'twitter', 'pinterest', 'blog', 'website',
+            'thank you for reading', 'if you like this recipe',
+            'ever imagined', 'make it come true', 'lands you here',
+            'coincidences', 'gratitude', 'productive', 'creative',
+            'trying this at home', 'tag me on instagram'
+        ]
+
+        for step in steps:
+            # Get step text
+            if isinstance(step, dict):
+                text = step.get('instruction') or step.get(
+                    'text') or step.get('step', '')
+                time_minutes = step.get('time_minutes')
+            else:
+                text = str(step)
+                time_minutes = None
+
+            # Skip empty steps
+            if not text or not text.strip():
+                continue
+
+            text = text.strip()
+            text_lower = text.lower()
+
+            # Skip obvious website/blog content
+            should_skip = False
+            for phrase in skip_phrases:
+                if phrase in text_lower:
+                    should_skip = True
+                    break
+
+            if should_skip:
+                continue
+
+            # Build step
+            clean_step = {
+                'text': text,
+                'step_number': step_number
+            }
+
+            if time_minutes:
+                clean_step['time_minutes'] = time_minutes
+
+            base_steps.append(clean_step)
+            step_number += 1
+
+        return base_steps
 
     async def _translate_recipe(
         self,
@@ -257,17 +385,27 @@ class RecipeAgentService:
         if not recipe_urls:
             return False, None, "No recipes found for your query"
 
-        # STEP 3: Scrape best recipe
+        # STEP 3: Scrape best recipe (try up to 5 URLs)
         scraped_data = None
-        for url in recipe_urls[:3]:  # Try first 3 URLs
+        for i, url in enumerate(recipe_urls[:5], 1):
+            print(f"[SCRAPE] Trying URL {i}/5...")
             scraped_data = await self._scrape_recipe(url)
             if scraped_data and len(scraped_data.get('text', '')) > 500:
+                print(f"[SCRAPE] ✅ Successfully scraped from URL {i}")
                 break
+            else:
+                print(f"[SCRAPE] ❌ URL {i} failed or had insufficient content")
 
         if not scraped_data:
-            return False, None, "Could not extract recipe from websites"
+            print(
+                f"[ERROR] Failed to scrape any of the {len(recipe_urls[:5])} URLs")
+            return False, None, "Could not extract recipe from websites. Please try a different recipe or check your internet connection."
 
         # STEP 4: Convert to RCIP format using AI
+        print(f"[CONVERT] Converting scraped content to RCIP format...")
+        print(
+            f"[CONVERT] Content length: {len(scraped_data.get('text', ''))} characters")
+
         rcip_recipe = await self._convert_to_rcip(
             scraped_data,
             user_query,
@@ -275,7 +413,8 @@ class RecipeAgentService:
         )
 
         if not rcip_recipe:
-            return False, None, "Failed to convert recipe to standard format"
+            print(f"[ERROR] ❌ AI conversion returned None")
+            return False, None, "Failed to convert recipe to standard format. The recipe content may be too complex or incomplete. Please try a different recipe."
 
         # STEP 5: Create canonical recipe
         canonical = await self._create_canonical_recipe(
@@ -589,41 +728,81 @@ class RecipeAgentService:
 
         try:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
             }
 
             # Run in executor to avoid blocking
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
-                lambda: requests.get(url, headers=headers, timeout=10)
+                lambda: requests.get(url, headers=headers,
+                                     timeout=15, allow_redirects=True)
             )
+
+            print(f"   [DEBUG] Status code: {response.status_code}")
             response.raise_for_status()
 
-            soup = BeautifulSoup(response.content, 'lxml')
+            soup = BeautifulSoup(response.content, 'html.parser')
 
             # Remove unwanted tags
-            for script in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]):
+            for script in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript", "form", "button"]):
                 script.decompose()
 
-            # Extract text
-            text = soup.get_text(separator='\n', strip=True)
+            # Try to find recipe content first (common recipe containers)
+            recipe_content = None
+            for selector in [
+                'article', '.recipe', '#recipe', '.recipe-content',
+                '.recipe-instructions', '.post-content', 'main',
+                '[itemtype*="Recipe"]', '.entry-content'
+            ]:
+                recipe_content = soup.select_one(selector)
+                if recipe_content:
+                    print(f"   [DEBUG] Found content in: {selector}")
+                    break
+
+            # Extract text from recipe content or full page
+            if recipe_content:
+                text = recipe_content.get_text(separator='\n', strip=True)
+            else:
+                text = soup.get_text(separator='\n', strip=True)
+                print(f"   [DEBUG] Using full page content")
 
             # Filter meaningful lines
             lines = text.split('\n')
-            filtered_lines = [line for line in lines if len(line) > 20]
-            # First 150 meaningful lines
-            text = '\n'.join(filtered_lines[:150])
+            filtered_lines = [line for line in lines if len(
+                line) > 15 and not line.startswith('×')]
 
-            print(f"   [OK] Extracted {len(text)} characters")
+            # Take more lines for better extraction
+            text = '\n'.join(filtered_lines[:200])
+
+            print(
+                f"   [OK] Extracted {len(text)} characters from {len(filtered_lines)} lines")
+
+            # Check if we got meaningful content
+            if len(text) < 500:
+                print(f"   [WARNING] Content too short: {len(text)} chars")
+                return None
 
             return {
                 'url': url,
                 'text': text
             }
 
+        except requests.exceptions.Timeout:
+            print(f"   [ERROR] Timeout error for {url}")
+            return None
+        except requests.exceptions.RequestException as e:
+            print(f"   [ERROR] Request error: {e}")
+            return None
         except Exception as e:
             print(f"   [ERROR] Scraping error: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     async def _convert_to_rcip(
@@ -633,11 +812,13 @@ class RecipeAgentService:
         user_preferences: Dict = None
     ) -> Optional[Dict]:
         """Convert scraped recipe to RCIP format using Groq LLM"""
-        print(f"[AI] Converting to RCIP format...")
+        print(f"[AI] Converting to RCIP format for recipe: {recipe_name}")
 
         # If no Groq client, use fallback
         if not self.groq_client:
-            print("   [WARNING] No AI available, using fallback parser")
+            print("   [WARNING] No Groq AI client available, using fallback parser")
+            print("   [WARNING] Install Groq: pip install groq")
+            print("   [WARNING] Set GROQ_API_KEY environment variable")
             return self._fallback_conversion(scraped_data, recipe_name)
 
         try:
@@ -648,36 +829,42 @@ class RecipeAgentService:
                 'unit_system', 'metric') if user_preferences else 'metric'
 
             # First, extract structured data using LLM
-            prompt = f"""Extract from the recipe text ONLY the list of ingredients and cooking steps.
+            prompt = f"""You are extracting a recipe from a webpage. The webpage may contain comments, reviews, ads, and other text.
 
 Recipe Name: {recipe_name}
-User Language: {user_language}
-User Unit System: {user_unit_system}
+Language: {user_language}
+Units: {user_unit_system}
 
-Text:
+Webpage Text:
 {scraped_data['text'][:3000]}
 
-CRITICAL MEASUREMENT RULES:
-1. ALWAYS include specific measurements (never "to taste" or "some")
-2. Use {user_unit_system} units: {'g, kg, ml, L' if user_unit_system == 'metric' else 'oz, lb, cups, fl oz'}
-3. For solids: use weight ({'g, kg' if user_unit_system == 'metric' else 'oz, lb'})
-4. For liquids: use volume ({'ml, L' if user_unit_system == 'metric' else 'cups, fl oz'})
-5. For small amounts: use cooking units (tsp, tbsp) - these are universal
-6. For eggs/items: use count (2 eggs, 3 tomatoes)
-7. If original recipe is vague, estimate reasonable amounts based on servings
+TASK:
+Extract ONLY the actual recipe ingredients and cooking instructions. Ignore everything else (comments, reviews, blog posts, nutrition info, personal stories, ads).
 
-Return in {user_language} language in this exact format:
+INGREDIENTS FORMAT:
+- Must have quantity AND unit AND ingredient name
+- Example: "2 cups flour" or "200g sugar" or "3 eggs"
+- If no quantity is given, skip that ingredient
+- Use {user_unit_system} units ({'metric (g, kg, ml, L, pieces)' if user_unit_system == 'metric' else 'imperial (oz, lb, cups, tbsp, tsp)'})
+
+STEPS FORMAT:
+- Only actual cooking actions (Mix, Heat, Bake, Add, etc.)
+- Must be instructions that tell you HOW to cook
+- Skip: comments, reviews, tips, suggestions, personal stories, nutrition info
+- Maximum 20 steps
+
+Return ONLY this format (no extra text):
 
 INGREDIENTS:
-- 300g flour
-- 250ml milk
-- 2 eggs
-...
+- 200g all-purpose flour
+- 2 large eggs
+- 100ml milk
 
 STEPS:
-1. Mix flour with eggs
-2. Add water
-..."""
+1. Preheat oven to 180°C
+2. Mix flour and eggs in a bowl
+3. Add milk and stir until smooth
+4. Bake for 25 minutes"""
 
             # Run in executor
             loop = asyncio.get_event_loop()
@@ -687,7 +874,7 @@ STEPS:
                     messages=[
                         {
                             "role": "system",
-                            "content": f"You extract ingredients and steps from recipes in {user_language}. Be precise and clear. Always separate ingredients and steps clearly. Use {user_unit_system} units."
+                            "content": f"You are a recipe extraction expert. Extract ONLY recipe ingredients (with quantities) and cooking instructions from webpages. Ignore comments, reviews, ads, and blog text. Output in {user_language} using {user_unit_system} units."
                         },
                         {
                             "role": "user",
@@ -701,16 +888,25 @@ STEPS:
             )
 
             response = chat_completion.choices[0].message.content
+            print(f"   [AI] ✅ Received response: {len(response)} characters")
+            print(f"   [AI] Response preview: {response[:200]}...")
 
             # Parse LLM response
             parts = response.split('STEPS:')
             if len(parts) != 2:
                 print(
-                    "   [WARNING] Could not parse LLM response, using local parser")
+                    f"   [AI] ⚠️ Could not parse LLM response - got {len(parts)} parts instead of 2")
+                print(f"   [AI] Response preview: {response[:500]}...")
+                print(f"   [AI] Falling back to local parser")
                 return self._fallback_conversion(scraped_data, recipe_name)
 
             ingredients_text = parts[0].replace('INGREDIENTS:', '').strip()
             steps_text = parts[1].strip()
+
+            print(f"   [RCIP] Converting to RCIP format...")
+            print(
+                f"   [RCIP] Ingredients: {len(ingredients_text.split(chr(10)))} lines")
+            print(f"   [RCIP] Steps: {len(steps_text.split(chr(10)))} lines")
 
             # Convert using RCIP converter
             rcip_recipe = self.rcip_converter.convert(
@@ -719,13 +915,18 @@ STEPS:
                 steps_text=steps_text,
                 source_url=scraped_data['url']
             )
+            print(f"   [RCIP] ✅ RCIP conversion successful")
+            print(
+                f"   [RCIP] Recipe has {len(rcip_recipe.get('ingredients', []))} ingredients and {len(rcip_recipe.get('steps', []))} steps")
 
             # Enhance with AI analysis
+            print(f"   [ANALYZE] Estimating times...")
             times = self.recipe_analyzer.estimate_times(
                 rcip_recipe['steps'],
                 rcip_recipe['ingredients']
             )
             rcip_recipe['meta'].update(times)
+            print(f"   [ANALYZE] ✅ Times estimated: {times}")
 
             # Detect diet labels
             diet_labels = self.recipe_analyzer.detect_diet_labels(
@@ -740,21 +941,44 @@ STEPS:
             rcip_recipe['meta']['difficulty'] = difficulty
 
             # NEW: Enrich with IML data
-            rcip_recipe = await self._enrich_recipe_with_iml(rcip_recipe, user_preferences)
+            try:
+                print(f"   [IML] Starting IML enrichment...")
+                rcip_recipe = await self._enrich_recipe_with_iml(rcip_recipe, user_preferences)
+                print(f"   [IML] ✅ IML enrichment successful")
+            except Exception as iml_error:
+                print(f"   [IML] ⚠️ IML enrichment failed: {iml_error}")
+                print(f"   [IML] Continuing without IML data...")
 
             # NEW: Translate to all languages
-            user_language = user_preferences.get(
-                'language', 'en') if user_preferences else 'en'
-            rcip_recipe = await self._translate_recipe(rcip_recipe, user_language)
+            try:
+                user_language = user_preferences.get(
+                    'language', 'en') if user_preferences else 'en'
+                print(
+                    f"   [TRANSLATE] Starting translation to {user_language}...")
+                rcip_recipe = await self._translate_recipe(rcip_recipe, user_language)
+                print(f"   [TRANSLATE] ✅ Translation successful")
+            except Exception as translate_error:
+                print(
+                    f"   [TRANSLATE] ⚠️ Translation failed: {translate_error}")
+                print(f"   [TRANSLATE] Continuing without translation...")
 
-            print(f"   [OK] Conversion successful with IML enrichment!")
+            print(f"   [OK] ✅ Conversion successful!")
             return rcip_recipe
 
         except Exception as e:
-            print(f"   [ERROR] AI conversion failed: {e}")
+            print(
+                f"   [ERROR] ❌ AI conversion failed with exception: {type(e).__name__}: {e}")
             import traceback
+            print("   [ERROR] Full traceback:")
             traceback.print_exc()
-            return self._fallback_conversion(scraped_data, recipe_name)
+            print(f"   [FALLBACK] Attempting local parser...")
+            fallback_result = self._fallback_conversion(
+                scraped_data, recipe_name)
+            if fallback_result:
+                print(f"   [FALLBACK] ✅ Local parser succeeded")
+            else:
+                print(f"   [FALLBACK] ❌ Local parser also failed")
+            return fallback_result
 
     def _fallback_conversion(self, scraped_data: Dict, recipe_name: str) -> Optional[Dict]:
         """Fallback: Use local RCIP converter without AI"""
@@ -879,7 +1103,7 @@ class RecipeDeduplicationService:
 
     @staticmethod
     def get_similarity_score(recipe1: 'Recipe', recipe2_data: Dict) -> float:
-        """Calculate similarity score between two recipes (0-1)"""
+        """Calculate similarity score between two recipes(0-1)"""
         score = 0.0
 
         # Name similarity (30%)

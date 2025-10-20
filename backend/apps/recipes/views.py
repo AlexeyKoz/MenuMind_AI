@@ -98,7 +98,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
         # Get user preferences
         user_preferences = {
             'dietary_restrictions': request.user.dietary_restrictions,
-            'allergies': request.user.allergies
+            'allergies': request.user.allergies,
+            'language': getattr(request.user, 'preferred_language', 'en'),
+            'unit_system': 'metric' if getattr(request.user, 'weight_unit', 'kg') == 'kg' else 'imperial'
         }
 
         # Run recipe agent WITH DEDUPLICATION

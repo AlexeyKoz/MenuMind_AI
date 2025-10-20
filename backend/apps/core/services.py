@@ -12,100 +12,103 @@ from .models import IngredientCache, IngredientTranslation
 
 class IMLSyncService:
     """Service for syncing IML SQLite database to PostgreSQL"""
-    
+
     def __init__(self):
-        self.iml_db_path = getattr(settings, 'IML_DB_PATH', '../ingredient-master-list/data/iml.db')
+        self.iml_db_path = getattr(
+            settings, 'IML_DB_PATH', '../ingredient-master-list/data/iml.db')
         self.conn = None
-    
+
     def connect(self) -> bool:
         """Connect to IML SQLite database (READ ONLY)"""
         try:
-            self.conn = sqlite3.connect(f'file:{self.iml_db_path}?mode=ro', uri=True)
+            self.conn = sqlite3.connect(
+                f'file:{self.iml_db_path}?mode=ro', uri=True)
             self.conn.row_factory = sqlite3.Row  # Access columns by name
-            
+
             # Set to read-only mode
             self.conn.execute("PRAGMA query_only = ON")
-            
-            print(f"✅ Connected to IML database: {self.iml_db_path}")
+
+            print(f"[OK] Connected to IML database: {self.iml_db_path}")
             return True
         except Exception as e:
-            print(f"❌ Failed to connect to IML database: {e}")
+            print(f"[ERROR] Failed to connect to IML database: {e}")
             return False
-    
+
     def disconnect(self):
         """Close IML database connection"""
         if self.conn:
             self.conn.close()
-            print("✅ Disconnected from IML database")
-    
+            print("[OK] Disconnected from IML database")
+
     def get_iml_structure(self) -> Dict:
         """Inspect IML database structure"""
         if not self.conn:
             return {}
-        
+
         cursor = self.conn.cursor()
-        
+
         # Get all tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in cursor.fetchall()]
-        
+
         structure = {}
         for table in tables:
             cursor.execute(f"PRAGMA table_info({table})")
-            columns = [{'name': row[1], 'type': row[2]} for row in cursor.fetchall()]
+            columns = [{'name': row[1], 'type': row[2]}
+                       for row in cursor.fetchall()]
             structure[table] = columns
-        
+
         return structure
-    
+
     def sync_all(self, force: bool = False) -> Tuple[int, int, int]:
         """
         Sync all ingredients from IML to PostgreSQL
-        
+
         Args:
             force: If True, sync all. If False, only sync modified since last sync
-        
+
         Returns:
             (created_count, updated_count, error_count)
         """
         if not self.connect():
             return (0, 0, 1)
-        
+
         try:
-            print("🔄 Starting IML sync...")
-            
+            print("[START] Starting IML sync...")
+
             # Get IML structure first
             structure = self.get_iml_structure()
-            print(f"📊 IML Database structure:")
+            print(f"[STRUCTURE] IML Database structure:")
             for table, columns in structure.items():
                 print(f"  - {table}: {len(columns)} columns")
-            
+
             # Sync ingredients
             created, updated, errors = self._sync_ingredients(force)
-            
-            print(f"\n✅ Sync complete!")
+
+            print(f"\n[OK] Sync complete!")
             print(f"   Created: {created}")
             print(f"   Updated: {updated}")
             print(f"   Errors: {errors}")
-            
+
             return (created, updated, errors)
-            
+
         except Exception as e:
-            print(f"❌ Sync failed: {e}")
+            print(f"[ERROR] Sync failed: {e}")
             import traceback
             traceback.print_exc()
             return (0, 0, 1)
         finally:
             self.disconnect()
-    
+
     def _sync_ingredients(self, force: bool) -> Tuple[int, int, int]:
         """Sync ingredients from IML"""
         cursor = self.conn.cursor()
-        
+
         # First, inspect the actual table structure
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in cursor.fetchall()]
         print(f"📋 Available tables: {tables}")
-        
+
         # Try to find the main ingredients table
         # Common names: ingredients, ingredient, items, food_items
         ingredient_table = None
@@ -113,31 +116,33 @@ class IMLSyncService:
             if possible_name in tables:
                 ingredient_table = possible_name
                 break
-        
+
         if not ingredient_table:
-            print(f"⚠️  Could not find ingredients table. Available tables: {tables}")
+            print(
+                f"⚠️  Could not find ingredients table. Available tables: {tables}")
             print(f"⚠️  Please check IML database structure")
             return (0, 0, 1)
-        
-        print(f"✅ Found ingredients table: {ingredient_table}")
-        
+
+        print(f"[OK] Found ingredients table: {ingredient_table}")
+
         # Get table structure
         cursor.execute(f"PRAGMA table_info({ingredient_table})")
         columns = {row[1]: row[2] for row in cursor.fetchall()}
-        print(f"📋 Columns: {list(columns.keys())}")
-        
+        print(f"[COLUMNS] Columns: {list(columns.keys())}")
+
         # Query ingredients
         try:
             # Try to get all rows first to see what data looks like
             cursor.execute(f"SELECT * FROM {ingredient_table} LIMIT 5")
             sample_rows = cursor.fetchall()
-            
+
             if sample_rows:
-                print(f"\n📊 Sample data (first row):")
+                print(f"\n[SAMPLE] Sample data (first row):")
                 sample = dict(sample_rows[0])
-                for key, value in list(sample.items())[:10]:  # Show first 10 columns
+                # Show first 10 columns
+                for key, value in list(sample.items())[:10]:
                     print(f"   {key}: {value}")
-            
+
             # Now sync all ingredients
             if force:
                 query = f"SELECT * FROM {ingredient_table}"
@@ -151,17 +156,17 @@ class IMLSyncService:
                 else:
                     query = f"SELECT * FROM {ingredient_table}"
                     cursor.execute(query)
-            
+
             if force:
                 cursor.execute(query)
-            
+
             rows = cursor.fetchall()
-            print(f"\n🔄 Syncing {len(rows)} ingredients...")
-            
+            print(f"\n[SYNC] Syncing {len(rows)} ingredients...")
+
             created_count = 0
             updated_count = 0
             error_count = 0
-            
+
             for row in rows:
                 try:
                     result = self._sync_single_ingredient(dict(row), columns)
@@ -169,27 +174,28 @@ class IMLSyncService:
                         created_count += 1
                     elif result == 'updated':
                         updated_count += 1
-                    
+
                     # Progress indicator
                     if (created_count + updated_count) % 100 == 0:
-                        print(f"   Progress: {created_count + updated_count}/{len(rows)}")
-                        
+                        print(
+                            f"   Progress: {created_count + updated_count}/{len(rows)}")
+
                 except Exception as e:
                     error_count += 1
                     print(f"   ❌ Error syncing ingredient: {e}")
-            
+
             return (created_count, updated_count, error_count)
-            
+
         except Exception as e:
             print(f"❌ Error querying ingredients: {e}")
             import traceback
             traceback.print_exc()
             return (0, 0, 1)
-    
+
     def _sync_single_ingredient(self, row_data: Dict, columns: Dict) -> str:
         """
         Sync single ingredient to PostgreSQL
-        
+
         Returns: 'created', 'updated', or 'error'
         """
         # Extract ingredient_key (try different possible column names)
@@ -198,15 +204,15 @@ class IMLSyncService:
             if key_field in row_data and row_data[key_field]:
                 ingredient_key = str(row_data[key_field])
                 break
-        
+
         if not ingredient_key:
             print(f"   ⚠️  Skipping row - no ingredient_key found")
             return 'error'
-        
+
         # Extract other fields with fallbacks
         category = row_data.get('category', row_data.get('food_category', ''))
         source = row_data.get('source', row_data.get('data_source', 'unknown'))
-        
+
         # Parse JSON fields
         def safe_json_parse(data, default=None):
             if not data:
@@ -217,13 +223,15 @@ class IMLSyncService:
                 except:
                     return default or {}
             return data
-        
+
         common_units = safe_json_parse(row_data.get('common_units'))
         unit_conversions = safe_json_parse(row_data.get('unit_conversions'))
         shelf_life = safe_json_parse(row_data.get('shelf_life'))
-        storage_recommendations = safe_json_parse(row_data.get('storage_recommendations'))
-        nutrition_per_100g = safe_json_parse(row_data.get('nutrition_per_100g'))
-        
+        storage_recommendations = safe_json_parse(
+            row_data.get('storage_recommendations'))
+        nutrition_per_100g = safe_json_parse(
+            row_data.get('nutrition_per_100g'))
+
         # Create or update IngredientCache
         with transaction.atomic():
             ingredient, created = IngredientCache.objects.update_or_create(
@@ -240,17 +248,18 @@ class IMLSyncService:
                     'last_synced': timezone.now()
                 }
             )
-            
+
             # Sync translations (if available in IML)
             self._sync_translations(ingredient, row_data)
-            
+
             return 'created' if created else 'updated'
-    
+
     def _sync_translations(self, ingredient: IngredientCache, row_data: Dict):
         """Sync translations for ingredient"""
         # Check if translations are stored as JSON in single field
-        translations_json = row_data.get('translations', row_data.get('names', None))
-        
+        translations_json = row_data.get(
+            'translations', row_data.get('names', None))
+
         if translations_json:
             # Parse translations JSON
             if isinstance(translations_json, str):
@@ -260,12 +269,12 @@ class IMLSyncService:
                     translations = {}
             else:
                 translations = translations_json
-            
+
             # Expected format: {"en": "tomato", "ru": "помидор", "he": "עגבנייה"}
             for lang in ['en', 'ru', 'he']:
                 if lang in translations:
                     name = translations[lang]
-                    
+
                     # Also check for description and aliases
                     description = translations.get(f'{lang}_description', '')
                     aliases = translations.get(f'{lang}_aliases', [])
@@ -274,7 +283,7 @@ class IMLSyncService:
                             aliases = json.loads(aliases)
                         except:
                             aliases = []
-                    
+
                     IngredientTranslation.objects.update_or_create(
                         ingredient=ingredient,
                         language=lang,
@@ -300,14 +309,15 @@ class IMLSyncService:
                             'storage_tips': ''
                         }
                     )
-    
+
     def _get_last_sync_time(self) -> str:
         """Get timestamp of last successful sync"""
-        last_ingredient = IngredientCache.objects.order_by('-last_synced').first()
+        last_ingredient = IngredientCache.objects.order_by(
+            '-last_synced').first()
         if last_ingredient:
             return last_ingredient.last_synced.isoformat()
         return '1970-01-01T00:00:00'
-    
+
     def get_sync_stats(self) -> Dict:
         """Get statistics about current sync state"""
         return {

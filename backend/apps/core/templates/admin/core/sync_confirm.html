@@ -1,0 +1,37 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div style="padding: 20px;">
+    <h1>Sync Ingredients from SQLite Database</h1>
+
+    <div style="margin: 20px 0; padding: 15px; background-color: #f0f0f0; border-left: 4px solid #417690;">
+        <h3>Current Database Status:</h3>
+        <ul>
+            <li><strong>Ingredients:</strong> {{ current_count }}</li>
+            <li><strong>Translations:</strong> {{ translation_count }}</li>
+        </ul>
+    </div>
+
+    <div style="margin: 20px 0; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
+        <p><strong>⚠️ Warning:</strong></p>
+        <p>This will sync all ingredients from the SQLite database (IML).</p>
+        <p>Existing ingredients will be updated with new data.</p>
+        <p>This operation may take a few moments.</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div style="margin-top: 20px;">
+            <a href="../" class="button"
+                style="background-color: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">
+                Cancel
+            </a>
+            <button type="submit" class="button"
+                style="background-color: #417690; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                🔄 Start Sync
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
