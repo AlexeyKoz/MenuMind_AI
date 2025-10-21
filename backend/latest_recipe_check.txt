@@ -1,0 +1,35 @@
+================================================================================
+LATEST RECIPE CHECK
+================================================================================
+
+Recipe ID: 27c60328-cfbe-4a01-be3e-2dc4c199974f
+Recipe Name (English): карбонара
+Original Language: ru
+
+ENGLISH BASE INGREDIENTS:
+  1. 350.0 g spaghetti
+  2. 4.0 pcs eggs
+  3. 1.0 as ground black pepper
+  4. 10.0 g coarse salt
+
+ENGLISH BASE STEPS:
+  1. Bring a pot of water to a boil.
+  2. Cut the guanciale into small pieces.
+  3. Cook guanciale in a skillet over medium heat for 2-3 minutes, stirring occasionally.
+
+================================================================================
+RUSSIAN TRANSLATION (Status: completed)
+================================================================================
+
+Recipe Name (Russian): Карбонара
+
+RUSSIAN INGREDIENTS:
+  1. 350.0 g спагетти
+  2. 4.0 pcs яйца
+  3. 1.0 as молотый черный перец
+  4. 10.0 g крупная соль
+
+RUSSIAN STEPS:
+  1. Доведите кастрюлю с водой до кипения.
+  2. Нарежьте гуанчиале на мелкие кусочки.
+  3. Готовьте гуанчиале на сковороде на средней прожарке в течение 2-3 минут, периодически помешивая.

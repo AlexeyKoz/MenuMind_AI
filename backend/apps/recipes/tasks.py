@@ -357,13 +357,57 @@ def translate_recipe_to_language(self, recipe_id: str, target_language: str):
         translation_service = TranslationService()
         cooking_terms_service = CookingTermsTranslationService()
 
-        # Translate recipe name
-        translated_name = recipe.name  # For now, keep English - can enhance later
+        # Translate recipe name using SmartTranslationService
+        from apps.core.smart_translator import SmartTranslationService
+        smart_translator = SmartTranslationService()
+        translated_name = smart_translator.translate_recipe_name(
+            recipe.name,
+            target_language
+        )
+        logger.info(
+            f"[TRANSLATION] Recipe name: {recipe.name} -> {translated_name}")
 
-        # Translate ingredients (using IML database)
+        # Unit translation dictionary
+        unit_translations = {
+            'ru': {
+                'g': 'г', 'kg': 'кг', 'mg': 'мг',
+                'ml': 'мл', 'l': 'л',
+                'tsp': 'ч.л.', 'tbsp': 'ст.л.', 'cup': 'чашка', 'cups': 'чашки',
+                'oz': 'унция', 'lb': 'фунт',
+                'pcs': 'шт', 'piece': 'шт', 'pieces': 'шт',
+                'cloves': 'зубчика', 'clove': 'зубчик',
+                'slice': 'ломтик', 'slices': 'ломтики',
+                'pinch': 'щепотка',
+                'large': 'крупный', 'medium': 'средний', 'small': 'маленький',
+                'egg': 'яйцо', 'eggs': 'яйца'
+            },
+            'he': {
+                'g': 'גרם', 'kg': 'ק"ג', 'mg': 'מ"ג',
+                'ml': 'מ"ל', 'l': 'ליטר',
+                'tsp': 'כפית', 'tbsp': 'כף', 'cup': 'כוס', 'cups': 'כוסות',
+                'oz': 'אונקיה', 'lb': 'ליבר',
+                'pcs': 'יח', 'piece': 'יח', 'pieces': 'יח',
+                'cloves': 'שיני', 'clove': 'שן',
+                'slice': 'פרוסה', 'slices': 'פרוסות',
+                'pinch': 'קמצוץ',
+                'large': 'גדול', 'medium': 'בינוני', 'small': 'קטן',
+                'egg': 'ביצה', 'eggs': 'ביצים'
+            }
+        }
+
+        # Translate ingredients (using IML database + Gemini fallback)
         translated_ingredients = []
         for ing in recipe.base_ingredients:
             translated_ing = ing.copy()
+            translated_name = None
+
+            # Translate unit if available
+            if target_language in unit_translations and ing.get('unit'):
+                unit = ing.get('unit').lower().strip()
+                if unit in unit_translations[target_language]:
+                    translated_ing['unit'] = unit_translations[target_language][unit]
+                    logger.info(
+                        f"[TRANSLATION] Unit: {ing.get('unit')} -> {translated_ing['unit']}")
 
             # Translate ingredient name using IML
             if ing.get('ingredient_key'):
@@ -376,23 +420,95 @@ def translate_recipe_to_language(self, recipe_id: str, target_language: str):
                         translations_dict[trans.language] = trans.name
 
                     if target_language in translations_dict:
-                        translated_ing['name'] = translations_dict[target_language]
+                        translated_name = translations_dict[target_language]
+                        logger.info(
+                            f"[TRANSLATION] IML: {ing.get('name')} -> {translated_name}")
                 except IngredientCache.DoesNotExist:
-                    pass  # Keep original name
+                    logger.warning(
+                        f"[TRANSLATION] Ingredient not in IML: {ing.get('ingredient_key')}")
+
+            # If no translation found in IML, use Gemini fallback
+            if not translated_name and ing.get('name'):
+                logger.info(
+                    f"[TRANSLATION] Using Gemini fallback for ingredient: {ing.get('name')}")
+                try:
+                    from apps.core.smart_translator import SmartTranslationService
+                    smart_translator = SmartTranslationService()
+
+                    # Use the ingredient translation method
+                    gemini_translation = smart_translator.translate_ingredients_batch(
+                        [ing],
+                        target_language
+                    )
+                    if gemini_translation and len(gemini_translation) > 0:
+                        translated_name = gemini_translation[0].get('name')
+                        logger.info(
+                            f"[TRANSLATION] GEMINI: {ing.get('name')} -> {translated_name}")
+                except Exception as e:
+                    logger.error(
+                        f"[TRANSLATION] Gemini fallback failed: {e}")
+
+            # Apply translation if found
+            if translated_name:
+                translated_ing['name'] = translated_name
+            else:
+                logger.warning(
+                    f"[TRANSLATION] No translation found for: {ing.get('name')}, keeping English")
 
             translated_ingredients.append(translated_ing)
 
-        # Translate cooking steps (using CookLingo database)
+        # Translate cooking steps (using CookLingo database + Gemini fallback)
         translated_steps = []
         for step in recipe.base_steps:
             translated_step = step.copy()
 
-            # Translate cooking terms in step text
-            if step.get('text'):
-                translated_step['text'] = cooking_terms_service.translate_text(
-                    step['text'],
-                    target_language
-                )
+            # Get step text (can be 'text' or 'instruction')
+            step_text = step.get('instruction') or step.get('text')
+
+            if step_text:
+                # Try CookLingo translation first
+                try:
+                    translated_text = cooking_terms_service.translate_text(
+                        step_text,
+                        target_language
+                    )
+
+                    # Check if translation actually happened (not just returned English)
+                    if translated_text and translated_text != step_text:
+                        translated_step['instruction'] = translated_text
+                        if 'text' in translated_step:
+                            translated_step['text'] = translated_text
+                        logger.info(
+                            f"[TRANSLATION] CookLingo: Step {step.get('order')}")
+                    else:
+                        # No translation from CookLingo, use Gemini
+                        raise Exception("CookLingo translation not available")
+
+                except Exception as e:
+                    # Fallback to Gemini for full step translation
+                    logger.info(
+                        f"[TRANSLATION] Using Gemini for step {step.get('order')}: {e}")
+                    try:
+                        from apps.core.smart_translator import SmartTranslationService
+                        smart_translator = SmartTranslationService()
+
+                        # Use cooking steps translation with Gemini fallback
+                        gemini_steps = smart_translator.translate_cooking_steps_batch(
+                            [step],
+                            target_language
+                        )
+                        if gemini_steps and len(gemini_steps) > 0:
+                            gemini_text = gemini_steps[0].get(
+                                'instruction') or gemini_steps[0].get('text')
+                            if gemini_text:
+                                translated_step['instruction'] = gemini_text
+                                if 'text' in translated_step:
+                                    translated_step['text'] = gemini_text
+                                logger.info(
+                                    f"[TRANSLATION] GEMINI: Step {step.get('order')} translated")
+                    except Exception as gemini_err:
+                        logger.error(
+                            f"[TRANSLATION] Gemini step translation failed: {gemini_err}")
 
             translated_steps.append(translated_step)
 

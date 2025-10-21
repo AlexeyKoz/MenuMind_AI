@@ -6,8 +6,9 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
 from django.utils import timezone
 from django.http import HttpResponse
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 import json
+import asyncio
 
 from .models import (
     Recipe, UserRecipe, CanonicalRecipe,
@@ -407,6 +408,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
             user_recipe.archived_at = timezone.now()
             user_recipe.save(update_fields=['is_archived', 'archived_at'])
 
+            # Automatically remove like from canonical recipe when archiving
+            if recipe.canonical_recipe:
+                try:
+                    like = RecipeLike.objects.get(
+                        user=request.user,
+                        canonical_recipe=recipe.canonical_recipe
+                    )
+                    like.delete()
+                    print(
+                        f"[ARCHIVE] Removed like from canonical recipe: {recipe.canonical_recipe.id}")
+                except RecipeLike.DoesNotExist:
+                    # No like exists, that's fine
+                    pass
+
             return Response({
                 'message': f'Recipe "{recipe.name}" moved to archive',
                 'saved': False,
@@ -432,6 +447,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
             user_recipe.is_archived = False
             user_recipe.archived_at = None
             user_recipe.save(update_fields=['is_archived', 'archived_at'])
+
+            # Automatically re-like the canonical recipe when restoring
+            if recipe.canonical_recipe:
+                like, created = RecipeLike.objects.get_or_create(
+                    user=request.user,
+                    canonical_recipe=recipe.canonical_recipe
+                )
+                if created:
+                    print(
+                        f"[RESTORE] Re-liked canonical recipe: {recipe.canonical_recipe.id}")
 
             return Response({
                 'message': f'Recipe "{recipe.name}" restored to My Recipes',
@@ -1087,54 +1112,53 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         print(
             f"[LIST] User language: {user_language} (from query param: {self.request.query_params.get('lang')})")
 
-        # If not English, add translated names to each recipe
-        if user_language != 'en':
-            from .models import RecipeTranslation
-            from apps.core.smart_translator import SmartTranslationService
+        # Translate recipe names to user's language (always check for translations)
+        from .models import RecipeTranslation
+        from apps.core.smart_translator import SmartTranslationService
 
-            print(
-                f"[LIST] Translating {len(recipes_data)} recipe names to {user_language}")
+        print(
+            f"[LIST] Translating {len(recipes_data)} recipe names to {user_language}")
 
-            # Initialize translator for fallback
-            smart_translator = None
+        # Initialize translator for fallback
+        smart_translator = None
 
-            for recipe_data in recipes_data:
-                try:
-                    translation = RecipeTranslation.objects.filter(
-                        canonical_recipe_id=recipe_data['id'],
-                        language=user_language,
-                        status='completed'
-                    ).first()
+        for recipe_data in recipes_data:
+            try:
+                translation = RecipeTranslation.objects.filter(
+                    canonical_recipe_id=recipe_data['id'],
+                    language=user_language,
+                    status='completed'
+                ).first()
 
-                    if translation and translation.name:
-                        print(
-                            f"[LIST] ✅ DB: {recipe_data['name']} -> {translation.name}")
-                        recipe_data['name'] = translation.name
-                    else:
-                        # FALLBACK: Use Gemini to translate on-the-fly
-                        print(
-                            f"[LIST] ⚠️ No translation in DB for {recipe_data['name']}, using Gemini fallback...")
-
-                        if smart_translator is None:
-                            smart_translator = SmartTranslationService()
-
-                        translated_name = smart_translator.translate_recipe_name(
-                            recipe_data['name'],
-                            user_language
-                        )
-
-                        if translated_name and translated_name != recipe_data['name']:
-                            print(
-                                f"[LIST] ✅ GEMINI: {recipe_data['name']} -> {translated_name}")
-                            recipe_data['name'] = translated_name
-                        else:
-                            print(
-                                f"[LIST] ❌ FALLBACK FAILED: Keeping original name {recipe_data['name']}")
-
-                except Exception as e:
+                if translation and translation.name:
                     print(
-                        f"[LIST] ❌ Translation error for recipe {recipe_data.get('id')}: {e}")
-                    # Keep original name if all fails
+                        f"[LIST] ✅ DB: {recipe_data['name']} -> {translation.name}")
+                    recipe_data['name'] = translation.name
+                else:
+                    # FALLBACK: Use Gemini to translate on-the-fly
+                    print(
+                        f"[LIST] ⚠️ No translation in DB for {recipe_data['name']}, using Gemini fallback...")
+
+                    if smart_translator is None:
+                        smart_translator = SmartTranslationService()
+
+                    translated_name = smart_translator.translate_recipe_name(
+                        recipe_data['name'],
+                        user_language
+                    )
+
+                    if translated_name and translated_name != recipe_data['name']:
+                        print(
+                            f"[LIST] ✅ GEMINI: {recipe_data['name']} -> {translated_name}")
+                        recipe_data['name'] = translated_name
+                    else:
+                        print(
+                            f"[LIST] ❌ FALLBACK FAILED: Keeping original name {recipe_data['name']}")
+
+            except Exception as e:
+                print(
+                    f"[LIST] ❌ Translation error for recipe {recipe_data.get('id')}: {e}")
+                # Keep original name if all fails
 
         if page is not None:
             return self.get_paginated_response(recipes_data)

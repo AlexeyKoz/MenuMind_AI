@@ -97,7 +97,8 @@ class RecipeAgentService:
 
         for idx, ingredient in enumerate(rcip_recipe.get('ingredients', [])):
             ingredient_text = ingredient.get('name', '')
-            quantity = ingredient.get('quantity')
+            # RCIP converter uses 'amount', not 'quantity'
+            quantity = ingredient.get('quantity') or ingredient.get('amount')
             unit = ingredient.get('unit', '')
 
             # Map to IML (wrap in sync_to_async since it uses Django ORM)
@@ -204,6 +205,8 @@ class RecipeAgentService:
         Returns:
             List of ingredients in format: {amount, unit, name}
         """
+        print(
+            f"[PREPARE_INGREDIENTS] Starting with {len(enriched_ingredients)} ingredients")
         base_ingredients = []
 
         for ing in enriched_ingredients:
@@ -236,6 +239,19 @@ class RecipeAgentService:
 
             # Format quantity
             quantity = ing.get('quantity')
+            unit = ing.get('unit', '')
+
+            # Skip if unit contains "as" or "needed" (from "as needed")
+            unit_lower = unit.lower().strip()
+            invalid_units = [
+                'as', 'needed', 'taste', 'quantity', 'optional'
+            ]
+            # Check if unit is invalid
+            if any(invalid in unit_lower for invalid in invalid_units):
+                print(
+                    f"[FILTER] Skipping ingredient with invalid unit: {name} ({quantity} {unit})")
+                continue
+
             if quantity:
                 if isinstance(quantity, (int, float)):
                     # Skip if quantity is exactly 1 and name is vague or contains skip terms
@@ -262,11 +278,12 @@ class RecipeAgentService:
 
             base_ingredients.append({
                 'amount': amount,
-                'unit': ing.get('unit', ''),
+                'unit': unit,  # Use filtered unit variable
                 'name': name,
                 'ingredient_key': ing.get('ingredient_key'),
                 'original': ing.get('original', name)
             })
+            print(f"   [PREPARE] Added: {amount} {unit} {name}")
 
         return base_ingredients
 
@@ -414,6 +431,8 @@ class RecipeAgentService:
         """
         Main method: Search, scrape, convert recipe from user query WITH DEDUPLICATION
 
+        NEW: Real-time progress updates via WebSocket!
+
         NEW FLOW:
         1. Check if canonical recipe exists (by normalized name)
         2. If EXISTS: Return existing canonical + create user fork
@@ -430,24 +449,147 @@ class RecipeAgentService:
         """
         print(f"[RECIPE AGENT] Processing query: '{user_query}'")
 
-        # STEP 1: Check if canonical recipe already exists
-        normalized_name = self._normalize_recipe_name(user_query)
-        existing_canonical = await self._find_existing_canonical(normalized_name)
+        # Initialize progress tracker
+        from .progress_tracker import RecipeGenerationProgress
+        user_language = user_preferences.get(
+            'language', 'en') if user_preferences else 'en'
+        progress = RecipeGenerationProgress(str(user.id), user_language)
 
-        if existing_canonical:
+        try:
+            # STEP 1: Check if canonical recipe already exists
+            normalized_name = self._normalize_recipe_name(user_query)
+            existing_canonical = await self._find_existing_canonical(normalized_name)
+
+            if existing_canonical:
+                print(
+                    f"[REUSE] Found existing canonical: {existing_canonical.name}")
+
+                # Send complete immediately (recipe already exists!)
+                progress.update_complete()
+
+                # Create or get user fork
+                user_fork = await self._create_or_get_user_fork(user, existing_canonical)
+
+                # Serialize for response
+                from .serializers import CanonicalRecipeSerializer, RecipeSerializer
+
+                @sync_to_async
+                def serialize_recipes():
+                    canonical_data = CanonicalRecipeSerializer(
+                        existing_canonical).data
+                    fork_data = RecipeSerializer(user_fork).data
+                    return canonical_data, fork_data
+
+                canonical_data, fork_data = await serialize_recipes()
+
+                return True, {
+                    'canonical_recipe': canonical_data,
+                    'user_recipe': fork_data,
+                    'is_new': False
+                }, f"Found existing recipe: {existing_canonical.name}"
+
+            # STEP 2: Recipe doesn't exist - search and scrape using Brave + Firecrawl
+            progress.update_searching()  # 10% - Searching the internet...
+            print(f"[SEARCH] No canonical found, searching web...")
+            scraped_recipes = await self._search_and_scrape_recipes(user_query, max_results=3)
+
+            if not scraped_recipes:
+                progress.update_error()
+                return False, None, "No recipes found for your query"
+
+            # 25% - Found recipes! Extracting content...
+            progress.update_scraping(len(scraped_recipes))
+
+            # DEBUG: Log scraped recipes structure
+            print(f"[DEBUG] Got {len(scraped_recipes)} scraped recipes")
+            for i, recipe in enumerate(scraped_recipes, 1):
+                print(f"[DEBUG] Recipe {i} keys: {list(recipe.keys())}")
+                print(f"[DEBUG] Recipe {i} URL: {recipe.get('url', 'NO URL')}")
+                print(
+                    f"[DEBUG] Recipe {i} content length: {len(recipe.get('content', ''))} chars")
+
+            # STEP 3: Try each scraped recipe until we get a good one
+            scraped_data = None
+            for i, recipe in enumerate(scraped_recipes, 1):
+                url = recipe.get('url', '')
+                content = recipe.get('content', '')
+
+                print(f"[CONVERT] Trying recipe {i}/{len(scraped_recipes)}...")
+                print(f"[CONVERT] Content length: {len(content)} characters")
+
+                if len(content) < 500:
+                    print(f"[CONVERT] ⚠️ Content too short, skipping...")
+                    continue
+
+                # Use the content directly (already scraped by Firecrawl)
+                scraped_data = {
+                    'url': url,
+                    'text': content
+                }
+                break
+
+            if not scraped_data:
+                print(f"[ERROR] Failed to scrape any recipes")
+                progress.update_error()
+                return False, None, "Could not extract recipe from websites. Please try a different recipe or check your internet connection."
+
+            # STEP 4: Convert to RCIP format using AI (Stage 1: Extraction)
+            # 40% - Converting recipe to standard format...
+            progress.update_converting()
+            print(f"[CONVERT] Converting scraped content to RCIP format...")
             print(
-                f"[REUSE] Found existing canonical: {existing_canonical.name}")
+                f"[CONVERT] Content length: {len(scraped_data.get('text', ''))} characters")
 
-            # Create or get user fork
-            user_fork = await self._create_or_get_user_fork(user, existing_canonical)
+            rcip_recipe = await self._convert_to_rcip(
+                scraped_data,
+                user_query,
+                user_preferences
+            )
+
+            if not rcip_recipe:
+                print(f"[ERROR] ❌ AI conversion returned None")
+                progress.update_error()
+                return False, None, "Failed to convert recipe to standard format. The recipe content may be too complex or incomplete. Please try a different recipe."
+
+            # STEP 4.5: Enriching with nutrition data
+            # 55% - Adding nutritional information...
+            progress.update_enriching()
+
+            # STEP 5: Validate Recipe Quality (Stage 2: Auto-Validation + Stage 3: AI Fix)
+            progress.update_validating()  # 70% - Checking recipe quality...
+            print(f"[VALIDATION] Starting quality validation...")
+            rcip_recipe = await self._validate_and_fix_recipe(rcip_recipe)
+
+            if not rcip_recipe:
+                print(f"[ERROR] ❌ Recipe validation failed - unusable quality")
+                progress.update_error()
+                return False, None, "Could not extract a valid recipe. The content may not contain a proper recipe. Please try a different search."
+
+            # STEP 6: Create canonical recipe
+            # 85% - Translating to your language...
+            progress.update_translating()
+            canonical = await self._create_canonical_recipe(
+                rcip_recipe,
+                source_type='ai_generated',
+                original_creator=user
+            )
+
+            # STEP 7: Create user fork
+            # 95% - Almost done! Finalizing recipe...
+            progress.update_finalizing()
+            user_fork = await self._create_user_fork(user, canonical, rcip_recipe)
+
+            print(f"[SUCCESS] Created new canonical recipe: {canonical.name}")
+
+            # STEP 8: Complete!
+            progress.update_complete()  # 100% - Recipe ready! 🎉
 
             # Serialize for response
             from .serializers import CanonicalRecipeSerializer, RecipeSerializer
 
             @sync_to_async
             def serialize_recipes():
-                canonical_data = CanonicalRecipeSerializer(
-                    existing_canonical).data
+                canonical_data = CanonicalRecipeSerializer(canonical).data
                 fork_data = RecipeSerializer(user_fork).data
                 return canonical_data, fork_data
 
@@ -456,74 +598,16 @@ class RecipeAgentService:
             return True, {
                 'canonical_recipe': canonical_data,
                 'user_recipe': fork_data,
-                'is_new': False
-            }, f"Found existing recipe: {existing_canonical.name}"
+                'is_new': True
+            }, f"Created new recipe: {canonical.name}"
 
-        # STEP 2: Recipe doesn't exist - search and create new canonical
-        print(f"[SEARCH] No canonical found, searching web...")
-        recipe_urls = await self._search_recipes(user_query)
-        if not recipe_urls:
-            return False, None, "No recipes found for your query"
-
-        # STEP 3: Scrape best recipe (try up to 5 URLs)
-        scraped_data = None
-        for i, url in enumerate(recipe_urls[:5], 1):
-            print(f"[SCRAPE] Trying URL {i}/5...")
-            scraped_data = await self._scrape_recipe(url)
-            if scraped_data and len(scraped_data.get('text', '')) > 500:
-                print(f"[SCRAPE] ✅ Successfully scraped from URL {i}")
-                break
-            else:
-                print(f"[SCRAPE] ❌ URL {i} failed or had insufficient content")
-
-        if not scraped_data:
-            print(
-                f"[ERROR] Failed to scrape any of the {len(recipe_urls[:5])} URLs")
-            return False, None, "Could not extract recipe from websites. Please try a different recipe or check your internet connection."
-
-        # STEP 4: Convert to RCIP format using AI
-        print(f"[CONVERT] Converting scraped content to RCIP format...")
-        print(
-            f"[CONVERT] Content length: {len(scraped_data.get('text', ''))} characters")
-
-        rcip_recipe = await self._convert_to_rcip(
-            scraped_data,
-            user_query,
-            user_preferences
-        )
-
-        if not rcip_recipe:
-            print(f"[ERROR] ❌ AI conversion returned None")
-            return False, None, "Failed to convert recipe to standard format. The recipe content may be too complex or incomplete. Please try a different recipe."
-
-        # STEP 5: Create canonical recipe
-        canonical = await self._create_canonical_recipe(
-            rcip_recipe,
-            source_type='ai_generated',
-            original_creator=user
-        )
-
-        # STEP 6: Create user fork
-        user_fork = await self._create_user_fork(user, canonical, rcip_recipe)
-
-        print(f"[SUCCESS] Created new canonical recipe: {canonical.name}")
-
-        # Serialize for response
-        from .serializers import CanonicalRecipeSerializer, RecipeSerializer
-
-        @sync_to_async
-        def serialize_recipes():
-            canonical_data = CanonicalRecipeSerializer(canonical).data
-            fork_data = RecipeSerializer(user_fork).data
-            return canonical_data, fork_data
-
-        canonical_data, fork_data = await serialize_recipes()
-
-        return True, {
-            'canonical_recipe': canonical_data,
-            'user_recipe': fork_data,
-            'is_new': True
-        }, f"Created new recipe: {canonical.name}"
+        except Exception as e:
+            # Send error to user
+            progress.update_error(str(e))
+            print(f"[ERROR] ❌ Recipe generation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, None, f"An error occurred: {str(e)}"
 
     # ============================================================================
     # DEDUPLICATION HELPER METHODS
@@ -546,21 +630,90 @@ class RecipeAgentService:
 
     @sync_to_async
     def _find_existing_canonical(self, normalized_name: str):
-        """Check if canonical recipe exists (by normalized name or similar)"""
-        from .models import CanonicalRecipe
+        """
+        Check if canonical recipe exists in ANY language (multilingual search)
+        Searches:
+        1. CanonicalRecipe.name (original English name)
+        2. RecipeTranslation.name (Russian, Hebrew translations)
+        """
+        from .models import CanonicalRecipe, RecipeTranslation
         from django.db.models import Q
 
-        # Try exact normalized name match first
+        print(
+            f"[MATCH] Searching for recipe: '{normalized_name}' in all languages")
+
+        # STEP 1: Try exact match on canonical recipe name (original)
         canonical = CanonicalRecipe.objects.filter(
             name__iexact=normalized_name,
             is_published=True
         ).first()
 
         if canonical:
-            print(f"[MATCH] Exact match found: {canonical.name}")
+            print(f"[MATCH] ✅ Exact match in original name: {canonical.name}")
             return canonical
 
-        # Improved partial match: require at least 70% of words to match
+        # STEP 2: Try exact match in translations (all languages)
+        translation = RecipeTranslation.objects.filter(
+            name__iexact=normalized_name,
+            status='completed',
+            canonical_recipe__is_published=True
+        ).select_related('canonical_recipe').first()
+
+        if translation:
+            print(
+                f"[MATCH] ✅ Exact match in {translation.language} translation: {translation.name}")
+            print(
+                f"[MATCH]    Original name: {translation.canonical_recipe.name}")
+            return translation.canonical_recipe
+
+        # STEP 2.5: **CRITICAL** - Translate search query to all languages
+        # This catches duplicates even if translations haven't been generated yet!
+        print(f"[MATCH] No direct match, translating search query to all languages...")
+
+        from apps.core.smart_translator import SmartTranslationService
+        translator = SmartTranslationService()
+        search_variations = {}
+
+        # Translate to English, Russian, Hebrew
+        for lang in ['en', 'ru', 'he']:
+            try:
+                translated = translator.translate_recipe_name(
+                    normalized_name, lang)
+                if translated and translated.lower().strip() != normalized_name.lower():
+                    translated_normalized = self._normalize_recipe_name(
+                        translated)
+                    search_variations[lang] = translated_normalized
+                    print(
+                        f"[MATCH] → Translated to {lang}: '{translated_normalized}'")
+            except Exception as e:
+                print(f"[MATCH] ⚠️ Translation to {lang} failed: {e}")
+
+        # Search using all translated variations
+        for lang_key, search_term in search_variations.items():
+            # Search canonical names
+            canonical = CanonicalRecipe.objects.filter(
+                name__iexact=search_term,
+                is_published=True
+            ).first()
+
+            if canonical:
+                print(
+                    f"[MATCH] ✅ Found via {lang_key} translation: '{search_term}' matches '{canonical.name}'")
+                return canonical
+
+            # Search existing translations
+            translation = RecipeTranslation.objects.filter(
+                name__iexact=search_term,
+                status='completed',
+                canonical_recipe__is_published=True
+            ).select_related('canonical_recipe').first()
+
+            if translation:
+                print(
+                    f"[MATCH] ✅ Found in translations via {lang_key}: '{search_term}' matches '{translation.name}'")
+                return translation.canonical_recipe
+
+        # STEP 3: Partial match in canonical names
         words = normalized_name.split()
         if len(words) >= 2:
             # Search for recipes containing at least the first 2 significant words
@@ -571,7 +724,7 @@ class RecipeAgentService:
 
             if similar:
                 print(
-                    f"[MATCH] Potential match found: {similar.name} (searched for: {normalized_name})")
+                    f"[MATCH] Potential match in original: {similar.name} (searched for: {normalized_name})")
 
                 # Strict validation: normalize the similar recipe name and check word overlap
                 similar_normalized = self._normalize_recipe_name(similar.name)
@@ -593,7 +746,36 @@ class RecipeAgentService:
                 else:
                     print(
                         f"[MATCH] ❌ Rejected match (insufficient overlap: {overlap_percentage * 100:.0f}% < 70%)")
-                    return None
+
+            # STEP 4: Partial match in translations (if not found in originals)
+            if not similar or (similar and overlap_percentage < 0.7):
+                similar_translation = RecipeTranslation.objects.filter(
+                    Q(name__icontains=words[0]) & Q(name__icontains=words[1]),
+                    status='completed',
+                    canonical_recipe__is_published=True
+                ).select_related('canonical_recipe').first()
+
+                if similar_translation:
+                    print(
+                        f"[MATCH] Potential match in {similar_translation.language} translation: {similar_translation.name}")
+
+                    # Normalize and check overlap
+                    similar_normalized = self._normalize_recipe_name(
+                        similar_translation.name)
+                    similar_words = set(similar_normalized.split())
+                    overlap = similar_words.intersection(search_words)
+                    overlap_percentage = len(
+                        overlap) / len(search_words) if search_words else 0
+
+                    print(
+                        f"[MATCH] Translation word overlap: {overlap} ({overlap_percentage * 100:.0f}% of search terms)")
+
+                    if overlap_percentage >= 0.7:
+                        print(f"[MATCH] ✅ Accepted translation match")
+                        return similar_translation.canonical_recipe
+                    else:
+                        print(
+                            f"[MATCH] ❌ Rejected translation match (insufficient overlap: {overlap_percentage * 100:.0f}% < 70%)")
 
         # If single word or no good match, don't match partially
         # Let the AI search for the exact recipe instead
@@ -615,8 +797,8 @@ class RecipeAgentService:
 
         if existing_fork:
             print(f"[FORK] User already has fork: {existing_fork.id}")
-            # Ensure UserRecipe entry exists
-            UserRecipe.objects.get_or_create(
+            # Ensure UserRecipe entry exists and is NOT archived
+            user_recipe, created = UserRecipe.objects.get_or_create(
                 user=user,
                 recipe=existing_fork,
                 defaults={
@@ -624,6 +806,15 @@ class RecipeAgentService:
                     'is_archived': False
                 }
             )
+
+            # If the UserRecipe already existed but was archived, unarchive it
+            if not created and user_recipe.is_archived:
+                user_recipe.is_archived = False
+                # Update saved_at to show as recently saved
+                user_recipe.saved_at = timezone.now()
+                user_recipe.save(update_fields=['is_archived', 'saved_at'])
+                print(f"[FORK] Unarchived recipe: {existing_fork.id}")
+
             return existing_fork
 
         # Create new fork
@@ -754,54 +945,86 @@ class RecipeAgentService:
                         translation.status = 'in_progress'
                         translation.save()
 
-                        # Initialize SMART translator (uses databases first, Gemini as fallback)
-                        from apps.core.smart_translator import SmartTranslationService
-                        smart_translator = SmartTranslationService()
+                        # Check if recipe has content to translate
+                        if not canonical.base_ingredients and not canonical.base_steps:
+                            logger.warning(
+                                f"[TRANSLATION] ⚠️ Recipe has no ingredients or steps - marking translation as failed")
+                            translation.status = 'failed'
+                            translation.save()
+                            logger.info(
+                                f"[TRANSLATION] ❌ Skipped translation - no content to translate")
+                        else:
+                            # Initialize SMART translator (uses databases first, Gemini as fallback)
+                            from apps.core.smart_translator import SmartTranslationService
+                            smart_translator = SmartTranslationService()
 
-                        # Translate recipe name
-                        translated_name = smart_translator.translate_recipe_name(
-                            canonical.name,
-                            user_language
-                        )
+                            # Translate recipe name
+                            translated_name = smart_translator.translate_recipe_name(
+                                canonical.name,
+                                user_language
+                            )
 
-                        # Translate ingredients using SMART approach
-                        # 1. Check IML database (exact + fuzzy match)
-                        # 2. Check cache for previous translations
-                        # 3. Use Gemini only for unknowns (batch)
-                        logger.info(
-                            f"[TRANSLATION] Starting smart translation for {len(canonical.base_ingredients)} ingredients")
+                            # Translate ingredients using SMART approach
+                            # 1. Check IML database (exact + fuzzy match)
+                            # 2. Check cache for previous translations
+                            # 3. Use Gemini only for unknowns (batch)
+                            logger.info(
+                                f"[TRANSLATION] Starting smart translation for {len(canonical.base_ingredients)} ingredients")
 
-                        translated_ingredients = smart_translator.translate_ingredients_batch(
-                            canonical.base_ingredients,
-                            user_language
-                        )
+                            translated_ingredients = smart_translator.translate_ingredients_batch(
+                                canonical.base_ingredients,
+                                user_language
+                            )
 
-                        # Translate cooking steps using SMART approach with CookLingo glossary
-                        # 1. Build glossary of cooking terms from CookLingo database
-                        # 2. Translate full sentences with Gemini using glossary
-                        logger.info(
-                            f"[TRANSLATION] Starting smart translation for {len(canonical.base_steps)} steps (with CookLingo glossary)")
+                            # Translate cooking steps using SMART approach with CookLingo glossary
+                            # 1. Build glossary of cooking terms from CookLingo database
+                            # 2. Translate full sentences with Gemini using glossary
+                            logger.info(
+                                f"[TRANSLATION] Starting smart translation for {len(canonical.base_steps)} steps (with CookLingo glossary)")
 
-                        translated_steps = smart_translator.translate_cooking_steps_batch(
-                            canonical.base_steps,
-                            user_language
-                        )
+                            translated_steps = smart_translator.translate_cooking_steps_batch(
+                                canonical.base_steps,
+                                user_language
+                            )
 
-                        # Save translation
-                        translation.name = translated_name  # Use translated name
-                        translation.description = canonical.description
-                        translation.base_ingredients = translated_ingredients
-                        translation.base_steps = translated_steps
-                        translation.status = 'completed'
-                        translation.completed_at = timezone.now()
-                        translation.save()
+                            # Save translation
+                            translation.name = translated_name  # Use translated name
+                            translation.description = canonical.description
+                            translation.base_ingredients = translated_ingredients
+                            translation.base_steps = translated_steps
+                            translation.status = 'completed'
+                            translation.completed_at = timezone.now()
 
-                        logger.info(
-                            f"[TRANSLATION] ✅ Completed immediate translation to {user_language}")
-                        logger.info(
-                            f"   - Translated {len(translated_ingredients)} ingredients")
-                        logger.info(
-                            f"   - Translated {len(translated_steps)} steps")
+                            # DEBUG: Log what we're saving
+                            logger.info(
+                                f"[TRANSLATION] Saving translation with:")
+                            logger.info(f"   - Name: {translated_name}")
+                            logger.info(
+                                f"   - {len(translated_ingredients)} ingredients")
+                            logger.info(f"   - {len(translated_steps)} steps")
+                            logger.info(
+                                f"   - First ingredient: {translated_ingredients[0] if translated_ingredients else 'NONE'}")
+                            logger.info(
+                                f"   - First step: {translated_steps[0] if translated_steps else 'NONE'}")
+
+                            translation.save()
+
+                            # DEBUG: Verify it was saved
+                            translation.refresh_from_db()
+                            logger.info(f"[TRANSLATION] ✅ Verified save:")
+                            logger.info(
+                                f"   - Ingredients in DB: {len(translation.base_ingredients)}")
+                            logger.info(
+                                f"   - Steps in DB: {len(translation.base_steps)}")
+                            logger.info(
+                                f"   - First DB step: {translation.base_steps[0] if translation.base_steps else 'NONE'}")
+
+                            logger.info(
+                                f"[TRANSLATION] ✅ Completed immediate translation to {user_language}")
+                            logger.info(
+                                f"   - Translated {len(translated_ingredients)} ingredients")
+                            logger.info(
+                                f"   - Translated {len(translated_steps)} steps")
 
                 except Exception as e:
                     logger.error(
@@ -874,28 +1097,79 @@ class RecipeAgentService:
         return hashlib.sha256(hash_string.encode()).hexdigest()
 
     # ============================================================================
-    # RECIPE SEARCH & SCRAPING (Existing Methods)
+    # RECIPE SEARCH & SCRAPING (NEW: Brave + Firecrawl)
     # ============================================================================
 
-    async def _search_recipes(self, query: str, max_results: int = 5) -> List[str]:
-        """Search for recipes using DuckDuckGo (primary) with Brave Search fallback"""
-        print(f"[SEARCH] Searching for: '{query}'")
+    async def _search_and_scrape_recipes(self, query: str, max_results: int = 3) -> List[Dict]:
+        """
+        Search and scrape recipes using Brave Search API + Firecrawl
+        Falls back to DuckDuckGo + BeautifulSoup if Brave is unavailable
+        Returns list of dicts with 'url' and 'content'
+        """
+        import logging
+        logger = logging.getLogger(__name__)
 
-        # Try DuckDuckGo first (FREE, unlimited, reliable)
+        logger.info(f"[SEARCH+SCRAPE] Starting for query: '{query}'")
+
+        # Try Brave + Firecrawl first
+        try:
+            from apps.recipes.brave_firecrawl_scraper import BraveFirecrawlScraper
+
+            loop = asyncio.get_event_loop()
+            scraper = BraveFirecrawlScraper()
+
+            # Check if Brave API is available
+            if scraper.brave_api_key:
+                recipes = await loop.run_in_executor(
+                    None,
+                    lambda: scraper.search_and_scrape(query, max_results)
+                )
+
+                if recipes:
+                    logger.info(
+                        f"[SEARCH+SCRAPE] ✅ Got {len(recipes)} recipes via Brave+Firecrawl")
+                    return recipes
+                else:
+                    logger.warning(
+                        "[SEARCH+SCRAPE] Brave+Firecrawl returned no results, falling back to DuckDuckGo")
+            else:
+                logger.warning(
+                    "[SEARCH+SCRAPE] Brave API key not configured, using DuckDuckGo fallback")
+        except Exception as e:
+            logger.error(
+                f"[SEARCH+SCRAPE] Brave+Firecrawl failed: {e}, falling back to DuckDuckGo")
+
+        # Fallback: Use old DuckDuckGo + BeautifulSoup method
+        logger.info(
+            "[SEARCH+SCRAPE] Using DuckDuckGo + BeautifulSoup fallback")
+
+        # Search with DuckDuckGo
         urls = await self._search_with_duckduckgo(query, max_results)
-        if urls:
-            print(f"[SEARCH] ✅ Found {len(urls)} URLs via DuckDuckGo")
-            return urls
+        if not urls:
+            logger.error("[SEARCH+SCRAPE] ❌ No URLs found")
+            return []
 
-        # Fallback to Brave Search if DuckDuckGo fails
-        print("[SEARCH] DuckDuckGo failed, trying Brave Search...")
-        urls = await self._search_with_brave(query, max_results)
-        if urls:
-            print(f"[SEARCH] ✅ Found {len(urls)} URLs via Brave")
-            return urls
+        # Scrape with BeautifulSoup
+        recipes = []
+        for idx, url in enumerate(urls[:max_results], 1):
+            logger.info(
+                f"[SEARCH+SCRAPE] Scraping {idx}/{len(urls[:max_results])}: {url}")
 
-        print("[SEARCH] ❌ Both search methods failed")
-        return []
+            scraped_data = await self._scrape_recipe(url)
+            if scraped_data and len(scraped_data.get('text', '')) > 500:
+                recipes.append({
+                    'url': url,
+                    'content': scraped_data['text']
+                })
+                logger.info(
+                    f"[SEARCH+SCRAPE] ✅ Successfully scraped {idx}/{len(urls[:max_results])}")
+            else:
+                logger.warning(
+                    f"[SEARCH+SCRAPE] ⚠️ Failed to scrape {idx}/{len(urls[:max_results])}")
+
+        logger.info(
+            f"[SEARCH+SCRAPE] ✅ Got {len(recipes)} recipes via DuckDuckGo+BeautifulSoup")
+        return recipes
 
     async def _search_with_brave(self, query: str, max_results: int = 5) -> List[str]:
         """Search using Brave Search API (direct)"""
@@ -1006,6 +1280,21 @@ class RecipeAgentService:
                 # Skip Chinese sites (zhihu, baidu, etc.)
                 if any(domain in url.lower() for domain in ['zhihu.com', 'baidu.com', 'bilibili.com', 'weibo.com', '163.com', 'sina.com']):
                     skipped_chinese += 1
+                    continue
+
+                # Skip Wikipedia and other non-recipe sites
+                skip_domains = [
+                    'wikipedia.org', 'wiki', 'amazon', 'youtube', 'pinterest',
+                    # News sites
+                    't-online.de', 'bild.de', 'spiegel.de', 'focus.de',
+                    'news', 'nachrichten',  # Generic news
+                    # Social media
+                    'facebook.com', 'instagram.com', 'twitter.com', 'tiktok.com',
+                    # Non-food sites
+                    'reddit.com', 'quora.com'
+                ]
+                if any(domain in url.lower() for domain in skip_domains):
+                    print(f"   [SKIP] Non-recipe site: {url[:60]}...")
                     continue
 
                 # Skip if title contains too many Chinese characters
@@ -1162,6 +1451,115 @@ class RecipeAgentService:
         print(f"   [FAILED] All scraping attempts failed")
         return None
 
+    async def _validate_and_fix_recipe(self, rcip_recipe: Dict) -> Optional[Dict]:
+        """
+        Validate recipe quality and fix issues if needed
+        Stage 2: Auto-validation (FREE)
+        Stage 3: AI re-validation (only if needed)
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(
+            f"[VALIDATION] Starting validation for recipe: {rcip_recipe.get('meta', {}).get('name', 'Unknown')}")
+
+        # Stage 2: Auto-validation using free rules
+        from apps.recipes.quality_checker import RecipeValidator
+
+        validator = RecipeValidator()
+
+        # Run validation in sync context (uses Django ORM for database loading)
+        validation_report = await sync_to_async(validator.validate_recipe)(rcip_recipe)
+
+        logger.info(
+            f"[VALIDATION] Confidence: {validation_report['confidence']}%")
+        logger.info(f"[VALIDATION] Status: {validation_report['status']}")
+        logger.info(
+            f"[VALIDATION] Issues found: {len(validation_report['issues'])}")
+
+        # If validation passed, return as-is
+        if validation_report['status'] == 'pass':
+            logger.info("[VALIDATION] ✅ Recipe passed auto-validation!")
+            return rcip_recipe
+
+        # Stage 3: AI re-validation for flagged recipes
+        if validation_report['needs_ai_validation']:
+            logger.info(
+                "[VALIDATION] ⚠️ Recipe flagged - attempting AI fix...")
+
+            from apps.recipes.ai_validator import AIRecipeValidator
+
+            ai_validator = AIRecipeValidator()
+            fixed_recipe = ai_validator.fix_recipe(
+                rcip_recipe, validation_report)
+
+            if fixed_recipe:
+                logger.info("[VALIDATION] ✅ Recipe fixed by AI")
+                logger.info(
+                    f"[VALIDATION] Fixed recipe has {len(fixed_recipe.get('ingredients', []))} ingredients and {len(fixed_recipe.get('steps', []))} steps")
+
+                # IMPORTANT: Preserve the original recipe name and metadata
+                original_name = rcip_recipe.get('meta', {}).get('name')
+                fixed_name = fixed_recipe.get('meta', {}).get(
+                    'name') if fixed_recipe.get('meta') else fixed_recipe.get('name')
+
+                if not fixed_name and original_name:
+                    # Ensure fixed_recipe has meta structure
+                    if 'meta' not in fixed_recipe:
+                        fixed_recipe['meta'] = {}
+                    fixed_recipe['meta']['name'] = original_name
+                    logger.info(
+                        f"[VALIDATION] Preserved recipe name: {original_name}")
+
+                # Preserve other metadata that AI might not include
+                if rcip_recipe.get('meta'):
+                    if 'meta' not in fixed_recipe:
+                        fixed_recipe['meta'] = {}
+
+                    if not fixed_recipe['meta'].get('description') and rcip_recipe['meta'].get('description'):
+                        fixed_recipe['meta']['description'] = rcip_recipe['meta']['description']
+
+                    if not fixed_recipe['meta'].get('cuisine') and rcip_recipe['meta'].get('cuisine'):
+                        fixed_recipe['meta']['cuisine'] = rcip_recipe['meta']['cuisine']
+
+                # Re-validate the fixed recipe
+                revalidation = await sync_to_async(validator.validate_recipe)(fixed_recipe)
+                logger.info(
+                    f"[VALIDATION] Re-validation confidence: {revalidation['confidence']}%")
+
+                # Lower threshold for fixed recipes
+                if revalidation['confidence'] >= 60:
+                    logger.info("[VALIDATION] ✅ Fixed recipe accepted")
+                    return fixed_recipe
+                else:
+                    logger.warning(
+                        "[VALIDATION] ⚠️ AI fix insufficient, using best available")
+                    # Return the better of the two
+                    if revalidation['confidence'] > validation_report['confidence']:
+                        logger.info(
+                            "[VALIDATION] Using AI-fixed recipe (better confidence)")
+                        return fixed_recipe
+                    else:
+                        logger.info(
+                            "[VALIDATION] Using original recipe (better confidence)")
+                        return rcip_recipe
+            else:
+                logger.warning(
+                    "[VALIDATION] ⚠️ AI could not fix recipe, using original")
+                logger.info(
+                    f"[VALIDATION] Original recipe has {len(rcip_recipe.get('ingredients', []))} ingredients and {len(rcip_recipe.get('steps', []))} steps")
+                # Still return original - better than nothing
+                return rcip_recipe
+
+        # Recipe has warnings but might be usable
+        if validation_report['confidence'] >= 40:
+            logger.info("[VALIDATION] ⚠️ Recipe has warnings but usable")
+            return rcip_recipe
+
+        # Recipe is too poor quality
+        logger.error("[VALIDATION] ❌ Recipe quality too poor")
+        return None
+
     async def _convert_to_rcip(
         self,
         scraped_data: Dict,
@@ -1186,7 +1584,9 @@ class RecipeAgentService:
                 'unit_system', 'metric') if user_preferences else 'metric'
 
             # First, extract structured data using LLM
-            prompt = f"""Extract the complete recipe from this webpage. Get ALL ingredients and ALL cooking steps.
+            prompt = f"""You are a professional recipe extraction expert. Extract the COMPLETE recipe with ALL ingredients and ALL cooking steps.
+
+IMPORTANT: Always output in ENGLISH - we will translate to other languages later.
 
 Recipe Name: {recipe_name}
 
@@ -1197,10 +1597,12 @@ CRITICAL RULES:
 
 INGREDIENTS - FORMAT STRICTLY AS:
 - quantity unit ingredient_name
-- Examples: "200g flour", "2 eggs", "1 tsp salt", "100ml milk"
-- NEVER write "1 as needed" - if no quantity, skip that ingredient completely
-- NEVER write explanations or analysis
+- Examples: "200g flour", "2 eggs", "1 tsp salt", "100ml milk", "400g spaghetti"
+- NEVER write "as needed", "to taste", "optional" - if no specific quantity, skip that ingredient
+- NEVER write "1 as needed" or similar vague amounts
+- ONLY include ingredients with SPECIFIC, MEASURABLE quantities
 - Each line must be ONE ingredient with quantity + unit + name
+- OUTPUT IN ENGLISH (translate if source is in another language)
 
 COOKING STEPS - FORMAT STRICTLY AS:
 - Extract ALL steps from start to finish
@@ -1208,12 +1610,15 @@ COOKING STEPS - FORMAT STRICTLY AS:
 - Number each step: 1., 2., 3., etc.
 - Typical recipes have 10-20 steps
 - DO NOT summarize or combine steps
+- OUTPUT IN ENGLISH (translate if source is in another language)
 
 FORBIDDEN:
+- NO "as needed", "to taste", "optional" ingredients
 - NO explanations like "After analyzing..." or "I found..."
 - NO commentary or analysis
 - NO duplicate ingredients
-- JUST the recipe data
+- NO vague quantities
+- JUST the recipe data with SPECIFIC amounts
 
 OUTPUT FORMAT (NOTHING ELSE):
 
@@ -1299,6 +1704,12 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
                 response = 'INGREDIENTS:' + \
                     response.split('INGREDIENTS:', 1)[1]
                 print(f"   [AI] ✅ Cleaned response, starts with INGREDIENTS")
+            else:
+                print(
+                    f"   [AI] ⚠️ Response doesn't contain 'INGREDIENTS:' marker")
+                print(f"   [AI] Full response: {response[:1000]}...")
+                print(f"   [AI] Falling back to local parser")
+                return self._fallback_conversion(scraped_data, recipe_name)
 
             # Parse LLM response
             parts = response.split('STEPS:')
@@ -1317,6 +1728,12 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
                 f"   [RCIP] Ingredients: {len(ingredients_text.split(chr(10)))} lines")
             print(f"   [RCIP] Steps: {len(steps_text.split(chr(10)))} lines")
 
+            # DEBUG: Show first 3 ingredient lines
+            ing_lines = ingredients_text.split('\n')[:3]
+            print(f"   [RCIP] First 3 ingredient lines:")
+            for i, line in enumerate(ing_lines, 1):
+                print(f"      {i}. {line}")
+
             # Convert using RCIP converter
             rcip_recipe = self.rcip_converter.convert(
                 name=recipe_name,
@@ -1327,6 +1744,9 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
             print(f"   [RCIP] ✅ RCIP conversion successful")
             print(
                 f"   [RCIP] Recipe has {len(rcip_recipe.get('ingredients', []))} ingredients and {len(rcip_recipe.get('steps', []))} steps")
+            # NEW DEBUG
+            print(
+                f"   [RCIP] Recipe name: '{rcip_recipe.get('name', 'NO NAME')}'")
 
             # DEBUG: Log first few steps
             if rcip_recipe.get('steps'):

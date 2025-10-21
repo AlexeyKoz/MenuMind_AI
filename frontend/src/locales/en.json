@@ -890,5 +890,22 @@
             "glutenFree": "Gluten Free",
             "dairyFree": "Dairy Free"
         }
+    },
+    "recipe": {
+        "progress": {
+            "generating": "Generating Recipe",
+            "complete": "Complete!",
+            "error": "Error",
+            "stages": {
+                "searching": "Searching the internet...",
+                "scraping": "Extracting recipe content...",
+                "converting": "Converting to standard format...",
+                "enriching": "Adding nutritional information...",
+                "validating": "Checking recipe quality...",
+                "translating": "Translating to your language...",
+                "finalizing": "Almost done! Finalizing...",
+                "complete": "Recipe ready! 🎉"
+            }
+        }
     }
 }

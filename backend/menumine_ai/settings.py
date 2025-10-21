@@ -276,6 +276,10 @@ GROQ_API_KEY = env('GROQ_API_KEY', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')  # Gemini Flash 2.5
 
+# Search & Scraping APIs
+BRAVE_SEARCH_API_KEY = env('BRAVE_SEARCH_API_KEY', default='')
+FIRECRAWL_API_KEY = env('FIRECRAWL_API_KEY', default='')
+
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Jerusalem'

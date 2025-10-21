@@ -42,6 +42,7 @@ google-generativeai>=0.8.3  # Gemini Flash 2.5
 duckduckgo-search>=6.3.0  # Also provides ddgs
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
+requests>=2.31.0  # HTTP client for Brave & Firecrawl APIs
 
 # Development Tools
 django-extensions==3.2.3

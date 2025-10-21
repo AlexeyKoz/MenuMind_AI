@@ -69,10 +69,84 @@ class SmartTranslationService:
             'gemini_needed': 0
         }
 
+        # Unit translation dictionary (same as in tasks.py)
+        unit_translations = {
+            'ru': {
+                'g': 'г', 'kg': 'кг', 'mg': 'мг',
+                'ml': 'мл', 'l': 'л',
+                'tsp': 'ч.л.', 'tbsp': 'ст.л.', 'cup': 'чашка', 'cups': 'чашки',
+                'oz': 'унция', 'lb': 'фунт',
+                'pcs': 'шт', 'piece': 'шт', 'pieces': 'шт',
+                'cloves': 'зубчика', 'clove': 'зубчик',
+                'slice': 'ломтик', 'slices': 'ломтики',
+                'pinch': 'щепотка',
+                'large': 'крупный', 'medium': 'средний', 'small': 'маленький',
+                'egg': 'яйцо', 'eggs': 'яйца',
+                'as': '',  # Remove "as" from "as needed"
+                'needed': '',  # Remove "needed"
+                'taste': '',  # Remove "to taste"
+                'optional': '',  # Remove "optional"
+                'quantity': '',  # Remove "quantity"
+                'amount': ''  # Remove "amount"
+            },
+            'he': {
+                'g': 'גרם', 'kg': 'ק"ג', 'mg': 'מ"ג',
+                'ml': 'מ"ל', 'l': 'ליטר',
+                'tsp': 'כפית', 'tbsp': 'כף', 'cup': 'כוס', 'cups': 'כוסות',
+                'oz': 'אונקיה', 'lb': 'ליבר',
+                'pcs': 'יח', 'piece': 'יח', 'pieces': 'יח',
+                'cloves': 'שיני', 'clove': 'שן',
+                'slice': 'פרוסה', 'slices': 'פרוסות',
+                'pinch': 'קמצוץ',
+                'large': 'גדול', 'medium': 'בינוני', 'small': 'קטן',
+                'egg': 'ביצה', 'eggs': 'ביצים',
+                'as': '',  # Remove "as" from "as needed"
+                'needed': '',
+                'taste': '',
+                'optional': '',
+                'quantity': '',
+                'amount': ''
+            }
+        }
+
         for idx, ing in enumerate(ingredients):
             translated_ing = ing.copy()
             ing_name = ing.get('name', '').strip()
             ingredient_key = ing.get('ingredient_key')
+
+            # Translate unit if available
+            if target_language in unit_translations and ing.get('unit'):
+                unit = ing.get('unit').lower().strip()
+                if unit in unit_translations[target_language]:
+                    translated_unit = unit_translations[target_language][unit]
+                    # Set the translated unit (even if empty - to remove invalid units)
+                    if translated_unit == '':
+                        translated_ing['unit'] = ''
+                        logger.info(
+                            f"   [UNIT REMOVED] Invalid unit '{ing.get('unit')}' removed from {ing_name}")
+                    else:
+                        translated_ing['unit'] = translated_unit
+                        logger.debug(
+                            f"   [UNIT] {ing.get('unit')} → {translated_unit}")
+                else:
+                    # Check if it's an invalid/nonsensical unit (like "servings", "ingredients", "recipes")
+                    invalid_units = ['servings', 'serving', 'ingredients',
+                                     'ingredient', 'recipes', 'recipe', 'items', 'item']
+                    if unit in invalid_units:
+                        # This is likely a parsing error - the AI extracted the wrong thing
+                        # We should ideally re-extract, but for now, just translate it
+                        logger.warning(
+                            f"   [UNIT WARNING] Invalid unit '{unit}' detected for ingredient '{ing_name}'")
+                        # Translate the invalid unit word
+                        if target_language == 'ru':
+                            unit_word_translations = {
+                                'servings': 'порций', 'serving': 'порция',
+                                'ingredients': 'ингредиентов', 'ingredient': 'ингредиент',
+                                'recipes': 'рецептов', 'recipe': 'рецепт',
+                                'items': 'предметов', 'item': 'предмет'
+                            }
+                            if unit in unit_word_translations:
+                                translated_ing['unit'] = unit_word_translations[unit]
 
             # Skip empty names
             if not ing_name:
@@ -151,8 +225,14 @@ class SmartTranslationService:
         logger.info(f"   IML fuzzy matches: {stats['iml_fuzzy']}")
         logger.info(f"   Cache hits: {stats['cache_hit']}")
         logger.info(f"   Gemini calls: {stats['gemini_needed']}")
-        logger.info(
-            f"   Savings: {((stats['iml_exact'] + stats['iml_fuzzy'] + stats['cache_hit']) / len(ingredients) * 100):.1f}% from databases/cache")
+
+        # Calculate savings percentage (avoid division by zero)
+        if len(ingredients) > 0:
+            savings_pct = ((stats['iml_exact'] + stats['iml_fuzzy'] +
+                           stats['cache_hit']) / len(ingredients) * 100)
+            logger.info(f"   Savings: {savings_pct:.1f}% from databases/cache")
+        else:
+            logger.info(f"   Savings: N/A (no ingredients to translate)")
 
         return translated_ingredients
 
@@ -493,15 +573,12 @@ Translations in {target_lang_name}:"""
         Translate recipe name to target language using Gemini
 
         Args:
-            name: Recipe name in English
-            target_language: Target language code (ru, he)
+            name: Recipe name (in any language)
+            target_language: Target language code (en, ru, he)
 
         Returns:
             Translated recipe name
         """
-        if target_language == 'en':
-            return name
-
         if not self.gemini_client:
             logger.warning(
                 "[SMART_TRANSLATE] No Gemini client for name translation")

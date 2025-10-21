@@ -636,7 +636,8 @@ class RecipeTranslation(models.Model):
     )
 
     # Translated content
-    name = models.CharField(max_length=200)
+    # Index for fast multilingual search
+    name = models.CharField(max_length=200, db_index=True)
     description = models.TextField(blank=True)
     base_ingredients = models.JSONField(
         default=list, help_text='Translated ingredients')

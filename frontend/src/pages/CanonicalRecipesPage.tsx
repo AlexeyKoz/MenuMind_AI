@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner } from '../components';
+import RecipeProgressModal from '../components/RecipeProgressModal';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { Heart, Sparkles } from 'lucide-react';
@@ -40,6 +41,7 @@ const CanonicalRecipesPage: React.FC = () => {
     const [aiLoading, setAiLoading] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [failedQuery, setFailedQuery] = useState('');
+    const [showProgress, setShowProgress] = useState(false); // Progress modal
 
     // Filters
     const [search, setSearch] = useState('');
@@ -214,6 +216,10 @@ const CanonicalRecipesPage: React.FC = () => {
         }
 
         setAiLoading(true);
+        setShowProgress(true); // Show progress modal
+
+        console.log('[AI SEARCH] Starting API call...');
+
         try {
             const result = await api.findRecipe(aiQuery);
             console.log('[AI SEARCH] Find recipe result:', result);
@@ -238,8 +244,18 @@ const CanonicalRecipesPage: React.FC = () => {
             }
 
             setAiQuery('');
+
+            // Close progress modal (fallback if WebSocket didn't close it)
+            setTimeout(() => {
+                console.log('[AI SEARCH] Closing progress modal (fallback)');
+                setShowProgress(false);
+            }, 2000); // Wait 2s to let WebSocket complete message show
+
         } catch (error: any) {
             console.error('AI search error:', error);
+
+            // Close progress modal on error
+            setShowProgress(false);
 
             // Show suggestions modal instead of just an error
             setFailedQuery(aiQuery);
@@ -292,43 +308,68 @@ const CanonicalRecipesPage: React.FC = () => {
         const lower = query.toLowerCase();
         const suggestions: string[] = [];
 
-        // Common typos and corrections
-        const corrections: Record<string, string[]> = {
-            'pasta': ['spaghetti carbonara', 'pasta bolognese', 'penne arrabbiata', 'fettuccine alfredo'],
-            'chicken': ['chicken curry', 'grilled chicken', 'chicken soup', 'roasted chicken'],
-            'beef': ['beef stew', 'beef stir fry', 'roast beef', 'beef tacos'],
-            'fish': ['grilled salmon', 'fish and chips', 'baked cod', 'tuna salad'],
-            'soup': ['tomato soup', 'chicken soup', 'vegetable soup', 'lentil soup'],
-            'salad': ['caesar salad', 'greek salad', 'garden salad', 'pasta salad'],
-            'pizza': ['margherita pizza', 'pepperoni pizza', 'vegetarian pizza', 'bbq chicken pizza'],
-            'burger': ['beef burger', 'veggie burger', 'chicken burger', 'mushroom burger'],
-            'cake': ['chocolate cake', 'vanilla cake', 'carrot cake', 'red velvet cake'],
-            'cookie': ['chocolate chip cookies', 'oatmeal cookies', 'sugar cookies', 'peanut butter cookies'],
-            'bread': ['sourdough bread', 'banana bread', 'french bread', 'whole wheat bread'],
-            'rice': ['fried rice', 'risotto', 'rice pilaf', 'biryani'],
+        // Get suggestions based on current language
+        const lang = i18n.language;
+
+        // Multilingual suggestions
+        const corrections: Record<string, Record<string, string[]>> = {
+            'en': {
+                'pasta': ['spaghetti carbonara', 'pasta bolognese', 'penne arrabbiata', 'fettuccine alfredo'],
+                'chicken': ['chicken curry', 'grilled chicken', 'chicken soup', 'roasted chicken'],
+                'beef': ['beef stew', 'beef stir fry', 'roast beef', 'beef tacos'],
+                'fish': ['grilled salmon', 'fish and chips', 'baked cod', 'tuna salad'],
+                'soup': ['tomato soup', 'chicken soup', 'vegetable soup', 'lentil soup'],
+                'cake': ['chocolate cake', 'vanilla cake', 'carrot cake', 'red velvet cake'],
+                'pie': ['apple pie', 'pumpkin pie', 'cherry pie', 'lemon meringue pie'],
+                'cookie': ['chocolate chip cookies', 'oatmeal cookies', 'sugar cookies'],
+                'pizza': ['margherita pizza', 'pepperoni pizza', 'vegetarian pizza'],
+            },
+            'ru': {
+                'паста': ['спагетти карбонара', 'паста болоньезе', 'пенне аррабьята'],
+                'курица': ['куриное карри', 'курица гриль', 'куриный суп', 'жареная курица'],
+                'говядина': ['говяжье рагу', 'жареная говядина', 'ростбиф'],
+                'рыба': ['лосось на гриле', 'рыба с картошкой', 'тунец'],
+                'суп': ['томатный суп', 'куриный суп', 'овощной суп', 'борщ'],
+                'торт': ['шоколадный торт', 'наполеон', 'медовик', 'тирамису'],
+                'пирог': ['яблочный пирог', 'вишневый пирог', 'черничный пирог'],
+                'пицца': ['маргарита', 'пепперони', 'вегетарианская пицца'],
+                'салат': ['цезарь', 'греческий салат', 'оливье', 'винегрет'],
+                'яблоч': ['яблочный пирог', 'шарлотка', 'яблочный штрудель'],
+                'яблок': ['яблочный пирог', 'шарлотка', 'яблочный штрудель'],
+            },
+            'he': {
+                'פסטה': ['ספגטי קרבונרה', 'פסטה בולונז', 'פסטה ארביאטה'],
+                'עוף': ['קארי עוף', 'עוף בגריל', 'מרק עוף', 'עוף צלוי'],
+                'בשר': ['תבשיל בשר', 'בשר צלי', 'המבורגר'],
+                'דג': ['סלמון בגריל', 'דג עם צ\'יפס', 'טונה'],
+                'מרק': ['מרק עגבניות', 'מרק עוף', 'מרק ירקות'],
+                'עוגה': ['עוגת שוקולד', 'עוגת וניל', 'עוגת גבינה', 'תפוח עץ'],
+                'פיצה': ['פיצה מרגריטה', 'פיצה פפרוני', 'פיצה צמחונית'],
+                'סלט': ['סלט קיסר', 'סלט יווני', 'סלט ירקות'],
+            }
         };
 
-        // Find relevant suggestions
-        for (const [keyword, options] of Object.entries(corrections)) {
-            if (lower.includes(keyword)) {
-                suggestions.push(...options);
+        // Find relevant suggestions for current language
+        const langCorrections = corrections[lang as keyof typeof corrections] || corrections['en'];
+
+        for (const [key, values] of Object.entries(langCorrections)) {
+            if (lower.includes(key)) {
+                suggestions.push(...values);
             }
         }
 
-        // If no specific matches, provide popular general suggestions
+        // If no specific matches, provide popular recipes in current language
         if (suggestions.length === 0) {
-            suggestions.push(
-                'spaghetti carbonara',
-                'chicken curry',
-                'beef stew',
-                'chocolate cake',
-                'caesar salad',
-                'margherita pizza'
-            );
+            if (lang === 'ru') {
+                suggestions.push('борщ', 'пельмени', 'шарлотка', 'оливье', 'блины');
+            } else if (lang === 'he') {
+                suggestions.push('שקשוקה', 'חומוס', 'פלאפל', 'שניצל', 'סלט ישראלי');
+            } else {
+                suggestions.push('spaghetti carbonara', 'chicken curry', 'chocolate cake', 'caesar salad');
+            }
         }
 
-        // Return up to 6 unique suggestions
-        return [...new Set(suggestions)].slice(0, 6);
+        return suggestions.slice(0, 6); // Return max 6 suggestions
     };
 
     if (showBuilder) {
@@ -395,7 +436,9 @@ const CanonicalRecipesPage: React.FC = () => {
                                 <div className="text-sm text-gray-600">{t('discover.minutes')}</div>
                             </div>
                             <div className="text-center p-4 bg-gray-50 rounded-lg">
-                                <div className="text-2xl font-bold text-gray-900">{selectedRecipe.difficulty}</div>
+                                <div className="text-2xl font-bold text-gray-900">
+                                    {t(`discover.difficulties.${selectedRecipe.difficulty}`, { defaultValue: selectedRecipe.difficulty })}
+                                </div>
                                 <div className="text-sm text-gray-600">{t('discover.difficulty')}</div>
                             </div>
                             <div className="text-center p-4 bg-gray-50 rounded-lg">
@@ -421,7 +464,7 @@ const CanonicalRecipesPage: React.FC = () => {
                                                 </div>
                                                 <div className="flex-1">
                                                     <span className="font-semibold text-blue-600">
-                                                        {ing.amount && ing.unit ? `${ing.amount} ${ing.unit}` : ''}
+                                                        {(ing.amount || ing.quantity) && ing.unit ? `${ing.amount || ing.quantity} ${ing.unit}` : ''}
                                                     </span>
                                                     {' '}
                                                     <span className="text-gray-900">{ing.name}</span>
@@ -489,6 +532,12 @@ const CanonicalRecipesPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4">
+            {/* Recipe Generation Progress Modal */}
+            <RecipeProgressModal
+                isOpen={showProgress}
+                onClose={() => setShowProgress(false)}
+            />
+
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="flex justify-between items-center mb-8">

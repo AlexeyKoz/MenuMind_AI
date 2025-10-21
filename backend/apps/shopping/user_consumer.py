@@ -57,6 +57,14 @@ class UserNotificationConsumer(AsyncWebsocketConsumer):
         print(
             f"👤 Added user {self.user.username} to personal notification group: {self.user_group_name}")
 
+        # Send a test message to verify connection works
+        await self.send(text_data=json.dumps({
+            'type': 'connection_test',
+            'message': 'WebSocket connected successfully!',
+            'user_id': str(self.user.id)
+        }, cls=UUIDEncoder))
+        print(f"📡 [TEST] Sent connection test message to client")
+
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection"""
         if hasattr(self, 'user_group_name'):
@@ -205,3 +213,18 @@ class UserNotificationConsumer(AsyncWebsocketConsumer):
             'new_collaboration_key': event['new_collaboration_key'],
             'message': event['message']
         }, cls=UUIDEncoder))
+
+    async def recipe_progress(self, event):
+        """Send recipe generation progress update to WebSocket"""
+        print(
+            f"📡 [CONSUMER] Received recipe_progress event for user {self.user.username}")
+        print(f"📡 [CONSUMER] Event data: {event['data']}")
+        print(f"📡 [CONSUMER] Sending to WebSocket client...")
+
+        await self.send(text_data=json.dumps({
+            'type': 'recipe_progress',
+            'data': event['data']
+        }, cls=UUIDEncoder))
+
+        print(
+            f"📡 [CONSUMER] ✅ Sent progress update to client: {event['data']['percent']}%")

@@ -1,0 +1,4 @@
+Gemini client exists: True
+Gemini client type: <class 'google.generativeai.generative_models.GenerativeModel'>
+Gemini client is initialized!
+Gemini response: Chocolate cake

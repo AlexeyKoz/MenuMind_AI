@@ -1,0 +1,10 @@
+Canonical recipe name: шоколадный пирог
+ID: aa798faf-59c3-47ed-b6bf-12e8e2b71f20
+
+Translations:
+
+en:
+  name: шоколадный пирог
+
+ru:
+  name: Шоколадный пирог
