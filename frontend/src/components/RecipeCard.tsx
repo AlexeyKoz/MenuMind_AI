@@ -48,6 +48,12 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     showStats = true
 }) => {
     const { t } = useTranslation();
+
+    // Helper function to convert snake_case to camelCase for translation keys
+    const toCamelCase = (str: string) => {
+        return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
+
     const difficultyColors = {
         beginner: 'bg-green-100 text-green-800',
         intermediate: 'bg-yellow-100 text-yellow-800',
@@ -105,7 +111,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                 <div className="flex flex-wrap gap-2">
                     {recipe.difficulty && (
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${difficultyColors[recipe.difficulty as keyof typeof difficultyColors] || 'bg-gray-100 text-gray-800'}`}>
-                            {recipe.difficulty}
+                            {t(`discover.difficulties.${recipe.difficulty}`, { defaultValue: recipe.difficulty })}
                         </span>
                     )}
 
@@ -125,14 +131,18 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                 {/* Diet Labels */}
                 {recipe.diet_labels && recipe.diet_labels.length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                        {recipe.diet_labels.slice(0, 4).map((label) => (
-                            <span
-                                key={label}
-                                className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs font-medium"
-                            >
-                                {label}
-                            </span>
-                        ))}
+                        {recipe.diet_labels.slice(0, 4).map((label) => {
+                            // Convert snake_case to camelCase (e.g., dairy_free -> dairyFree)
+                            const translationKey = toCamelCase(label);
+                            return (
+                                <span
+                                    key={label}
+                                    className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs font-medium"
+                                >
+                                    {t(`discover.dietLabels.${translationKey}`, { defaultValue: label })}
+                                </span>
+                            );
+                        })}
                         {recipe.diet_labels.length > 4 && (
                             <span className="px-2 py-1 bg-gray-50 text-gray-600 rounded text-xs font-medium">
                                 +{recipe.diet_labels.length - 4} {t('discover.recipeCard.more')}

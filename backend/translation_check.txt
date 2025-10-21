@@ -1,0 +1,5 @@
+Recipe: שקשוקה
+Hebrew translation exists: True
+  Status: completed
+  Ingredients: 21
+  First ingredient: {'name': 'all-purpose flour', 'amount': 500.0, 'unit': 'g', 'category': 'grains'}

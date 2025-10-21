@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from 'i18next';
 import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner } from '../components';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
@@ -50,6 +51,39 @@ const CanonicalRecipesPage: React.FC = () => {
     useEffect(() => {
         loadRecipes();
     }, [search, cuisine, difficulty, dietLabels, sortBy]);
+
+    // Reload recipe list when language changes
+    useEffect(() => {
+        console.log(`🌍 Language changed to ${i18n.language}, reloading recipe list...`);
+        loadRecipes();
+    }, [i18n.language]);
+
+    // Refetch selected recipe when language changes
+    useEffect(() => {
+        const handleLanguageChange = async () => {
+            if (selectedRecipe && selectedRecipe.id) {
+                console.log(`🌍 Language changed to ${i18n.language}, refetching recipe ${selectedRecipe.id}...`);
+                try {
+                    const updatedRecipe = await api.getCanonicalRecipe(selectedRecipe.id);
+                    console.log(`✅ Recipe refetched with ${i18n.language} translation`);
+                    console.log(`   Full recipe data:`, updatedRecipe);
+                    console.log(`   Ingredients preview:`, updatedRecipe.base_ingredients?.slice(0, 2));
+                    console.log(`   Steps preview:`, updatedRecipe.base_steps?.slice(0, 2));
+                    console.log(`   Translation language:`, updatedRecipe.translation_language);
+                    setSelectedRecipe(updatedRecipe);
+                } catch (err) {
+                    console.error('❌ Failed to refetch recipe on language change:', err);
+                }
+            } else {
+                console.log(`⚠️ No recipe selected, skipping language change refetch`);
+            }
+        };
+
+        // Only refetch if we have a recipe open
+        if (selectedRecipe?.id) {
+            handleLanguageChange();
+        }
+    }, [i18n.language]); // Only watch language, not recipe ID
 
     // Handle direct recipe link from query parameter
     useEffect(() => {

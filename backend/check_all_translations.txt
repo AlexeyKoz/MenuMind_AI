@@ -1,0 +1,31 @@
+Recipe: שקשוקה
+Base (English) ingredients:
+  1. all-purpose flour
+  2. eggs
+  3. milk
+
+Base (English) steps:
+
+============================================================
+
+HE Translation:
+  Status: completed
+  Ingredients:
+    1. קרם לכל מטרה
+    2. כבדים, עוף, קצוצים, עם ביצים ובצל
+    3. משקאות, תערובת משקאות בטעם חרובים, אבקה, מוכנה עם חלב מלא
+  Steps:
+    1. Preheat the תנור to 180°C (350°F)....
+    2. In a large mixing bowl, combine the קמח, sugar, אפייה powder, salt, קינמון, nutm...
+    3. In a להפריד bowl, whisk together the eggs, milk, vegetable oil, vanilla extract,...
+
+RU Translation:
+  Status: completed
+  Ingredients:
+    1. Универсальный сливочный крем
+    2. Печень куриная, рубленая, с яйцами и луком
+    3. Напитки, смесь напитков со вкусом рожкового дерева, порошок, приготовленный на цельном молоке
+  Steps:
+    1. Preheat the oven to 180°C (350°F)....
+    2. In a large mixing bowl, combine the flour, sugar, baking powder, salt, cinnamon,...
+    3. In a separate bowl, whisk together the eggs, milk, vegetable oil, vanilla extrac...

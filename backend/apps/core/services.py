@@ -1,5 +1,6 @@
 """
 IML Sync Service - Syncs ingredients from IML SQLite to PostgreSQL
+CookLingo Sync Service - Syncs cooking terms from CookLingo SQLite to PostgreSQL
 """
 import sqlite3
 import json
@@ -7,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from .models import IngredientCache, IngredientTranslation
+from .models import IngredientCache, IngredientTranslation, CookingTermCache, CookingTermTranslation
 
 
 class IMLSyncService:
@@ -332,3 +333,174 @@ class IMLSyncService:
             'categories': list(IngredientCache.objects.values_list('category', flat=True).distinct()),
             'last_sync': IngredientCache.objects.order_by('-last_synced').first().last_synced if IngredientCache.objects.exists() else None
         }
+
+
+class CookLingoSyncService:
+    """Service for syncing CookLingo SQLite database to PostgreSQL"""
+
+    def __init__(self):
+        self.cooklingo_db_path = getattr(
+            settings, 'COOKLINGO_DB_PATH', 'cooklingo.db')
+        self.conn = None
+
+    def connect(self) -> bool:
+        """Connect to CookLingo SQLite database (READ ONLY)"""
+        try:
+            self.conn = sqlite3.connect(
+                f'file:{self.cooklingo_db_path}?mode=ro', uri=True)
+            self.conn.row_factory = sqlite3.Row
+            self.conn.execute("PRAGMA query_only = ON")
+
+            print(
+                f"[OK] Connected to CookLingo database: {self.cooklingo_db_path}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to connect to CookLingo database: {e}")
+            return False
+
+    def disconnect(self):
+        """Close CookLingo database connection"""
+        if self.conn:
+            self.conn.close()
+            print("[OK] Disconnected from CookLingo database")
+
+    def sync_all(self, force: bool = False) -> Dict:
+        """
+        Sync all cooking terms from CookLingo to PostgreSQL
+
+        Args:
+            force: If True, sync all. If False, only sync modified since last sync
+
+        Returns:
+            Dict with created, updated, and error counts
+        """
+        if not self.connect():
+            return {'created': 0, 'updated': 0, 'errors': 1}
+
+        try:
+            print("[START] Starting CookLingo sync...")
+
+            created, updated, errors = self._sync_terms(force)
+
+            print(f"\n[OK] Sync complete!")
+            print(f"   Created: {created}")
+            print(f"   Updated: {updated}")
+            print(f"   Errors: {errors}")
+
+            return {'created': created, 'updated': updated, 'errors': errors}
+
+        except Exception as e:
+            print(f"[ERROR] Sync failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'created': 0, 'updated': 0, 'errors': 1}
+        finally:
+            self.disconnect()
+
+    def _sync_terms(self, force: bool) -> Tuple[int, int, int]:
+        """Sync cooking terms from CookLingo database"""
+        cursor = self.conn.cursor()
+
+        # Get all terms
+        cursor.execute("SELECT * FROM terms ORDER BY id")
+        terms = cursor.fetchall()
+
+        print(f"[SYNC] Found {len(terms)} terms in CookLingo database")
+
+        created_count = 0
+        updated_count = 0
+        error_count = 0
+
+        for idx, term_row in enumerate(terms, 1):
+            if idx % 100 == 0:
+                print(f"   Progress: {idx}/{len(terms)}")
+
+            try:
+                result = self._sync_single_term(term_row)
+                if result == 'created':
+                    created_count += 1
+                elif result == 'updated':
+                    updated_count += 1
+            except Exception as e:
+                error_count += 1
+                print(
+                    f"[ERROR] Failed to sync term '{term_row['term_english']}': {e}")
+
+        return (created_count, updated_count, error_count)
+
+    def _sync_single_term(self, term_row: sqlite3.Row) -> str:
+        """Sync a single cooking term and its translations"""
+        with transaction.atomic():
+            # Create or update term
+            term, created = CookingTermCache.objects.update_or_create(
+                term_english=term_row['term_english'],
+                defaults={
+                    'term_english_normalized': term_row['term_english_normalized'] or term_row['term_english'].lower(),
+                    'term_type': term_row['term_type'] or '',
+                    'category': term_row['category'] or '',
+                    'definition': term_row['definition'] or '',
+                    'usage_frequency': term_row['usage_frequency'] or '',
+                    'difficulty_level': term_row['difficulty_level'] or '',
+                    'confidence_score': term_row['confidence_score'] or 0,
+                    'verified': bool(term_row['verified']),
+                }
+            )
+
+            # Sync translations
+            self._sync_term_translations(term, term_row['id'])
+
+            return 'created' if created else 'updated'
+
+    def _sync_term_translations(self, term: CookingTermCache, term_id: int):
+        """Sync translations for a cooking term"""
+        cursor = self.conn.cursor()
+
+        # Get translations for this term
+        cursor.execute(
+            "SELECT * FROM translations WHERE term_id = ?",
+            (term_id,)
+        )
+        translations = cursor.fetchall()
+
+        for trans_row in translations:
+            lang_code = trans_row['language_code']
+
+            # Parse alternative translations
+            alt_translations = []
+            if trans_row['alternative_translations']:
+                try:
+                    alt_translations = json.loads(
+                        trans_row['alternative_translations'])
+                    if not isinstance(alt_translations, list):
+                        alt_translations = []
+                except:
+                    alt_translations = []
+
+            CookingTermTranslation.objects.update_or_create(
+                term=term,
+                language_code=lang_code,
+                defaults={
+                    'translation': trans_row['translation'],
+                    'verification_status': trans_row['verification_status'] or 'unverified',
+                    'alternative_translations': alt_translations,
+                    'cultural_notes': trans_row['cultural_notes'] or '',
+                    'source': trans_row['source'] or '',
+                    'confidence_score': trans_row['confidence_score'] or 0,
+                }
+            )
+
+    def get_sync_stats(self) -> Dict:
+        """Get statistics about current sync state"""
+        return {
+            'total_terms': CookingTermCache.objects.count(),
+            'total_translations': CookingTermTranslation.objects.count(),
+            'languages': {
+                'en': CookingTermTranslation.objects.filter(language_code='en').count(),
+                'ru': CookingTermTranslation.objects.filter(language_code='ru').count(),
+                'he': CookingTermTranslation.objects.filter(language_code='he').count(),
+            },
+            'categories': list(CookingTermCache.objects.values_list('category', flat=True).distinct()),
+            'term_types': list(CookingTermCache.objects.values_list('term_type', flat=True).distinct()),
+            'last_sync': CookingTermCache.objects.order_by('-last_synced').first().last_synced if CookingTermCache.objects.exists() else None
+        }
+

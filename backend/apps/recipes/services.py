@@ -8,6 +8,7 @@ from apps.core.ingredient_mapper import IngredientMapper
 from apps.core.unit_converter import UnitConverter
 from apps.core.nutrition_calculator import NutritionCalculator
 from apps.core.translation_service import TranslationService
+from apps.core.cooking_terms_service import CookingTermsTranslationService
 from rcip_converter import RCIPConverter, RecipeAnalyzer
 import os
 import sys
@@ -56,6 +57,7 @@ class RecipeAgentService:
         self.unit_converter = UnitConverter()
         self.nutrition_calculator = NutritionCalculator()
         self.translation_service = TranslationService()
+        self.cooking_terms_service = CookingTermsTranslationService()
 
     async def _enrich_recipe_with_iml(
         self,
@@ -76,26 +78,41 @@ class RecipeAgentService:
         Returns:
             Enhanced RCIP recipe
         """
-        print("[ENRICH] Starting IML enrichment...")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("[ENRICH] Starting IML enrichment...")
 
         user_language = user_preferences.get(
             'language', 'en') if user_preferences else 'en'
         user_unit_system = user_preferences.get(
             'unit_system', 'metric') if user_preferences else 'metric'
 
+        logger.info(
+            f"[ENRICH] User language: {user_language}, unit system: {user_unit_system}")
+
         # Step 1: Map ingredients to IML keys
         enriched_ingredients = []
-        for ingredient in rcip_recipe.get('ingredients', []):
+        ingredient_count = len(rcip_recipe.get('ingredients', []))
+        logger.info(f"[ENRICH] Processing {ingredient_count} ingredients...")
+
+        for idx, ingredient in enumerate(rcip_recipe.get('ingredients', [])):
             ingredient_text = ingredient.get('name', '')
             quantity = ingredient.get('quantity')
             unit = ingredient.get('unit', '')
 
-            # Map to IML
-            match_result = self.ingredient_mapper.map(
+            # Map to IML (wrap in sync_to_async since it uses Django ORM)
+            match_result = await sync_to_async(self.ingredient_mapper.map)(
                 text=f"{quantity}{unit} {ingredient_text}" if quantity and unit else ingredient_text,
                 language=user_language,
                 user_unit_system=user_unit_system
             )
+
+            if match_result.ingredient_key:
+                logger.info(
+                    f"[ENRICH] {idx+1}/{ingredient_count}: Mapped '{ingredient_text}' → {match_result.ingredient_key} (confidence: {match_result.confidence})")
+            else:
+                logger.warning(
+                    f"[ENRICH] {idx+1}/{ingredient_count}: No match for '{ingredient_text}'")
 
             # Build enriched ingredient
             enriched = {
@@ -144,7 +161,7 @@ class RecipeAgentService:
         if isinstance(servings, dict):
             servings = servings.get('amount', 4)
 
-        nutrition = self.nutrition_calculator.calculate_recipe_nutrition(
+        nutrition = await sync_to_async(self.nutrition_calculator.calculate_recipe_nutrition)(
             nutrition_ingredients,
             servings=servings
         )
@@ -160,15 +177,17 @@ class RecipeAgentService:
         rcip_recipe['meta']['nutrition_total'] = nutrition['total']
         rcip_recipe['meta']['nutrition_coverage'] = nutrition['coverage']
 
-        # Step 4: Prepare base_ingredients for frontend (translated)
+        # Step 4: Prepare base_ingredients for frontend (ALWAYS IN ENGLISH for storage)
+        # Frontend will translate using the translation tables
         base_ingredients = self._prepare_base_ingredients(
-            enriched_ingredients, user_language
+            enriched_ingredients, 'en'  # Always store in English
         )
         rcip_recipe['base_ingredients'] = base_ingredients
 
-        # Step 5: Prepare base_steps (clean, translated)
+        # Step 5: Prepare base_steps (ALWAYS IN ENGLISH for storage)
+        # Frontend will translate using cooking terms database
         base_steps = self._prepare_base_steps(
-            rcip_recipe.get('steps', []), user_language
+            rcip_recipe.get('steps', []), 'en'  # Always store in English
         )
         rcip_recipe['base_steps'] = base_steps
 
@@ -191,29 +210,55 @@ class RecipeAgentService:
             # Get translated name if available
             display_name = ing.get('display_name', {})
             if isinstance(display_name, dict):
+                # IML database match - has translations
                 name = display_name.get(language, ing.get('name', ''))
+            elif isinstance(display_name, str):
+                # Synthetic key - display_name is already a string (English name)
+                name = display_name
             else:
+                # Fallback to original name
                 name = ing.get('name', '')
 
             # Skip empty or very short names
             if not name or len(name.strip()) < 2:
                 continue
 
-            # Skip "as needed" without actual ingredient
-            name_lower = name.lower()
-            if name_lower in ['as needed', 'to taste', 'optional']:
+            # Skip generic non-ingredients (AGGRESSIVE FILTERING)
+            name_lower = name.lower().strip()
+            skip_terms = [
+                'as needed', 'to taste', 'optional', 'for serving', 'for garnish',
+                'needed', 'analyzing', 'webpage', 'content', 'found', 'recipe',
+                'however', 'extract', 'complete', '***'
+            ]
+            # Skip if name matches any skip term
+            if any(term in name_lower for term in skip_terms):
                 continue
 
             # Format quantity
             quantity = ing.get('quantity')
             if quantity:
                 if isinstance(quantity, (int, float)):
+                    # Skip if quantity is exactly 1 and name is vague or contains skip terms
+                    if quantity == 1:
+                        if any(term in name_lower for term in skip_terms):
+                            continue
+                        # Also skip if name is just 1-2 words with no real content
+                        if len(name_lower) < 4:
+                            continue
                     amount = str(int(quantity)) if quantity == int(
                         quantity) else str(quantity)
                 else:
-                    amount = str(quantity)
+                    amount = str(quantity).strip()
+                    # Skip if amount is "1" and name is vague
+                    if amount == "1" and len(name_lower) < 4:
+                        continue
             else:
+                # No quantity - use empty string (will be displayed without amount)
                 amount = ''
+
+            # Final check: skip if name is just a number or single character
+            if name_lower.isdigit() or len(name_lower) == 1:
+                continue
 
             base_ingredients.append({
                 'amount': amount,
@@ -234,8 +279,13 @@ class RecipeAgentService:
             language: User's preferred language
 
         Returns:
-            List of clean cooking steps
+            List of clean cooking steps with translated cooking terms
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"[PREPARE_STEPS] Starting with {len(steps)} steps")
+
         base_steps = []
         step_number = 1
 
@@ -250,14 +300,31 @@ class RecipeAgentService:
         ]
 
         for step in steps:
-            # Get step text
+            # Get step text and remember which field it came from
+            text = None
+            text_field_name = None
+            time_minutes = None
+            order = None
+            equipment = None
+
             if isinstance(step, dict):
-                text = step.get('instruction') or step.get(
-                    'text') or step.get('step', '')
+                # Try 'instruction' first (RCIP standard), then 'text'
+                if 'instruction' in step:
+                    text = step['instruction']
+                    text_field_name = 'instruction'
+                elif 'text' in step:
+                    text = step['text']
+                    text_field_name = 'text'
+                elif 'step' in step:
+                    text = step['step']
+                    text_field_name = 'instruction'
+
                 time_minutes = step.get('time_minutes')
+                order = step.get('order')
+                equipment = step.get('equipment')
             else:
                 text = str(step)
-                time_minutes = None
+                text_field_name = 'instruction'
 
             # Skip empty steps
             if not text or not text.strip():
@@ -276,17 +343,30 @@ class RecipeAgentService:
             if should_skip:
                 continue
 
-            # Build step
+            # Store in English - preserve original field name for consistency
+            # Build step with the SAME field name as the source
             clean_step = {
-                'text': text,
+                text_field_name: text,  # Use original field name
                 'step_number': step_number
             }
 
+            # Preserve additional fields if present
+            if order is not None:
+                clean_step['order'] = order
             if time_minutes:
                 clean_step['time_minutes'] = time_minutes
+            if equipment:
+                clean_step['equipment'] = equipment
 
             base_steps.append(clean_step)
             step_number += 1
+
+        logger.info(
+            f"[PREPARE_STEPS] Finished: {len(base_steps)} steps survived filtering (from {len(steps)} original)")
+        if len(base_steps) == 0 and len(steps) > 0:
+            logger.warning(f"[PREPARE_STEPS] ⚠️ ALL STEPS WERE FILTERED OUT!")
+            logger.warning(
+                f"[PREPARE_STEPS] First original step was: {steps[0] if steps else 'None'}")
 
         return base_steps
 
@@ -637,6 +717,114 @@ class RecipeAgentService:
         print(
             f"   Nutrition: {canonical.nutrition_per_serving.get('calories', 0):.0f} cal/serving")
 
+        # Queue background translations to all supported languages
+        try:
+            from .tasks import translate_recipe_to_language
+            from apps.core.models import IngredientCache
+            from apps.core.cooking_terms_service import CookingTermsTranslationService
+            from .models import RecipeTranslation
+            from django.utils import timezone
+
+            user_language = rcip_data.get(
+                'meta', {}).get('original_language', 'en')
+
+            # If user language is NOT English, translate IMMEDIATELY (synchronously)
+            if user_language and user_language != 'en':
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    f"[TRANSLATION] ⚡ Translating IMMEDIATELY to {user_language} (user's language)")
+                logger.info(
+                    f"[TRANSLATION] Recipe has {len(canonical.base_ingredients)} base_ingredients")
+                logger.info(
+                    f"[TRANSLATION] First ingredient: {canonical.base_ingredients[0] if canonical.base_ingredients else 'None'}")
+                try:
+                    # Get or create translation record
+                    translation, created = RecipeTranslation.objects.get_or_create(
+                        canonical_recipe=canonical,
+                        language=user_language,
+                        defaults={'status': 'in_progress'}
+                    )
+
+                    if not created and translation.status == 'completed':
+                        logger.info(
+                            f"[TRANSLATION] ✅ Translation already exists for {user_language}")
+                    else:
+                        # Update status
+                        translation.status = 'in_progress'
+                        translation.save()
+
+                        # Initialize SMART translator (uses databases first, Gemini as fallback)
+                        from apps.core.smart_translator import SmartTranslationService
+                        smart_translator = SmartTranslationService()
+
+                        # Translate recipe name
+                        translated_name = smart_translator.translate_recipe_name(
+                            canonical.name,
+                            user_language
+                        )
+
+                        # Translate ingredients using SMART approach
+                        # 1. Check IML database (exact + fuzzy match)
+                        # 2. Check cache for previous translations
+                        # 3. Use Gemini only for unknowns (batch)
+                        logger.info(
+                            f"[TRANSLATION] Starting smart translation for {len(canonical.base_ingredients)} ingredients")
+
+                        translated_ingredients = smart_translator.translate_ingredients_batch(
+                            canonical.base_ingredients,
+                            user_language
+                        )
+
+                        # Translate cooking steps using SMART approach with CookLingo glossary
+                        # 1. Build glossary of cooking terms from CookLingo database
+                        # 2. Translate full sentences with Gemini using glossary
+                        logger.info(
+                            f"[TRANSLATION] Starting smart translation for {len(canonical.base_steps)} steps (with CookLingo glossary)")
+
+                        translated_steps = smart_translator.translate_cooking_steps_batch(
+                            canonical.base_steps,
+                            user_language
+                        )
+
+                        # Save translation
+                        translation.name = translated_name  # Use translated name
+                        translation.description = canonical.description
+                        translation.base_ingredients = translated_ingredients
+                        translation.base_steps = translated_steps
+                        translation.status = 'completed'
+                        translation.completed_at = timezone.now()
+                        translation.save()
+
+                        logger.info(
+                            f"[TRANSLATION] ✅ Completed immediate translation to {user_language}")
+                        logger.info(
+                            f"   - Translated {len(translated_ingredients)} ingredients")
+                        logger.info(
+                            f"   - Translated {len(translated_steps)} steps")
+
+                except Exception as e:
+                    logger.error(
+                        f"[TRANSLATION] ⚠️ Immediate translation failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            # Queue background translations for OTHER languages (including English!)
+            all_languages = ['en', 'ru', 'he']
+            other_languages = [
+                lang for lang in all_languages if lang != user_language]
+
+            for lang in other_languages:
+                translate_recipe_to_language.delay(str(canonical.id), lang)
+
+            logger.info(
+                f"[TRANSLATION] ✅ Queued background translations for: {other_languages}")
+        except Exception as e:
+            print(f"[TRANSLATION] ⚠️ Could not queue translations: {e}")
+            import traceback
+            traceback.print_exc()
+            # Don't fail recipe creation if translation queuing fails
+
         return canonical
 
     @sync_to_async
@@ -690,120 +878,289 @@ class RecipeAgentService:
     # ============================================================================
 
     async def _search_recipes(self, query: str, max_results: int = 5) -> List[str]:
-        """Search for recipes using DuckDuckGo"""
+        """Search for recipes using DuckDuckGo (primary) with Brave Search fallback"""
         print(f"[SEARCH] Searching for: '{query}'")
 
+        # Try DuckDuckGo first (FREE, unlimited, reliable)
+        urls = await self._search_with_duckduckgo(query, max_results)
+        if urls:
+            print(f"[SEARCH] ✅ Found {len(urls)} URLs via DuckDuckGo")
+            return urls
+
+        # Fallback to Brave Search if DuckDuckGo fails
+        print("[SEARCH] DuckDuckGo failed, trying Brave Search...")
+        urls = await self._search_with_brave(query, max_results)
+        if urls:
+            print(f"[SEARCH] ✅ Found {len(urls)} URLs via Brave")
+            return urls
+
+        print("[SEARCH] ❌ Both search methods failed")
+        return []
+
+    async def _search_with_brave(self, query: str, max_results: int = 5) -> List[str]:
+        """Search using Brave Search API (direct)"""
+        try:
+            import aiohttp
+            search_query = f"{query} recipe step by step"
+
+            # Brave Search web endpoint (no API key needed for basic search)
+            search_url = f"https://search.brave.com/search?q={requests.utils.quote(search_query)}&source=web"
+
+            print(f"[BRAVE] Searching: {search_query}")
+
+            # Use requests to scrape Brave Search results
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: requests.get(
+                    search_url,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Connection': 'keep-alive',
+                    },
+                    timeout=10
+                )
+            )
+
+            if response.status_code != 200:
+                print(f"[BRAVE] Failed with status {response.status_code}")
+                return []
+
+            # Parse HTML to extract recipe URLs
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            urls = []
+            # Brave Search uses specific classes for search results
+            for result in soup.select('div.snippet[data-type="web"]')[:max_results]:
+                link_elem = result.select_one('a[href]')
+                if link_elem and link_elem.get('href'):
+                    url = link_elem['href']
+                    # Filter for recipe sites
+                    if any(domain in url.lower() for domain in ['recipe', 'cooking', 'kitchen', 'food', 'chef', 'allrecipes', 'foodnetwork', 'epicurious', 'seriouseats', 'bonappetit']):
+                        title_elem = result.select_one('.title')
+                        title = title_elem.get_text(
+                            strip=True) if title_elem else url
+                        urls.append(url)
+                        print(f"   {len(urls)}. {title[:60]}...")
+
+            if urls:
+                print(f"[BRAVE] ✅ Found {len(urls)} recipe URLs")
+                return urls
+
+            # If no filtered URLs, get any URLs
+            for result in soup.select('div.snippet[data-type="web"]')[:max_results]:
+                link_elem = result.select_one('a[href]')
+                if link_elem and link_elem.get('href'):
+                    url = link_elem['href']
+                    urls.append(url)
+                    print(f"   {len(urls)}. {url[:80]}")
+
+            if urls:
+                print(f"[BRAVE] ✅ Found {len(urls)} URLs (unfiltered)")
+            else:
+                print(f"[BRAVE] ⚠️ No results found")
+
+            return urls
+
+        except Exception as e:
+            print(f"[BRAVE] ❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    async def _search_with_duckduckgo(self, query: str, max_results: int = 5) -> List[str]:
+        """Search using DuckDuckGo (primary, free & unlimited)"""
         if DDGS is None:
-            print("[ERROR] DDGS not available. Please install: pip install ddgs")
+            print(
+                "[DDGS] ⚠️ DDGS not available. Please install: pip install duckduckgo-search")
             return []
 
         try:
             search_query = f"{query} recipe step by step"
+            print(f"[DDGS] Searching: {search_query}")
 
             # Run in executor to avoid blocking
             loop = asyncio.get_event_loop()
             results = await loop.run_in_executor(
                 None,
                 lambda: list(DDGS().text(
-                    search_query, max_results=max_results, region='wt-wt'))
+                    search_query,
+                    max_results=max_results * 2,  # Get more results to filter
+                    region='us-en',  # US English region for better recipe results
+                    safesearch='moderate'
+                ))
             )
 
             urls = []
+            skipped_chinese = 0
             for i, result in enumerate(results, 1):
                 url = result.get('href', result.get('link', ''))
                 title = result.get('title', '')
-                print(f"   {i}. {title}")
-                if url:
-                    urls.append(url)
+
+                if not url:
+                    continue
+
+                # Skip Chinese sites (zhihu, baidu, etc.)
+                if any(domain in url.lower() for domain in ['zhihu.com', 'baidu.com', 'bilibili.com', 'weibo.com', '163.com', 'sina.com']):
+                    skipped_chinese += 1
+                    continue
+
+                # Skip if title contains too many Chinese characters
+                chinese_chars = sum(
+                    1 for char in title if '\u4e00' <= char <= '\u9fff')
+                if chinese_chars > len(title) * 0.3:  # More than 30% Chinese
+                    skipped_chinese += 1
+                    continue
+
+                # Prioritize recipe sites
+                is_recipe_site = any(domain in url.lower() for domain in [
+                    'recipe', 'cooking', 'kitchen', 'food', 'chef',
+                    'allrecipes', 'foodnetwork', 'epicurious', 'seriouseats',
+                    'bonappetit', 'tasty', 'delish', 'yummly', 'simplyrecipes',
+                    'cookieandkate', 'budgetbytes', 'thekitchn'
+                ])
+
+                if is_recipe_site:
+                    print(f"   {i}. ⭐ {title[:60]}...")
+                else:
+                    print(f"   {i}. {title[:60]}...")
+
+                urls.append(url)
+
+                # Stop after we have enough English results
+                if len(urls) >= max_results:
+                    break
+
+            if skipped_chinese > 0:
+                print(f"[DDGS] Skipped {skipped_chinese} Chinese sites")
+
+            if urls:
+                print(f"[DDGS] ✅ Found {len(urls)} English recipe URLs")
+            else:
+                print(f"[DDGS] ⚠️ No English results found for '{query}'")
 
             return urls
 
         except Exception as e:
-            print(f"[ERROR] Search error: {e}")
+            print(f"[DDGS] ❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     async def _scrape_recipe(self, url: str) -> Optional[Dict]:
-        """Scrape recipe content from URL"""
+        """Scrape recipe content from URL with better anti-blocking"""
         print(f"[SCRAPE] Scraping: {url}")
 
-        try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1'
-            }
+        # List of user agents to rotate
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
+        ]
 
-            # Run in executor to avoid blocking
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: requests.get(url, headers=headers,
-                                     timeout=15, allow_redirects=True)
-            )
+        import random
 
-            print(f"   [DEBUG] Status code: {response.status_code}")
-            response.raise_for_status()
+        for attempt in range(2):  # Try twice with different user agents
+            try:
+                headers = {
+                    'User-Agent': random.choice(user_agents),
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Cache-Control': 'max-age=0'
+                }
 
-            soup = BeautifulSoup(response.content, 'html.parser')
+                # Run in executor to avoid blocking
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: requests.get(url, headers=headers,
+                                         timeout=15, allow_redirects=True)
+                )
 
-            # Remove unwanted tags
-            for script in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript", "form", "button"]):
-                script.decompose()
+                print(f"   [DEBUG] Status code: {response.status_code}")
 
-            # Try to find recipe content first (common recipe containers)
-            recipe_content = None
-            for selector in [
-                'article', '.recipe', '#recipe', '.recipe-content',
-                '.recipe-instructions', '.post-content', 'main',
-                '[itemtype*="Recipe"]', '.entry-content'
-            ]:
-                recipe_content = soup.select_one(selector)
+                if response.status_code == 403 and attempt == 0:
+                    print(
+                        f"   [RETRY] 403 Forbidden, trying with different user agent...")
+                    await asyncio.sleep(1)  # Wait 1 second before retry
+                    continue
+
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.content, 'html.parser')
+
+                # Remove unwanted tags
+                for script in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript", "form", "button"]):
+                    script.decompose()
+
+                # Try to find recipe content first (common recipe containers)
+                recipe_content = None
+                for selector in [
+                    'article', '.recipe', '#recipe', '.recipe-content',
+                    '.recipe-instructions', '.post-content', 'main',
+                    '[itemtype*="Recipe"]', '.entry-content'
+                ]:
+                    recipe_content = soup.select_one(selector)
+                    if recipe_content:
+                        print(f"   [DEBUG] Found content in: {selector}")
+                        break
+
+                # Extract text from recipe content or full page
                 if recipe_content:
-                    print(f"   [DEBUG] Found content in: {selector}")
-                    break
+                    text = recipe_content.get_text(separator='\n', strip=True)
+                else:
+                    text = soup.get_text(separator='\n', strip=True)
+                    print(f"   [DEBUG] Using full page content")
 
-            # Extract text from recipe content or full page
-            if recipe_content:
-                text = recipe_content.get_text(separator='\n', strip=True)
-            else:
-                text = soup.get_text(separator='\n', strip=True)
-                print(f"   [DEBUG] Using full page content")
+                # Filter meaningful lines
+                lines = text.split('\n')
+                filtered_lines = [line for line in lines if len(
+                    line) > 15 and not line.startswith('×')]
 
-            # Filter meaningful lines
-            lines = text.split('\n')
-            filtered_lines = [line for line in lines if len(
-                line) > 15 and not line.startswith('×')]
+                # Take more lines for better extraction
+                text = '\n'.join(filtered_lines[:200])
 
-            # Take more lines for better extraction
-            text = '\n'.join(filtered_lines[:200])
+                print(
+                    f"   [OK] Extracted {len(text)} characters from {len(filtered_lines)} lines")
 
-            print(
-                f"   [OK] Extracted {len(text)} characters from {len(filtered_lines)} lines")
+                # Check if we got meaningful content
+                if len(text) < 500:
+                    print(f"   [WARNING] Content too short: {len(text)} chars")
+                    return None
 
-            # Check if we got meaningful content
-            if len(text) < 500:
-                print(f"   [WARNING] Content too short: {len(text)} chars")
+                return {
+                    'url': url,
+                    'text': text
+                }
+
+            except requests.exceptions.Timeout:
+                print(f"   [ERROR] Timeout error for {url}")
+                return None
+            except requests.exceptions.RequestException as e:
+                if attempt == 0 and '403' in str(e):
+                    print(f"   [RETRY] {e}, trying with different approach...")
+                    await asyncio.sleep(1)
+                    continue
+                print(f"   [ERROR] Request error: {e}")
+                return None
+            except Exception as e:
+                print(f"   [ERROR] Scraping error: {e}")
+                import traceback
+                traceback.print_exc()
                 return None
 
-            return {
-                'url': url,
-                'text': text
-            }
-
-        except requests.exceptions.Timeout:
-            print(f"   [ERROR] Timeout error for {url}")
-            return None
-        except requests.exceptions.RequestException as e:
-            print(f"   [ERROR] Request error: {e}")
-            return None
-        except Exception as e:
-            print(f"   [ERROR] Scraping error: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+        print(f"   [FAILED] All scraping attempts failed")
+        return None
 
     async def _convert_to_rcip(
         self,
@@ -829,67 +1186,119 @@ class RecipeAgentService:
                 'unit_system', 'metric') if user_preferences else 'metric'
 
             # First, extract structured data using LLM
-            prompt = f"""You are extracting a recipe from a webpage. The webpage may contain comments, reviews, ads, and other text.
+            prompt = f"""Extract the complete recipe from this webpage. Get ALL ingredients and ALL cooking steps.
 
 Recipe Name: {recipe_name}
-Language: {user_language}
-Units: {user_unit_system}
 
-Webpage Text:
-{scraped_data['text'][:3000]}
+Webpage Content:
+{scraped_data['text'][:4000]}
 
-TASK:
-Extract ONLY the actual recipe ingredients and cooking instructions. Ignore everything else (comments, reviews, blog posts, nutrition info, personal stories, ads).
+CRITICAL RULES:
 
-INGREDIENTS FORMAT:
-- Must have quantity AND unit AND ingredient name
-- Example: "2 cups flour" or "200g sugar" or "3 eggs"
-- If no quantity is given, skip that ingredient
-- Use {user_unit_system} units ({'metric (g, kg, ml, L, pieces)' if user_unit_system == 'metric' else 'imperial (oz, lb, cups, tbsp, tsp)'})
+INGREDIENTS - FORMAT STRICTLY AS:
+- quantity unit ingredient_name
+- Examples: "200g flour", "2 eggs", "1 tsp salt", "100ml milk"
+- NEVER write "1 as needed" - if no quantity, skip that ingredient completely
+- NEVER write explanations or analysis
+- Each line must be ONE ingredient with quantity + unit + name
 
-STEPS FORMAT:
-- Only actual cooking actions (Mix, Heat, Bake, Add, etc.)
-- Must be instructions that tell you HOW to cook
-- Skip: comments, reviews, tips, suggestions, personal stories, nutrition info
-- Maximum 20 steps
+COOKING STEPS - FORMAT STRICTLY AS:
+- Extract ALL steps from start to finish
+- One action per step
+- Number each step: 1., 2., 3., etc.
+- Typical recipes have 10-20 steps
+- DO NOT summarize or combine steps
 
-Return ONLY this format (no extra text):
+FORBIDDEN:
+- NO explanations like "After analyzing..." or "I found..."
+- NO commentary or analysis
+- NO duplicate ingredients
+- JUST the recipe data
+
+OUTPUT FORMAT (NOTHING ELSE):
 
 INGREDIENTS:
-- 200g all-purpose flour
-- 2 large eggs
-- 100ml milk
+- 500g all-purpose flour
+- 3 large eggs
+- 250ml milk
 
 STEPS:
-1. Preheat oven to 180°C
-2. Mix flour and eggs in a bowl
-3. Add milk and stir until smooth
-4. Bake for 25 minutes"""
+1. [First step]
+2. [Second step]
+...
 
-            # Run in executor
-            loop = asyncio.get_event_loop()
-            chat_completion = await loop.run_in_executor(
-                None,
-                lambda: self.groq_client.chat.completions.create(
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": f"You are a recipe extraction expert. Extract ONLY recipe ingredients (with quantities) and cooking instructions from webpages. Ignore comments, reviews, ads, and blog text. Output in {user_language} using {user_unit_system} units."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
+START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
+
+            # Use Gemini Flash 2.5 for extraction (better rate limits than Groq)
+            try:
+                import google.generativeai as genai
+
+                # Configure Gemini
+                api_key = getattr(settings, 'GEMINI_API_KEY', None)
+                if not api_key:
+                    print("[AI] ⚠️ No Gemini API key, falling back to Groq")
+                    raise ImportError("No Gemini API key")
+
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+                # Run in executor
+                loop = asyncio.get_event_loop()
+                gemini_response = await loop.run_in_executor(
+                    None,
+                    lambda: model.generate_content(
+                        prompt,
+                        generation_config={
+                            'temperature': 0.1,
+                            'max_output_tokens': 3000,
                         }
-                    ],
-                    model=self.model,
-                    temperature=0.2,
-                    max_tokens=2000
+                    )
                 )
-            )
 
-            response = chat_completion.choices[0].message.content
-            print(f"   [AI] ✅ Received response: {len(response)} characters")
+                response = gemini_response.text
+                print(
+                    f"   [GEMINI] ✅ Received response: {len(response)} characters")
+
+            except Exception as gemini_error:
+                print(
+                    f"   [GEMINI] ⚠️ Failed: {gemini_error}, falling back to Groq")
+
+                # Fallback to Groq if Gemini fails
+                if not self.groq_client:
+                    print(f"   [AI] ❌ No Groq client available either")
+                    return None
+
+                loop = asyncio.get_event_loop()
+                chat_completion = await loop.run_in_executor(
+                    None,
+                    lambda: self.groq_client.chat.completions.create(
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a professional recipe extraction expert. Extract the COMPLETE recipe with ALL ingredients and ALL cooking steps. Never skip steps or summarize. Always output in English - we will translate later."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        model=self.model,
+                        temperature=0.1,
+                        max_tokens=3000
+                    )
+                )
+
+                response = chat_completion.choices[0].message.content
+                print(
+                    f"   [GROQ] ✅ Received response: {len(response)} characters")
+
             print(f"   [AI] Response preview: {response[:200]}...")
+
+            # Strip any text before "INGREDIENTS:" (AI sometimes adds explanation)
+            if 'INGREDIENTS:' in response:
+                response = 'INGREDIENTS:' + \
+                    response.split('INGREDIENTS:', 1)[1]
+                print(f"   [AI] ✅ Cleaned response, starts with INGREDIENTS")
 
             # Parse LLM response
             parts = response.split('STEPS:')
@@ -919,6 +1328,17 @@ STEPS:
             print(
                 f"   [RCIP] Recipe has {len(rcip_recipe.get('ingredients', []))} ingredients and {len(rcip_recipe.get('steps', []))} steps")
 
+            # DEBUG: Log first few steps
+            if rcip_recipe.get('steps'):
+                print(f"   [RCIP] First 3 steps preview:")
+                for i, step in enumerate(rcip_recipe.get('steps', [])[:3], 1):
+                    step_text = step.get('instruction') or step.get(
+                        'text') or str(step)
+                    print(f"      Step {i}: {step_text[:80]}...")
+            else:
+                print(f"   [RCIP] ⚠️ No steps found in RCIP conversion!")
+                print(f"   [RCIP] Steps text was: {steps_text[:200]}...")
+
             # Enhance with AI analysis
             print(f"   [ANALYZE] Estimating times...")
             times = self.recipe_analyzer.estimate_times(
@@ -942,11 +1362,19 @@ STEPS:
 
             # NEW: Enrich with IML data
             try:
-                print(f"   [IML] Starting IML enrichment...")
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"[IML] Starting IML enrichment...")
                 rcip_recipe = await self._enrich_recipe_with_iml(rcip_recipe, user_preferences)
-                print(f"   [IML] ✅ IML enrichment successful")
+                logger.info(f"[IML] ✅ IML enrichment successful")
+                logger.info(
+                    f"[IML] Recipe now has {len(rcip_recipe.get('base_ingredients', []))} base_ingredients")
             except Exception as iml_error:
-                print(f"   [IML] ⚠️ IML enrichment failed: {iml_error}")
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"[IML] ⚠️ IML enrichment failed: {iml_error}")
+                import traceback
+                logger.error(traceback.format_exc())
                 print(f"   [IML] Continuing without IML data...")
 
             # NEW: Translate to all languages

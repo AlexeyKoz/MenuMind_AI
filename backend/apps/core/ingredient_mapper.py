@@ -223,13 +223,33 @@ class IngredientMapper:
         if result:
             return result
 
-        # Strategy 6: AI fallback (if available)
-        if self.groq_client:
-            result = self._ai_match(name, language)
-            if result:
-                return result
+        # Strategy 6: AI fallback (if available) - DISABLED for now due to rate limits
+        # if self.groq_client:
+        #     result = self._ai_match(name, language)
+        #     if result:
+        #         return result
 
-        return None
+        # Strategy 7: Synthetic key (ALWAYS succeeds)
+        # Create a normalized key from the ingredient name
+        # This allows translation to work even if not in IML database
+        synthetic_key = self._create_synthetic_key(name)
+        return {
+            'key': synthetic_key,
+            'confidence': 0.5,  # Medium confidence
+            'display_name': name,  # Store as string, will be dict after translation
+            'matched_translation': name
+        }
+
+    def _create_synthetic_key(self, name: str) -> str:
+        """
+        Create a synthetic ingredient_key from the name
+        Format: synthetic_{normalized_name}
+        """
+        import re
+        # Normalize: lowercase, remove special chars, replace spaces with underscores
+        normalized = re.sub(r'[^a-z0-9\s]', '', name.lower())
+        normalized = re.sub(r'\s+', '_', normalized.strip())
+        return f"synthetic_{normalized}"
 
     def _exact_match(self, name: str, language: str) -> Optional[Dict]:
         """Exact match (case-sensitive)"""

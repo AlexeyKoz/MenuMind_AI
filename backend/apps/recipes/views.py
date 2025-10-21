@@ -126,6 +126,70 @@ class RecipeViewSet(viewsets.ModelViewSet):
             f"[RESULT] {'Created new' if created else 'Found existing'} canonical recipe: {canonical_recipe['name']}")
         print(f"[RESULT] User fork created/retrieved: {user_recipe['id']}")
 
+        # Check if translation exists for user's language and merge it
+        user_language = user_preferences.get('language', 'en')
+        if user_language != 'en':
+            try:
+                from .models import RecipeTranslation, CanonicalRecipe
+                import time
+
+                canonical_obj = CanonicalRecipe.objects.get(
+                    id=canonical_recipe['id'])
+
+                # DEBUG: Log what we're looking for
+                print(
+                    f"[TRANSLATION_CHECK] Looking for {user_language} translation for recipe {canonical_obj.id}")
+                print(
+                    f"[TRANSLATION_CHECK] Canonical has {len(canonical_obj.base_steps)} base_steps")
+                if canonical_obj.base_steps:
+                    first_step_text = canonical_obj.base_steps[0].get(
+                        'instruction') or canonical_obj.base_steps[0].get('text')
+                    print(
+                        f"[TRANSLATION_CHECK] First step in canonical: {first_step_text[:80] if first_step_text else 'None'}...")
+
+                # Wait up to 2 seconds for translation to complete (it's happening synchronously)
+                max_attempts = 4
+                for attempt in range(max_attempts):
+                    translation = RecipeTranslation.objects.filter(
+                        canonical_recipe=canonical_obj,
+                        language=user_language,
+                        status='completed'
+                    ).first()
+
+                    if translation:
+                        break
+
+                    if attempt < max_attempts - 1:
+                        print(
+                            f"[TRANSLATION_CHECK] Translation not ready yet, waiting... (attempt {attempt+1}/{max_attempts})")
+                        time.sleep(0.5)
+
+                if translation:
+                    print(
+                        f"[TRANSLATION] ✅ Using {user_language} translation for response")
+                    print(
+                        f"[TRANSLATION] Translation has {len(translation.base_steps)} steps")
+                    if translation.base_steps:
+                        first_translated_step = translation.base_steps[0].get(
+                            'instruction') or translation.base_steps[0].get('text')
+                        print(
+                            f"[TRANSLATION] First translated step: {first_translated_step[:80] if first_translated_step else 'None'}...")
+
+                    # Override with translated content
+                    # Add translated name
+                    canonical_recipe['name'] = translation.name
+                    canonical_recipe['base_ingredients'] = translation.base_ingredients
+                    canonical_recipe['base_steps'] = translation.base_steps
+                    canonical_recipe['translation_language'] = user_language
+                else:
+                    print(
+                        f"[TRANSLATION] ⚠️ No completed translation found for {user_language}, using English")
+                    print(f"[TRANSLATION] Returning English steps from canonical")
+            except Exception as e:
+                print(f"[TRANSLATION] ⚠️ Error fetching translation: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Add to shopping list if requested (use canonical ingredients)
         added_items = []
         if add_to_shopping_list and shopping_list_id:
@@ -1000,6 +1064,243 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             return CanonicalRecipeListSerializer
         return CanonicalRecipeSerializer
 
+    def list(self, request, *args, **kwargs):
+        """
+        List canonical recipes with translated names
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            recipes_data = serializer.data
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            recipes_data = serializer.data
+
+        # Get user's preferred language from query param (overrides saved preference)
+        user_language = self.request.query_params.get('lang', None)
+        if not user_language:
+            # Fallback to saved preference
+            user_language = getattr(request.user, 'preferred_language', 'en')
+
+        print(
+            f"[LIST] User language: {user_language} (from query param: {self.request.query_params.get('lang')})")
+
+        # If not English, add translated names to each recipe
+        if user_language != 'en':
+            from .models import RecipeTranslation
+            from apps.core.smart_translator import SmartTranslationService
+
+            print(
+                f"[LIST] Translating {len(recipes_data)} recipe names to {user_language}")
+
+            # Initialize translator for fallback
+            smart_translator = None
+
+            for recipe_data in recipes_data:
+                try:
+                    translation = RecipeTranslation.objects.filter(
+                        canonical_recipe_id=recipe_data['id'],
+                        language=user_language,
+                        status='completed'
+                    ).first()
+
+                    if translation and translation.name:
+                        print(
+                            f"[LIST] ✅ DB: {recipe_data['name']} -> {translation.name}")
+                        recipe_data['name'] = translation.name
+                    else:
+                        # FALLBACK: Use Gemini to translate on-the-fly
+                        print(
+                            f"[LIST] ⚠️ No translation in DB for {recipe_data['name']}, using Gemini fallback...")
+
+                        if smart_translator is None:
+                            smart_translator = SmartTranslationService()
+
+                        translated_name = smart_translator.translate_recipe_name(
+                            recipe_data['name'],
+                            user_language
+                        )
+
+                        if translated_name and translated_name != recipe_data['name']:
+                            print(
+                                f"[LIST] ✅ GEMINI: {recipe_data['name']} -> {translated_name}")
+                            recipe_data['name'] = translated_name
+                        else:
+                            print(
+                                f"[LIST] ❌ FALLBACK FAILED: Keeping original name {recipe_data['name']}")
+
+                except Exception as e:
+                    print(
+                        f"[LIST] ❌ Translation error for recipe {recipe_data.get('id')}: {e}")
+                    # Keep original name if all fails
+
+        if page is not None:
+            return self.get_paginated_response(recipes_data)
+        return Response(recipes_data)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Get canonical recipe with translation if available
+        Checks user's preferred language and returns translated version
+        """
+        print(f"\n{'='*60}")
+        print(
+            f"[RETRIEVE] Starting retrieve for user: {request.user.username}")
+        print(
+            f"[RETRIEVE] User's preferred_language: {request.user.preferred_language}")
+        print(f"{'='*60}\n")
+
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        recipe_data = serializer.data
+
+        # Get user's preferred language
+        user_language = getattr(request.user, 'preferred_language', 'en')
+        print(
+            f"[RETRIEVE] Recipe {instance.id} requested by user in language: {user_language}")
+
+        # If not English, check for translation
+        if user_language != 'en':
+            try:
+                from .models import RecipeTranslation
+                from .tasks import translate_recipe_to_language
+
+                translation = RecipeTranslation.objects.filter(
+                    canonical_recipe=instance,
+                    language=user_language,
+                    status='completed'
+                ).first()
+
+                if translation:
+                    print(
+                        f"[RETRIEVE] ✅ Using {user_language} translation for recipe {instance.id}")
+
+                    # Check if name translation exists, use Gemini fallback if not
+                    if translation.name:
+                        translated_name = translation.name
+                    else:
+                        print(
+                            f"[RETRIEVE] ⚠️ Translation exists but name is missing, using Gemini fallback...")
+                        from apps.core.smart_translator import SmartTranslationService
+                        smart_translator = SmartTranslationService()
+                        translated_name = smart_translator.translate_recipe_name(
+                            instance.name,
+                            user_language
+                        )
+                        print(
+                            f"[RETRIEVE] ✅ GEMINI: {instance.name} -> {translated_name}")
+
+                    # Override with translated content
+                    recipe_data['name'] = translated_name
+                    recipe_data['base_ingredients'] = translation.base_ingredients
+                    recipe_data['base_steps'] = translation.base_steps
+                    recipe_data['translation_language'] = user_language
+                else:
+                    print(
+                        f"[RETRIEVE] ⚠️ No {user_language} translation found for recipe {instance.id}")
+
+                    # Check if translation is in progress
+                    in_progress = RecipeTranslation.objects.filter(
+                        canonical_recipe=instance,
+                        language=user_language,
+                        status='in_progress'
+                    ).exists()
+
+                    if not in_progress:
+                        # No translation exists, create one NOW (synchronously)
+                        print(
+                            f"[RETRIEVE] 🔄 Creating {user_language} translation NOW for recipe {instance.id}")
+
+                        try:
+                            from apps.core.smart_translator import SmartTranslationService
+                            from django.utils import timezone
+
+                            # Create translation record
+                            translation = RecipeTranslation.objects.create(
+                                canonical_recipe=instance,
+                                language=user_language,
+                                status='in_progress'
+                            )
+
+                            # Initialize SMART translator (uses databases + Gemini fallback)
+                            smart_translator = SmartTranslationService()
+
+                            # Translate recipe name
+                            translated_name = smart_translator.translate_recipe_name(
+                                instance.name,
+                                user_language
+                            )
+
+                            # Translate ingredients using SMART approach
+                            print(
+                                f"[RETRIEVE] Translating {len(instance.base_ingredients)} ingredients...")
+                            translated_ingredients = smart_translator.translate_ingredients_batch(
+                                instance.base_ingredients,
+                                user_language
+                            )
+
+                            # Translate cooking steps using SMART approach with CookLingo glossary
+                            print(
+                                f"[RETRIEVE] Translating {len(instance.base_steps)} cooking steps...")
+                            translated_steps = smart_translator.translate_cooking_steps_batch(
+                                instance.base_steps,
+                                user_language
+                            )
+
+                            # Save translation
+                            translation.name = translated_name  # Use translated name
+                            translation.description = instance.description
+                            translation.base_ingredients = translated_ingredients
+                            translation.base_steps = translated_steps
+                            translation.status = 'completed'
+                            translation.completed_at = timezone.now()
+                            translation.save()
+
+                            print(
+                                f"[RETRIEVE] ✅ Translation completed! Returning {user_language} version")
+
+                            # Return translated version
+                            # Add translated name
+                            recipe_data['name'] = translated_name
+                            recipe_data['base_ingredients'] = translated_ingredients
+                            recipe_data['base_steps'] = translated_steps
+                            recipe_data['translation_language'] = user_language
+                            recipe_data['translation_just_created'] = True
+
+                            print(f"[RETRIEVE] 📤 Returning data:")
+                            print(
+                                f"   - Ingredients count: {len(translated_ingredients)}")
+                            print(
+                                f"   - First ingredient: {translated_ingredients[0] if translated_ingredients else 'None'}")
+                            print(f"   - Steps count: {len(translated_steps)}")
+                            print(
+                                f"   - First step: {translated_steps[0] if translated_steps else 'None'}")
+
+                        except Exception as trans_error:
+                            print(
+                                f"[RETRIEVE] ❌ Translation failed: {trans_error}")
+                            import traceback
+                            traceback.print_exc()
+                            # Return English version
+                            print(
+                                f"[RETRIEVE] Returning English version (translation failed)")
+                    else:
+                        print(
+                            f"[RETRIEVE] ⏳ Translation to {user_language} is in progress...")
+                        recipe_data['translation_in_progress'] = True
+                        # Return English for now
+                        print(
+                            f"[RETRIEVE] Returning English version (translation in progress)")
+
+            except Exception as e:
+                print(f"[RETRIEVE] ⚠️ Error fetching translation: {e}")
+                import traceback
+                traceback.print_exc()
+
+        return Response(recipe_data)
+
     @action(detail=True, methods=['post'], throttle_classes=[LikeRateThrottle])
     def like(self, request, pk=None):
         """
@@ -1378,3 +1679,82 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             'marked_helpful': marked_helpful,
             'helpful_count': review.helpful_count
         })
+
+    @action(detail=True, methods=['get'], url_path='translation/(?P<language>[a-z]{2})')
+    def get_translation(self, request, pk=None, language=None):
+        """
+        Get translated version of recipe in specified language
+
+        GET /api/recipes/canonical/{id}/translation/{language}/
+
+        Returns:
+        {
+            "status": "completed|in_progress|pending|failed",
+            "language": "ru",
+            "name": "Translated name",
+            "description": "Translated description",
+            "base_ingredients": [...],
+            "base_steps": [...]
+        }
+        """
+        from apps.recipes.models import RecipeTranslation
+
+        canonical = self.get_object()
+
+        # If requesting English, return original recipe
+        if language == 'en':
+            return Response({
+                'status': 'completed',
+                'language': 'en',
+                'name': canonical.name,
+                'description': canonical.description,
+                'base_ingredients': canonical.base_ingredients,
+                'base_steps': canonical.base_steps
+            })
+
+        # Try to get existing translation
+        try:
+            translation = RecipeTranslation.objects.get(
+                canonical_recipe=canonical,
+                language=language
+            )
+
+            response_data = {
+                'status': translation.status,
+                'language': translation.language,
+                'name': translation.name,
+                'description': translation.description,
+                'base_ingredients': translation.base_ingredients,
+                'base_steps': translation.base_steps,
+                'updated_at': translation.updated_at,
+            }
+
+            if translation.status == 'failed':
+                response_data['error'] = translation.error_message
+
+            return Response(response_data)
+
+        except RecipeTranslation.DoesNotExist:
+            # Translation doesn't exist yet - queue it
+            from apps.recipes.tasks import translate_recipe_to_language
+
+            # Create pending translation
+            translation = RecipeTranslation.objects.create(
+                canonical_recipe=canonical,
+                language=language,
+                status='pending'
+            )
+
+            # Queue translation task
+            try:
+                translate_recipe_to_language.delay(str(canonical.id), language)
+                print(
+                    f"[TRANSLATION] Queued translation for {canonical.name} to {language}")
+            except Exception as e:
+                print(f"[TRANSLATION] Failed to queue: {e}")
+
+            return Response({
+                'status': 'pending',
+                'language': language,
+                'message': 'Translation queued'
+            }, status=status.HTTP_202_ACCEPTED)

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface StarRatingProps {
     recipeId: string;
@@ -28,6 +29,7 @@ const StarRating: React.FC<StarRatingProps> = ({
     readonly = false,
     size = 'md'
 }) => {
+    const { t } = useTranslation();
     const [userRating, setUserRating] = useState(initialRating);
     const [hoverRating, setHoverRating] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -92,11 +94,11 @@ const StarRating: React.FC<StarRatingProps> = ({
             <div className="text-sm text-gray-600">
                 {userRating > 0 ? (
                     <span className="font-medium text-blue-600">
-                        You rated: {userRating}/5
+                        {t('discover.recipeCard.yourRating')}: {userRating}/5
                     </span>
                 ) : (
                     <span>
-                        {Number(averageRating).toFixed(1)} ({totalRatings} {totalRatings === 1 ? 'rating' : 'ratings'})
+                        {Number(averageRating).toFixed(1)} ({totalRatings} {t(`discover.recipeCard.rating${totalRatings === 1 ? '' : 's'}`)})
                     </span>
                 )}
             </div>

@@ -237,6 +237,13 @@ class ApiService {
         })
     });
 
+    // Get recipe translation in specific language
+    getRecipeTranslation = async (recipeId: string, language: string) => {
+        return this.request(`/recipes/canonical/${recipeId}/translation/${language}/`, {
+            method: 'GET'
+        });
+    };
+
     // RCIP file operations
     downloadRCIP = async (recipeId: string, recipeName: string) => {
         const url = `${this.baseURL}/recipes/recipes/${recipeId}/download_rcip/`;
@@ -297,8 +304,11 @@ class ApiService {
         sort?: string;
         page?: number;
     }) => {
+        // Add current language to params
+        const language = localStorage.getItem('i18nextLng') || 'en';
+
         if (!params) {
-            return this.request('/recipes/canonical/');
+            return this.request(`/recipes/canonical/?lang=${language}`);
         }
 
         const queryParams = new URLSearchParams();
@@ -313,6 +323,9 @@ class ApiService {
                 }
             }
         });
+
+        // Add current language
+        queryParams.append('lang', language);
 
         const queryString = queryParams.toString();
         return this.request(`/recipes/canonical/${queryString ? '?' + queryString : ''}`);

@@ -110,6 +110,10 @@ else:
 IML_DB_PATH = os.getenv(
     'IML_DB_PATH', r'C:\Users\al7ko\Desktop\ingredients-master-list-new\ingredient-master-list\data\iml.db')
 
+# CookLingo Database Path
+COOKLINGO_DB_PATH = os.getenv(
+    'COOKLINGO_DB_PATH', os.path.join(BASE_DIR, 'cooklingo.db'))
+
 # Multilingual
 LANGUAGES = [
     ('en', 'English'),
@@ -270,6 +274,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # AI Configuration
 GROQ_API_KEY = env('GROQ_API_KEY', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')  # Gemini Flash 2.5
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'

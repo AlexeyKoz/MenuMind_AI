@@ -308,3 +308,177 @@ CELERY_BEAT_SCHEDULE = {
 }
 """
 
+
+@shared_task(bind=True, max_retries=3)
+def translate_recipe_to_language(self, recipe_id: str, target_language: str):
+    """
+    Translate a recipe to a target language using IML and CookLingo databases
+
+    Args:
+        recipe_id: UUID of the CanonicalRecipe
+        target_language: Language code ('ru', 'he', etc.)
+
+    Returns:
+        Dict with translation status and data
+    """
+    from apps.recipes.models import CanonicalRecipe, RecipeTranslation
+    from apps.core.translation_service import TranslationService
+    from apps.core.cooking_terms_service import CookingTermsTranslationService
+    from django.utils import timezone
+
+    try:
+        logger.info(
+            f"[TRANSLATION] Starting translation of recipe {recipe_id} to {target_language}")
+
+        # Get recipe
+        recipe = CanonicalRecipe.objects.get(id=recipe_id)
+
+        # Get or create translation record
+        translation, created = RecipeTranslation.objects.get_or_create(
+            canonical_recipe=recipe,
+            language=target_language,
+            defaults={'status': 'in_progress'}
+        )
+
+        if not created and translation.status == 'completed':
+            logger.info(
+                f"[TRANSLATION] Translation already completed for {recipe_id} ({target_language})")
+            return {
+                'recipe_id': recipe_id,
+                'language': target_language,
+                'status': 'already_completed'
+            }
+
+        # Update status
+        translation.status = 'in_progress'
+        translation.save()
+
+        # Initialize services
+        translation_service = TranslationService()
+        cooking_terms_service = CookingTermsTranslationService()
+
+        # Translate recipe name
+        translated_name = recipe.name  # For now, keep English - can enhance later
+
+        # Translate ingredients (using IML database)
+        translated_ingredients = []
+        for ing in recipe.base_ingredients:
+            translated_ing = ing.copy()
+
+            # Translate ingredient name using IML
+            if ing.get('ingredient_key'):
+                from apps.core.models import IngredientCache
+                try:
+                    ingredient = IngredientCache.objects.get(
+                        ingredient_key=ing['ingredient_key'])
+                    translations_dict = {}
+                    for trans in ingredient.translations.all():
+                        translations_dict[trans.language] = trans.name
+
+                    if target_language in translations_dict:
+                        translated_ing['name'] = translations_dict[target_language]
+                except IngredientCache.DoesNotExist:
+                    pass  # Keep original name
+
+            translated_ingredients.append(translated_ing)
+
+        # Translate cooking steps (using CookLingo database)
+        translated_steps = []
+        for step in recipe.base_steps:
+            translated_step = step.copy()
+
+            # Translate cooking terms in step text
+            if step.get('text'):
+                translated_step['text'] = cooking_terms_service.translate_text(
+                    step['text'],
+                    target_language
+                )
+
+            translated_steps.append(translated_step)
+
+        # Save translation
+        translation.name = translated_name
+        translation.description = recipe.description
+        translation.base_ingredients = translated_ingredients
+        translation.base_steps = translated_steps
+        translation.status = 'completed'
+        translation.completed_at = timezone.now()
+        translation.save()
+
+        logger.info(
+            f"[TRANSLATION] ✅ Completed translation of recipe {recipe_id} to {target_language}")
+
+        return {
+            'recipe_id': recipe_id,
+            'language': target_language,
+            'status': 'completed',
+            'ingredients_count': len(translated_ingredients),
+            'steps_count': len(translated_steps)
+        }
+
+    except CanonicalRecipe.DoesNotExist:
+        logger.error(f"[TRANSLATION] Recipe {recipe_id} not found")
+        return {'recipe_id': recipe_id, 'status': 'failed', 'error': 'Recipe not found'}
+
+    except Exception as exc:
+        logger.error(
+            f"[TRANSLATION] Error translating recipe {recipe_id} to {target_language}: {exc}")
+
+        # Update translation status
+        try:
+            translation.status = 'failed'
+            translation.error_message = str(exc)
+            translation.save()
+        except:
+            pass
+
+        # Retry with exponential backoff
+        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+
+
+@shared_task
+def translate_recipe_to_all_languages(recipe_id: str, priority_language: str = None):
+    """
+    Translate a recipe to all supported languages
+
+    Args:
+        recipe_id: UUID of the CanonicalRecipe
+        priority_language: Language to translate first (synchronously if needed)
+
+    Returns:
+        Dict with translation task IDs
+    """
+    from apps.recipes.models import RecipeTranslation
+
+    # Excluding 'en' as it's the base language
+    SUPPORTED_LANGUAGES = ['ru', 'he']
+
+    logger.info(f"[TRANSLATION] Queuing translations for recipe {recipe_id}")
+
+    task_ids = {}
+
+    # If priority language is specified and not English, translate it first
+    if priority_language and priority_language != 'en' and priority_language in SUPPORTED_LANGUAGES:
+        task = translate_recipe_to_language.apply_async(
+            args=[recipe_id, priority_language],
+            priority=9  # High priority
+        )
+        task_ids[priority_language] = task.id
+        SUPPORTED_LANGUAGES.remove(priority_language)
+
+    # Queue other languages in background
+    for lang in SUPPORTED_LANGUAGES:
+        task = translate_recipe_to_language.apply_async(
+            args=[recipe_id, lang],
+            priority=5  # Normal priority
+        )
+        task_ids[lang] = task.id
+
+    logger.info(
+        f"[TRANSLATION] Queued {len(task_ids)} translation tasks for recipe {recipe_id}")
+
+    return {
+        'recipe_id': recipe_id,
+        'task_ids': task_ids,
+        'total_languages': len(task_ids)
+    }

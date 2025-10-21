@@ -4,8 +4,8 @@ from django.shortcuts import render, redirect
 from django.urls import path
 from django.contrib import messages
 from django.db import transaction
-from .models import IngredientCache, IngredientTranslation
-from .services import IMLSyncService
+from .models import IngredientCache, IngredientTranslation, CookingTermCache, CookingTermTranslation
+from .services import IMLSyncService, CookLingoSyncService
 
 
 class IngredientTranslationInline(admin.TabularInline):
@@ -361,6 +361,204 @@ class IngredientTranslationAdmin(admin.ModelAdmin):
             '✅' if obj.storage_tips else '⬜'
         )
     has_storage_tips.short_description = 'Storage Tips'
+
+    def has_add_permission(self, request):
+        """Disable manual add - data comes from sync"""
+        return False
+
+
+class CookingTermTranslationInline(admin.TabularInline):
+    """Inline translations for cooking terms"""
+    model = CookingTermTranslation
+    extra = 0
+    fields = ['language_code', 'translation',
+              'verification_status', 'confidence_score']
+    readonly_fields = []
+
+
+@admin.register(CookingTermCache)
+class CookingTermCacheAdmin(admin.ModelAdmin):
+    """Admin interface for Cooking Terms Cache (CookLingo data)"""
+
+    list_display = [
+        'term_english',
+        'category',
+        'term_type',
+        'translation_count',
+        'confidence_indicator',
+        'last_synced'
+    ]
+
+    list_filter = ['category', 'term_type',
+                   'difficulty_level', 'usage_frequency', 'verified']
+
+    search_fields = [
+        'term_english',
+        'term_english_normalized',
+        'category',
+        'translations__translation'
+    ]
+
+    readonly_fields = [
+        'term_english',
+        'term_english_normalized',
+        'last_synced',
+        'created_at'
+    ]
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': (
+                'term_english',
+                'term_english_normalized',
+                'category',
+                'term_type',
+            )
+        }),
+        ('Details', {
+            'fields': (
+                'definition',
+                'usage_frequency',
+                'difficulty_level',
+            )
+        }),
+        ('Quality', {
+            'fields': (
+                'confidence_score',
+                'verified',
+            )
+        }),
+        ('Timestamps', {
+            'fields': ('last_synced', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    inlines = [CookingTermTranslationInline]
+
+    # Custom actions
+    actions = ['delete_selected_terms']
+
+    # Show more terms per page
+    list_per_page = 100
+    list_max_show_all = 2500
+
+    def translation_count(self, obj):
+        """Count of translations"""
+        count = obj.translations.count()
+        if count == 0:
+            return format_html('<span style="color: red;">No translations</span>')
+        elif count < 2:
+            return format_html('<span style="color: orange;">{} lang</span>', count)
+        else:
+            return format_html('<span style="color: green;">{} langs</span>', count)
+    translation_count.short_description = 'Translations'
+
+    def confidence_indicator(self, obj):
+        """Visual confidence score"""
+        score = obj.confidence_score
+        if score >= 80:
+            color = 'green'
+            icon = 'OK'
+        elif score >= 60:
+            color = 'orange'
+            icon = 'OK'
+        else:
+            color = 'red'
+            icon = '?'
+
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{} {}%</span>',
+            color, icon, score
+        )
+    confidence_indicator.short_description = 'Confidence'
+
+    def has_add_permission(self, request):
+        """Disable manual add - data comes from sync"""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Allow deletion"""
+        return True
+
+    def delete_selected_terms(self, request, queryset):
+        """Delete selected cooking terms and their translations"""
+        count = queryset.count()
+        translation_count = CookingTermTranslation.objects.filter(
+            term__in=queryset
+        ).count()
+
+        with transaction.atomic():
+            CookingTermTranslation.objects.filter(term__in=queryset).delete()
+            queryset.delete()
+
+        self.message_user(
+            request,
+            f'Successfully deleted {count} cooking terms and {translation_count} translations.',
+            messages.SUCCESS
+        )
+    delete_selected_terms.short_description = "Delete selected cooking terms"
+
+
+@admin.register(CookingTermTranslation)
+class CookingTermTranslationAdmin(admin.ModelAdmin):
+    """Admin interface for Cooking Term Translations"""
+
+    list_display = [
+        'term_display',
+        'language_code',
+        'translation',
+        'verification_status',
+        'confidence_indicator',
+    ]
+
+    list_filter = ['language_code',
+                   'verification_status', 'source', 'term__category']
+
+    search_fields = [
+        'translation',
+        'term__term_english',
+    ]
+
+    readonly_fields = []
+
+    fieldsets = (
+        ('Link', {
+            'fields': ('term',)
+        }),
+        ('Translation', {
+            'fields': ('language_code', 'translation', 'verification_status')
+        }),
+        ('Quality', {
+            'fields': ('confidence_score', 'source')
+        }),
+        ('Additional Info', {
+            'fields': ('alternative_translations', 'cultural_notes'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def term_display(self, obj):
+        """Display cooking term"""
+        return obj.term.term_english
+    term_display.short_description = 'Cooking Term'
+    term_display.admin_order_field = 'term__term_english'
+
+    def confidence_indicator(self, obj):
+        """Visual confidence score"""
+        score = obj.confidence_score
+        if score >= 80:
+            color = 'green'
+        elif score >= 60:
+            color = 'orange'
+        else:
+            color = 'red'
+
+        return format_html(
+            '<span style="color: {};">{} {}%</span>',
+            color, 'OK', score
+        )
+    confidence_indicator.short_description = 'Confidence'
 
     def has_add_permission(self, request):
         """Disable manual add - data comes from sync"""

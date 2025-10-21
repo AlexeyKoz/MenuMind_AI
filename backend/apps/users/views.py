@@ -187,8 +187,13 @@ class UserProfileViewSet(viewsets.ModelViewSet):
         # PATCH method
         if 'preferred_language' in request.data:
             lang = request.data['preferred_language']
+            print(
+                f"[USER_PREFS] Updating language: {request.user.username} → {lang}")
             if lang in ['en', 'ru', 'he']:
                 request.user.preferred_language = lang
+                print(f"[USER_PREFS] ✅ Language updated to: {lang}")
+            else:
+                print(f"[USER_PREFS] ⚠️ Invalid language: {lang}")
 
         if 'unit_system' in request.data:
             system = request.data['unit_system']

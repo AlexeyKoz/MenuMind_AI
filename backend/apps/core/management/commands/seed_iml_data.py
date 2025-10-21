@@ -248,3 +248,4 @@ class Command(BaseCommand):
             '\nYou can now view the ingredients at: http://localhost:8000/admin/core/ingredientcache/\n')
 
 
+
