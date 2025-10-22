@@ -2,6 +2,8 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import LikeButton from './LikeButton';
 import StarRating from './StarRating';
+import AllergenWarning from './AllergenWarning';
+import { useAuth } from '../contexts/AuthContext';
 
 interface RecipeCardProps {
     recipe: {
@@ -13,6 +15,7 @@ interface RecipeCardProps {
         total_time_minutes?: number;
         servings?: number;
         diet_labels?: string[];
+        allergens?: string[];
         source_type?: string;
         average_rating: number;
         total_ratings: number;
@@ -149,6 +152,15 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                             </span>
                         )}
                     </div>
+                )}
+
+                {/* Allergen Warning */}
+                {recipe.allergens && recipe.allergens.length > 0 && (
+                    <AllergenWarning
+                        allergens={recipe.allergens}
+                        userAllergies={[]} // Will be populated from user context
+                        className="mt-3"
+                    />
                 )}
 
                 {/* Social Actions */}

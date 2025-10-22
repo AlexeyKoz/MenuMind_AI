@@ -1,0 +1,28 @@
+TITLE BUG FIX - FINAL STATUS
+=============================
+
+PROBLEM: Both English and Russian show "Untitled Recipe"
+
+ROOT CAUSE: Backend not restarted! Old code still running.
+
+WHAT WAS FIXED:
+File: backend/apps/recipes/services.py (lines 1761-1775)
+
+- Added fallback: if AI doesn't extract title, use search query with .title()
+- "carbonara" -> "Carbonara"
+- "черный перец" -> "Черный Перец"
+
+DEBUG LOGGING ADDED:
+- Will print what title AI extracts
+- Will print what title is used
+- Look for "[AI] DEBUG:" in backend logs
+
+NEXT STEPS:
+1. RESTART BACKEND (kill and restart)
+2. Delete old recipes: python test_title_fix.py
+3. Generate NEW recipe
+4. Check backend logs for DEBUG output
+5. Verify recipe has proper title
+
+The fix WILL work after restart!
+

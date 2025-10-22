@@ -568,6 +568,18 @@ class RecipeAgentService:
             # STEP 6: Create canonical recipe
             # 85% - Translating to your language...
             progress.update_translating()
+
+            # DEBUG: Check meta before creating canonical
+            print(f"[DEBUG] Before _create_canonical_recipe:")
+            print(f"[DEBUG] rcip_recipe keys: {list(rcip_recipe.keys())}")
+            print(
+                f"[DEBUG] rcip_recipe['meta'] type: {type(rcip_recipe.get('meta'))}")
+            print(
+                f"[DEBUG] rcip_recipe['meta'] value: {rcip_recipe.get('meta')}")
+            if isinstance(rcip_recipe.get('meta'), dict):
+                print(
+                    f"[DEBUG] meta.get('name'): {rcip_recipe['meta'].get('name')}")
+
             canonical = await self._create_canonical_recipe(
                 rcip_recipe,
                 source_type='ai_generated',
@@ -858,7 +870,30 @@ class RecipeAgentService:
         """Create new canonical recipe from RCIP data"""
         from .models import CanonicalRecipe
 
+        # DEBUG: Deep inspection
+        print(f"[CREATE_CANONICAL] === DEEP DEBUG ===")
+        print(f"[CREATE_CANONICAL] rcip_data type: {type(rcip_data)}")
+        print(f"[CREATE_CANONICAL] rcip_data keys: {list(rcip_data.keys())}")
+        print(f"[CREATE_CANONICAL] 'meta' in rcip_data: {'meta' in rcip_data}")
+
         meta = rcip_data.get('meta', {})
+        print(f"[CREATE_CANONICAL] meta type: {type(meta)}")
+        print(f"[CREATE_CANONICAL] meta is dict: {isinstance(meta, dict)}")
+
+        if isinstance(meta, dict):
+            print(f"[CREATE_CANONICAL] meta keys: {list(meta.keys())}")
+            print(f"[CREATE_CANONICAL] 'name' in meta: {'name' in meta}")
+            if 'name' in meta:
+                print(
+                    f"[CREATE_CANONICAL] meta['name'] direct access: '{meta['name']}'")
+
+        # DEBUG: Log what we're receiving
+        recipe_name = meta.get('name', 'Untitled Recipe')
+        print(
+            f"[CREATE_CANONICAL] Received recipe name from RCIP: '{recipe_name}'")
+        print(
+            f"[CREATE_CANONICAL] Full meta keys: {list(meta.keys()) if isinstance(meta, dict) else 'NOT A DICT'}")
+        print(f"[CREATE_CANONICAL] === END DEBUG ===\n")
 
         # Calculate hash for deduplication
         hash_string = self._calculate_recipe_hash(
@@ -886,6 +921,7 @@ class RecipeAgentService:
                 0] if meta.get('keywords') else '',
             difficulty=meta.get('difficulty', 'intermediate'),
             diet_labels=meta.get('diet_labels', []),
+            allergens=meta.get('allergens', []),
             prep_time_minutes=meta.get('prep_time_minutes'),
             cook_time_minutes=meta.get('cook_time_minutes'),
             total_time_minutes=meta.get('total_time_minutes'),
@@ -1498,29 +1534,37 @@ class RecipeAgentService:
                 logger.info(
                     f"[VALIDATION] Fixed recipe has {len(fixed_recipe.get('ingredients', []))} ingredients and {len(fixed_recipe.get('steps', []))} steps")
 
-                # IMPORTANT: Preserve the original recipe name and metadata
-                original_name = rcip_recipe.get('meta', {}).get('name')
-                fixed_name = fixed_recipe.get('meta', {}).get(
-                    'name') if fixed_recipe.get('meta') else fixed_recipe.get('name')
+                # IMPORTANT: Preserve the original recipe structure and ALL metadata
+                original_meta = rcip_recipe.get('meta', {})
 
-                if not fixed_name and original_name:
-                    # Ensure fixed_recipe has meta structure
-                    if 'meta' not in fixed_recipe:
-                        fixed_recipe['meta'] = {}
-                    fixed_recipe['meta']['name'] = original_name
+                # AI validator returns wrong format (name at root, not in meta)
+                # We need to fix this and preserve ALL original metadata
+                if 'meta' not in fixed_recipe or not isinstance(fixed_recipe.get('meta'), dict):
+                    fixed_recipe['meta'] = {}
+
+                # If AI put name at root level, move it to meta
+                if 'name' in fixed_recipe and 'name' not in fixed_recipe['meta']:
+                    fixed_recipe['meta']['name'] = fixed_recipe.pop('name')
                     logger.info(
-                        f"[VALIDATION] Preserved recipe name: {original_name}")
+                        f"[VALIDATION] Moved name from root to meta: {fixed_recipe['meta']['name']}")
 
-                # Preserve other metadata that AI might not include
-                if rcip_recipe.get('meta'):
-                    if 'meta' not in fixed_recipe:
-                        fixed_recipe['meta'] = {}
+                # Preserve ALL original metadata (AI validator doesn't return most of it)
+                for key, value in original_meta.items():
+                    if key not in fixed_recipe['meta']:
+                        fixed_recipe['meta'][key] = value
+                        logger.info(
+                            f"[VALIDATION] Preserved meta.{key} from original")
 
-                    if not fixed_recipe['meta'].get('description') and rcip_recipe['meta'].get('description'):
-                        fixed_recipe['meta']['description'] = rcip_recipe['meta']['description']
+                # Ensure name is preserved
+                if not fixed_recipe['meta'].get('name') and original_meta.get('name'):
+                    fixed_recipe['meta']['name'] = original_meta['name']
+                    logger.info(
+                        f"[VALIDATION] Restored original name: {original_meta['name']}")
 
-                    if not fixed_recipe['meta'].get('cuisine') and rcip_recipe['meta'].get('cuisine'):
-                        fixed_recipe['meta']['cuisine'] = rcip_recipe['meta']['cuisine']
+                # Preserve other RCIP structure fields
+                for key in ['rcip_version', 'id', 'extensions', 'base_ingredients', 'base_steps']:
+                    if key in rcip_recipe and key not in fixed_recipe:
+                        fixed_recipe[key] = rcip_recipe[key]
 
                 # Re-validate the fixed recipe
                 revalidation = await sync_to_async(validator.validate_recipe)(fixed_recipe)
@@ -1586,14 +1630,47 @@ class RecipeAgentService:
             # First, extract structured data using LLM
             prompt = f"""You are a professional recipe extraction expert. Extract the COMPLETE recipe with ALL ingredients and ALL cooking steps.
 
-IMPORTANT: Always output in ENGLISH - we will translate to other languages later.
+═══════════════════════════════════════════════════════════════
+🚨 CRITICAL REQUIREMENT - ENGLISH ONLY OUTPUT 🚨
+═══════════════════════════════════════════════════════════════
 
-Recipe Name: {recipe_name}
+YOU MUST output EVERYTHING in ENGLISH language ONLY.
+
+❌ FORBIDDEN:
+- Russian (Cyrillic): Доведите, кипения, приготовить, etc.
+- Hebrew: לחתוך, לבשל, להוסיף, etc.
+- Any other non-English characters
+- Mixed language: "Bring воду to a boil" ❌
+- Partial translations: "Довести water до boil" ❌
+
+✅ REQUIRED:
+- ALL text must be in English: "Bring water to a boil" ✅
+- If the webpage is in Russian/Hebrew/other language, TRANSLATE TO ENGLISH first
+- Every word must be recognizable English
+
+LANGUAGE VERIFICATION:
+Before responding, verify:
+1. ✓ All ingredient names are English
+2. ✓ All step instructions are English  
+3. ✓ No Cyrillic (Russian) characters
+4. ✓ No Hebrew characters
+5. ✓ No mixed-language text
+
+═══════════════════════════════════════════════════════════════
+
+Search Query: {recipe_name}
 
 Webpage Content:
 {scraped_data['text'][:4000]}
 
 CRITICAL RULES:
+
+RECIPE TITLE:
+- Extract the EXACT title from the webpage
+- If the webpage says "Classic Spaghetti Carbonara", use that exact title
+- If title is in another language, TRANSLATE IT TO ENGLISH
+- DO NOT use the search query as the title
+- The title should be the recipe's real name from the webpage
 
 INGREDIENTS - FORMAT STRICTLY AS:
 - quantity unit ingredient_name
@@ -1618,9 +1695,12 @@ FORBIDDEN:
 - NO commentary or analysis
 - NO duplicate ingredients
 - NO vague quantities
-- JUST the recipe data with SPECIFIC amounts
+- NO non-English words (Russian, Hebrew, etc.)
+- JUST the recipe data with SPECIFIC amounts in ENGLISH
 
 OUTPUT FORMAT (NOTHING ELSE):
+
+TITLE: [Extract exact recipe title from webpage, IN ENGLISH]
 
 INGREDIENTS:
 - 500g all-purpose flour
@@ -1628,11 +1708,12 @@ INGREDIENTS:
 - 250ml milk
 
 STEPS:
-1. [First step]
-2. [Second step]
+1. [First step in English]
+2. [Second step in English]
 ...
 
-START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
+START YOUR RESPONSE WITH "TITLE:" - NOTHING BEFORE IT.
+REMEMBER: ALL OUTPUT MUST BE IN ENGLISH LANGUAGE ONLY!"""
 
             # Use Gemini Flash 2.5 for extraction (better rate limits than Groq)
             try:
@@ -1699,19 +1780,40 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
 
             print(f"   [AI] Response preview: {response[:200]}...")
 
-            # Strip any text before "INGREDIENTS:" (AI sometimes adds explanation)
-            if 'INGREDIENTS:' in response:
-                response = 'INGREDIENTS:' + \
-                    response.split('INGREDIENTS:', 1)[1]
-                print(f"   [AI] ✅ Cleaned response, starts with INGREDIENTS")
+            # Strip any text before "TITLE:" (AI sometimes adds explanation)
+            if 'TITLE:' in response:
+                response = 'TITLE:' + response.split('TITLE:', 1)[1]
+                print(f"   [AI] ✅ Cleaned response, starts with TITLE")
             else:
-                print(
-                    f"   [AI] ⚠️ Response doesn't contain 'INGREDIENTS:' marker")
+                print(f"   [AI] ⚠️ Response doesn't contain 'TITLE:' marker")
                 print(f"   [AI] Full response: {response[:1000]}...")
                 print(f"   [AI] Falling back to local parser")
                 return self._fallback_conversion(scraped_data, recipe_name)
 
-            # Parse LLM response
+            # Parse LLM response - now includes TITLE
+            if 'INGREDIENTS:' not in response or 'STEPS:' not in response:
+                print(f"   [AI] ⚠️ Missing INGREDIENTS or STEPS markers")
+                print(f"   [AI] Falling back to local parser")
+                return self._fallback_conversion(scraped_data, recipe_name)
+
+            # Extract title
+            title_section = response.split('INGREDIENTS:')[0]
+            extracted_title = title_section.replace('TITLE:', '').strip()
+
+            print(f"   [AI] DEBUG: Raw title section: '{title_section[:100]}'")
+            print(f"   [AI] DEBUG: Extracted title: '{extracted_title}'")
+            print(f"   [AI] DEBUG: Search query: '{recipe_name}'")
+
+            # Validate title
+            if not extracted_title or len(extracted_title) > 200 or extracted_title.lower() == recipe_name.lower():
+                # AI failed to extract a good title, use user's search query
+                extracted_title = recipe_name.title()  # Capitalize properly
+                print(
+                    f"   [AI] ⚠️ Using search query as title: '{extracted_title}'")
+            else:
+                print(f"   [AI] ✅ Using extracted title: '{extracted_title}'")
+
+            # Parse ingredients and steps
             parts = response.split('STEPS:')
             if len(parts) != 2:
                 print(
@@ -1720,8 +1822,9 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
                 print(f"   [AI] Falling back to local parser")
                 return self._fallback_conversion(scraped_data, recipe_name)
 
-            ingredients_text = parts[0].replace('INGREDIENTS:', '').strip()
+            ingredients_section = parts[0].split('INGREDIENTS:')[1].strip()
             steps_text = parts[1].strip()
+            ingredients_text = ingredients_section
 
             print(f"   [RCIP] Converting to RCIP format...")
             print(
@@ -1736,7 +1839,7 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
 
             # Convert using RCIP converter
             rcip_recipe = self.rcip_converter.convert(
-                name=recipe_name,
+                name=extracted_title,  # Use AI-extracted title, not search query
                 ingredients_text=ingredients_text,
                 steps_text=steps_text,
                 source_url=scraped_data['url']
@@ -1744,9 +1847,12 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
             print(f"   [RCIP] ✅ RCIP conversion successful")
             print(
                 f"   [RCIP] Recipe has {len(rcip_recipe.get('ingredients', []))} ingredients and {len(rcip_recipe.get('steps', []))} steps")
-            # NEW DEBUG
+            # NEW DEBUG - check correct path
             print(
-                f"   [RCIP] Recipe name: '{rcip_recipe.get('name', 'NO NAME')}'")
+                f"   [RCIP] Recipe name (meta): '{rcip_recipe.get('meta', {}).get('name', 'NO NAME IN META')}'")
+            print(
+                # Debug: show what title we used
+                f"   [RCIP] Title used: '{extracted_title}'")
 
             # DEBUG: Log first few steps
             if rcip_recipe.get('steps'):
@@ -1772,6 +1878,13 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
             diet_labels = self.recipe_analyzer.detect_diet_labels(
                 rcip_recipe['ingredients'])
             rcip_recipe['meta']['diet_labels'] = diet_labels
+
+            # Detect allergens
+            allergens = self.recipe_analyzer.detect_allergens(
+                rcip_recipe['ingredients'])
+            rcip_recipe['meta']['allergens'] = allergens
+            print(
+                f"   [ANALYZE] ✅ Allergens detected: {allergens if allergens else 'none'}")
 
             # Estimate difficulty
             difficulty = self.recipe_analyzer.estimate_difficulty(
@@ -1852,6 +1965,11 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
                 diet_labels = self.recipe_analyzer.detect_diet_labels(
                     rcip_recipe['ingredients'])
                 rcip_recipe['meta']['diet_labels'] = diet_labels
+
+                # Detect allergens
+                allergens = self.recipe_analyzer.detect_allergens(
+                    rcip_recipe['ingredients'])
+                rcip_recipe['meta']['allergens'] = allergens
 
                 difficulty = self.recipe_analyzer.estimate_difficulty(
                     rcip_recipe['steps'],

@@ -520,7 +520,10 @@ Return JSON array only:
         step_count = len(structured_steps['steps'])
         print(f"[BUILDER] Structured {step_count} cooking steps")
 
-        # TRANSLATE COOKING STEPS using CookLingo database (BEFORE saving to session!)
+        # NORMALIZE TEMPERATURE DATA in steps
+        self._normalize_step_temperatures(structured_steps['steps'])
+
+        # TRANSLATE COOKING STEPS using AI (BEFORE saving to session!)
         await self._translate_cooking_steps(structured_steps['steps'])
 
         # Update session AFTER translation
@@ -995,21 +998,59 @@ Return JSON only:
         # Run in thread to avoid async context issues
         await sync_to_async(_do_translation)()
 
+    def _normalize_step_temperatures(self, steps: List[Dict]):
+        """
+        Normalize temperature data in steps to structured format
+        Converts strings like "350F" to {"value": 350, "unit": "fahrenheit"}
+        """
+        from apps.core.utils.temperature_utils import parse_temperature_text
+
+        print(f"[BUILDER] Normalizing temperatures in {len(steps)} steps...")
+
+        for step in steps:
+            temp = step.get('temperature')
+
+            if not temp:
+                continue
+
+            # If already structured, ensure it's properly formatted
+            if isinstance(temp, dict) and 'value' in temp and 'unit' in temp:
+                # Normalize unit name
+                unit = temp['unit'].lower()
+                if unit in ['f', 'fahrenheit', '°f']:
+                    temp['unit'] = 'fahrenheit'
+                elif unit in ['c', 'celsius', '°c']:
+                    temp['unit'] = 'celsius'
+                continue
+
+            # If it's a string, parse it
+            if isinstance(temp, str):
+                parsed_temp = parse_temperature_text(temp)
+                if parsed_temp:
+                    step['temperature'] = parsed_temp
+                    print(
+                        f"[BUILDER]   ✅ Parsed temperature: {temp} → {parsed_temp}")
+                else:
+                    print(
+                        f"[BUILDER]   ⚠️ Could not parse temperature: {temp}")
+                    step['temperature'] = None
+            else:
+                # Unknown format, set to None
+                step['temperature'] = None
+
+        print(f"[BUILDER] ✅ Temperature normalization complete")
+
     async def _translate_cooking_steps(self, steps: List[Dict]):
         """
-        Translate cooking steps using CookLingo database (same as Discovery agent)
+        Translate cooking steps using Gemini/Groq AI for FULL translation
         Modifies steps in-place to add translations
 
         CRITICAL: Detects source language and translates from that language
         """
         def _do_translation():
             """Run translation in sync context"""
-            from apps.core.cooking_terms_service import CookingTermsTranslationService
-
             print(
-                f"[BUILDER] Translating {len(steps)} cooking steps using CookLingo...")
-
-            translator = CookingTermsTranslationService()
+                f"[BUILDER] Translating {len(steps)} cooking steps using AI...")
 
             for step in steps:
                 instruction = step.get('instruction', '')
@@ -1045,134 +1086,83 @@ Return JSON only:
                     translations[source_lang] = instruction
 
                     if source_lang == 'en':
-                        # Source is English, translate to RU and HE
-                        try:
-                            result_ru = translator.translate_text(
-                                instruction, 'ru')
-                            # Check if translation actually happened
-                            if result_ru == instruction:
-                                print(
-                                    f"[BUILDER]   ⚠️ RU: CookLingo unchanged, keeping original EN")
-                                # Don't set RU translation - it will show EN text
-                                # Will show English
-                                translations['ru'] = instruction
-                            else:
-                                translations['ru'] = result_ru
-                        except Exception as trans_err:
+                        # Source is English, translate to RU and HE using Google Translate
+                        from apps.core.google_translate_service import get_google_translate_service
+                        google_translate = get_google_translate_service()
+
+                        # Translate to Russian
+                        result_ru = google_translate.translate_text(
+                            instruction, 'ru', 'en')
+                        if result_ru:
+                            translations['ru'] = result_ru
+                            print(f"[BUILDER]   ✅ RU: {result_ru[:50]}...")
+                        else:
                             print(
-                                f"[BUILDER]   ⚠️ RU error: {trans_err}, keeping original EN")
-                            # Will show English
+                                f"[BUILDER]   ❌ RU translation failed, keeping English")
                             translations['ru'] = instruction
-                        try:
-                            result_he = translator.translate_text(
-                                instruction, 'he')
-                            if result_he == instruction:
-                                print(
-                                    f"[BUILDER]   ⚠️ HE: CookLingo unchanged, keeping original EN")
-                                # Don't set HE translation - it will show EN text
-                                # Will show English
-                                translations['he'] = instruction
-                            else:
-                                translations['he'] = result_he
-                        except Exception as trans_err:
+
+                        # Translate to Hebrew
+                        result_he = google_translate.translate_text(
+                            instruction, 'he', 'en')
+                        if result_he:
+                            translations['he'] = result_he
+                            print(f"[BUILDER]   ✅ HE: {result_he[:50]}...")
+                        else:
                             print(
-                                f"[BUILDER]   ⚠️ HE error: {trans_err}, keeping original EN")
-                            # Will show English
+                                f"[BUILDER]   ❌ HE translation failed, keeping English")
                             translations['he'] = instruction
+
                     elif source_lang == 'ru':
                         # Source is Russian, translate to EN and HE
-                        try:
-                            result_en = translator.translate_text(
-                                instruction, 'en')
-                            if result_en == instruction:
-                                print(
-                                    f"[BUILDER]   ⚠️ EN: CookLingo unchanged, keeping original RU")
-                                # Don't set EN translation - it will show RU text
-                                # Will show Russian
-                                translations['en'] = instruction
-                            else:
-                                translations['en'] = result_en
-                        except Exception as trans_err:
-                            print(
-                                f"[BUILDER]   ⚠️ EN error: {trans_err}, keeping original RU")
-                            # Will show Russian
+                        from apps.core.google_translate_service import get_google_translate_service
+                        google_translate = get_google_translate_service()
+
+                        result_en = google_translate.translate_text(
+                            instruction, 'en', 'ru')
+                        if result_en:
+                            translations['en'] = result_en
+                        else:
                             translations['en'] = instruction
-                        try:
-                            result_he = translator.translate_text(
-                                instruction, 'he')
-                            if result_he == instruction:
-                                print(
-                                    f"[BUILDER]   ⚠️ HE: CookLingo unchanged, keeping original RU")
-                                # Don't set HE translation - it will show RU text
-                                # Will show Russian
-                                translations['he'] = instruction
-                            else:
-                                translations['he'] = result_he
-                        except Exception as trans_err:
-                            print(
-                                f"[BUILDER]   ⚠️ HE error: {trans_err}, keeping original RU")
-                            # Will show Russian
+
+                        result_he = google_translate.translate_text(
+                            instruction, 'he', 'ru')
+                        if result_he:
+                            translations['he'] = result_he
+                        else:
                             translations['he'] = instruction
+
                     elif source_lang == 'he':
                         # Source is Hebrew, translate to EN and RU
-                        try:
-                            result_en = translator.translate_text(
-                                instruction, 'en')
-                            if result_en == instruction:
-                                print(
-                                    f"[BUILDER]   ⚠️ EN: CookLingo unchanged, keeping original HE")
-                                # Don't set EN translation - it will show HE text
-                                # Will show Hebrew
-                                translations['en'] = instruction
-                            else:
-                                translations['en'] = result_en
-                        except Exception as trans_err:
-                            print(
-                                f"[BUILDER]   ⚠️ EN error: {trans_err}, keeping original HE")
-                            # Will show Hebrew
+                        from apps.core.google_translate_service import get_google_translate_service
+                        google_translate = get_google_translate_service()
+
+                        result_en = google_translate.translate_text(
+                            instruction, 'en', 'he')
+                        if result_en:
+                            translations['en'] = result_en
+                        else:
                             translations['en'] = instruction
-                        try:
-                            result_ru = translator.translate_text(
-                                instruction, 'ru')
-                            if result_ru == instruction:
-                                print(
-                                    f"[BUILDER]   ⚠️ RU: CookLingo unchanged, keeping original HE")
-                                # Don't set RU translation - it will show HE text
-                                # Will show Hebrew
-                                translations['ru'] = instruction
-                            else:
-                                translations['ru'] = result_ru
-                        except Exception as trans_err:
-                            print(
-                                f"[BUILDER]   ⚠️ RU error: {trans_err}, keeping original HE")
-                            # Will show Hebrew
+
+                        result_ru = google_translate.translate_text(
+                            instruction, 'ru', 'he')
+                        if result_ru:
+                            translations['ru'] = result_ru
+                        else:
                             translations['ru'] = instruction
 
+                    # Set translations in step
                     step['text_translations'] = translations
-                    print(
-                        f"[BUILDER]   ✅ Step {step.get('order', '?')} translated from {source_lang}")
+
                 except Exception as e:
-                    print(
-                        f"[BUILDER]   ⚠️ Step {step.get('order', '?')} translation failed: {e}")
-                    # Fallback: Keep original in source language only
-                    # Detect source language first
-                    has_cyrillic = any('\u0400' <= char <=
-                                       '\u04FF' for char in instruction)
-                    has_hebrew = any('\u0590' <= char <=
-                                     '\u05FF' for char in instruction)
-                    if has_cyrillic:
-                        detected_source = 'ru'
-                    elif has_hebrew:
-                        detected_source = 'he'
-                    else:
-                        detected_source = 'en'
-
+                    print(f"[BUILDER]   ⚠️ Translation error: {e}")
+                    # Fallback: set all to original
                     step['text_translations'] = {
-                        detected_source: instruction  # Only set source language
+                        'en': instruction,
+                        'ru': instruction,
+                        'he': instruction
                     }
-                    # Other languages will show source language if translation missing
 
-            print(f"[BUILDER] ✅ Cooking steps translation complete")
+            print(f"[BUILDER] ✅ Step translation complete")
 
         # Run in thread to avoid async context issues
         await sync_to_async(_do_translation)()
@@ -1208,8 +1198,30 @@ Return JSON only:
                 'he': 'Hebrew'
             }
 
-            prompt = f"""Translate this cooking instruction from {lang_names[source_lang]} to {lang_names[target_lang]}.
+            # Special instructions for Russian to prevent mixed-language output
+            russian_emphasis = ""
+            if target_lang == 'ru':
+                russian_emphasis = """
+═══════════════════════════════════════════════════════════════
+🚨 КРИТИЧЕСКИ ВАЖНО - ТОЛЬКО РУССКИЙ ЯЗЫК 🚨
+═══════════════════════════════════════════════════════════════
 
+ВЫ ДОЛЖНЫ вывести ВСЁ ТОЛЬКО на РУССКОМ языке.
+
+❌ ЗАПРЕЩЕНО:
+- Английские слова: "Place", "Mix", "Preheat", "Grease", etc.
+- Смешанный язык: "Place приготовленный rice" ❌
+- Частичные переводы: "Mix полностью fried" ❌
+
+✅ ТРЕБУЕТСЯ:
+- ВЕСЬ текст должен быть на русском языке: "Поместите приготовленный рис" ✅
+- Каждое слово должно быть узнаваемым русским словом
+
+═══════════════════════════════════════════════════════════════
+"""
+
+            prompt = f"""Translate this cooking instruction from {lang_names[source_lang]} to {lang_names[target_lang]}.
+{russian_emphasis}
 Source text ({lang_names[source_lang]}):
 "{text}"
 
@@ -1219,6 +1231,7 @@ Requirements:
 3. Keep temperatures, measurements, and times exactly as they are
 4. Maintain the same tone and style
 5. For Hebrew: use proper right-to-left Hebrew script
+6. For Russian: EVERY word must be in Russian (no English words allowed!)
 
 Translated text ({lang_names[target_lang]}):"""
 
@@ -1261,8 +1274,36 @@ Translated text ({lang_names[target_lang]}):"""
                 'he': 'Hebrew'
             }
 
-            prompt = f"""Translate this cooking instruction from {lang_names[source_lang]} to {lang_names[target_lang]}.
+            # Special system message for Russian
+            system_message = "You are a professional cooking translator. Return ONLY the translated text."
+            if target_lang == 'ru':
+                system_message = "Вы профессиональный переводчик рецептов. Возвращайте ТОЛЬКО переведенный текст. ВСЕ слова должны быть ПОЛНОСТЬЮ на русском языке."
 
+            # Special instructions for Russian to prevent mixed-language output
+            russian_emphasis = ""
+            if target_lang == 'ru':
+                russian_emphasis = """
+
+═══════════════════════════════════════════════════════════════
+🚨 КРИТИЧЕСКИ ВАЖНО - ТОЛЬКО РУССКИЙ ЯЗЫК 🚨
+═══════════════════════════════════════════════════════════════
+
+ВЫ ДОЛЖНЫ вывести ВСЁ ТОЛЬКО на РУССКОМ языке.
+
+❌ ЗАПРЕЩЕНО:
+- Английские слова: "Place", "Mix", "Preheat", "Grease", etc.
+- Смешанный язык: "Place приготовленный rice" ❌
+- Частичные переводы: "Mix полностью fried" ❌
+
+✅ ТРЕБУЕТСЯ:
+- ВЕСЬ текст должен быть на русском языке: "Поместите приготовленный рис" ✅
+- Каждое слово должно быть узнаваемым русским словом
+
+═══════════════════════════════════════════════════════════════
+"""
+
+            prompt = f"""Translate this cooking instruction from {lang_names[source_lang]} to {lang_names[target_lang]}.
+{russian_emphasis}
 Source text ({lang_names[source_lang]}):
 "{text}"
 
@@ -1272,11 +1313,15 @@ Requirements:
 3. Keep temperatures, measurements, and times exactly as they are
 4. Maintain the same tone and style
 5. For Hebrew: use proper right-to-left Hebrew script
+6. For Russian: EVERY word must be in Russian (no English words allowed!)
 
 Translated text ({lang_names[target_lang]}):"""
 
             response = self.groq_client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ],
                 model=self.model,
                 temperature=0.3,
                 max_tokens=300

@@ -13,6 +13,8 @@ interface User {
     daily_fat_goal: number;
     preferred_language?: 'en' | 'ru' | 'he';
     unit_system?: 'metric' | 'imperial';
+    allergies?: string[];
+    temperature_unit?: 'celsius' | 'fahrenheit';
 }
 
 interface AuthContextType {

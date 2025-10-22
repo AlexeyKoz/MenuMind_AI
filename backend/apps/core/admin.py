@@ -4,8 +4,17 @@ from django.shortcuts import render, redirect
 from django.urls import path
 from django.contrib import messages
 from django.db import transaction
-from .models import IngredientCache, IngredientTranslation, CookingTermCache, CookingTermTranslation
-from .services import IMLSyncService, CookLingoSyncService
+from .models import (
+    IngredientCache,
+    IngredientTranslation,
+    CookingTermCache,
+    CookingTermTranslation,
+    ImportHistory
+)
+# Import sync services directly from services.py module
+from .services_old import IMLSyncService, CookLingoSyncService
+# Import new admin service from services/ directory
+from .services.admin_import_service import admin_import_service
 
 
 class IngredientTranslationInline(admin.TabularInline):

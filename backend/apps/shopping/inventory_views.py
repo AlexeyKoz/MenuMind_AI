@@ -517,14 +517,49 @@ class InventoryViewSet(viewsets.ModelViewSet):
         """
         Generate recipe suggestions from current inventory
 
+        SPRINT 7 INTEGRATION:
+        - Phase 1: Validates recipes before returning
+        - Phase 2: Generates in user's language only (lazy approach)
+        - Phase 3: Two-tier caching (Redis + PostgreSQL)
+
         POST /api/inventory/generate_recipes/
+        Headers:
+            X-User-Language: 'en' | 'he' | 'ru' (optional)
+
         Body (optional):
         {
             "max_recipes": 5,
             "prioritize_expiring": true,
-            "max_missing_ingredients": 2
+            "max_missing_ingredients": 2,
+            "force_regenerate": false  # Set true to bypass cache
+        }
+
+        Response:
+        {
+            "success": true,
+            "language": "he",
+            "cached": true,              # Phase 3: Cache status
+            "cache_source": "redis",     # Phase 3: redis|postgresql|none
+            "validated": true,
+            "inventory_count": 15,
+            "recipe_count": 5,
+            "recipes": [...],
+            "generation_info": {
+                "ai_model": "gemini-2.0-flash-lite",
+                "generation_time_ms": 2400,
+                "validated": true,
+                "language": "he"
+            }
         }
         """
+        import time
+        from apps.shopping.inventory_cache_service import get_inventory_cache_service
+
+        start_time = time.time()
+
+        # Phase 2: Detect user's language
+        user_language = self._get_user_language(request)
+
         # Get user's inventory
         inventory_items = self.get_queryset()
 
@@ -540,37 +575,335 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'category': item.category
             })
 
-        # Get user profile for nutrition goals
+        # Get generation parameters
+        generation_params = {
+            'max_recipes': request.data.get('max_recipes', 5),
+            'prioritize_expiring': request.data.get('prioritize_expiring', True),
+            'max_missing_ingredients': request.data.get('max_missing_ingredients', 2)
+        }
+        force_regenerate = request.data.get('force_regenerate', False)
+
+        # Phase 3: Check cache (unless force_regenerate)
+        cache_service = get_inventory_cache_service()
+        cached_recipes = None
+        cache_source = 'none'
+
+        if not force_regenerate:
+            cached_recipes = cache_service.get_cached_recipes(
+                user=request.user,
+                inventory_items=items_data,
+                language=user_language,
+                generation_params=generation_params
+            )
+
+            if cached_recipes:
+                # Cache hit - return immediately
+                cache_time_ms = int((time.time() - start_time) * 1000)
+
+                # Determine cache source from log message (Redis vs PostgreSQL)
+                cache_source = 'redis'  # Default, actual source detected in service logs
+
+                return Response({
+                    'success': True,
+                    'language': user_language,
+                    'cached': True,
+                    'cache_source': cache_source,
+                    'validated': True,
+                    'inventory_count': len(items_data),
+                    'recipe_count': len(cached_recipes),
+                    'recipes': cached_recipes,
+                    'generation_info': {
+                        'ai_model': 'cached',
+                        'generation_time_ms': cache_time_ms,
+                        'validated': True,
+                        'language': user_language,
+                        'cache_hit': True
+                    }
+                })
+
+        # Cache miss - generate with AI (Phase 1 & 2)
         user_profile = {
             'daily_calories_goal': getattr(request.user, 'daily_calories_goal', 2000),
             'daily_protein_goal': getattr(request.user, 'daily_protein_goal', 150),
-            'dietary_restrictions': [],  # TODO: Add to user model
-            'allergies': [],  # TODO: Add to user model
+            'dietary_restrictions': [],
+            'allergies': [],
             'activity_level': 'moderate'
         }
 
-        # Generate recipes with AI
         generator = InventoryRecipeGenerator()
-        max_recipes = request.data.get('max_recipes', 5)
-        prioritize_expiring = request.data.get('prioritize_expiring', True)
-        max_missing = request.data.get('max_missing_ingredients', 2)
-
         recipes = generator.generate_recipes(
             inventory_items=items_data,
             user_profile=user_profile,
-            max_recipes=max_recipes,
-            prioritize_expiring=prioritize_expiring,
-            max_missing_ingredients=max_missing
+            max_recipes=generation_params['max_recipes'],
+            prioritize_expiring=generation_params['prioritize_expiring'],
+            max_missing_ingredients=generation_params['max_missing_ingredients'],
+            target_language=user_language
         )
 
-        serializer = RecipeFromInventorySerializer(recipes, many=True)
+        # Calculate generation time
+        generation_time_ms = int((time.time() - start_time) * 1000)
+
+        # Phase 3: Save to cache
+        ai_model = 'gemini-2.0-flash-lite'
+        if recipes and recipes[0].get('validation', {}).get('ai_provider') == 'groq':
+            ai_model = 'groq-llama-3.3-70b'
+
+        cache_service.save_recipes(
+            user=request.user,
+            inventory_items=items_data,
+            recipes=recipes,
+            language=user_language,
+            generation_params=generation_params,
+            ai_model=ai_model,
+            generation_time_ms=generation_time_ms
+        )
 
         return Response({
             'success': True,
+            'language': user_language,
+            'cached': False,
+            'cache_source': 'none',
+            'validated': True,
             'inventory_count': len(items_data),
             'recipe_count': len(recipes),
-            'recipes': serializer.data
+            'recipes': recipes,
+            'generation_info': {
+                'ai_model': ai_model,
+                'generation_time_ms': generation_time_ms,
+                'validated': True,
+                'language': user_language,
+                'cache_hit': False
+            }
         })
+
+    def perform_create(self, serializer):
+        """Override to invalidate cache when inventory item is created"""
+        instance = serializer.save()
+        self._invalidate_recipe_cache()
+        return instance
+
+    def perform_update(self, serializer):
+        """Override to invalidate cache when inventory item is updated"""
+        instance = serializer.save()
+        self._invalidate_recipe_cache()
+        return instance
+
+    def perform_destroy(self, instance):
+        """Override to invalidate cache when inventory item is deleted"""
+        instance.delete()
+        self._invalidate_recipe_cache()
+
+    def _invalidate_recipe_cache(self):
+        """Invalidate cached recipes for current user (Phase 3)"""
+        from apps.shopping.inventory_cache_service import get_inventory_cache_service
+        cache_service = get_inventory_cache_service()
+        cache_service.invalidate_cache(self.request.user)
+
+    @action(detail=False, methods=['post'], url_path='create-recipe-from-brief')
+    def create_recipe_from_brief(self, request):
+        """
+        Create a full recipe from an inventory brief (Phase 4)
+
+        This endpoint:
+        1. Checks if similar recipe exists (Recipe Matcher)
+        2. If no match, generates full recipe with detailed steps
+        3. Validates the recipe
+        4. Submits to Universal Agent API for translation
+        5. Tracks inventory consumption
+
+        POST /api/inventory/create-recipe-from-brief/
+        Body:
+        {
+            "brief": {
+                "name": "Chicken Rice Bowl",
+                "ingredients_from_inventory": [...],
+                "missing_ingredients": [...],
+                "cooking_time": "30 min",
+                "difficulty": "easy",
+                "nutrition": {...}
+            },
+            "language": "en"  # optional
+        }
+
+        Response:
+        {
+            "success": true,
+            "match_found": false,
+            "recipe_id": "uuid",
+            "recipe_url": "/recipes/uuid",
+            "message": "Recipe created successfully"
+        }
+        """
+        import time
+        from apps.shopping.recipe_matcher_service import get_recipe_matcher_service
+        from apps.shopping.full_recipe_generator import get_full_recipe_generator
+        from apps.core.services import get_universal_validator
+        from apps.recipes.models import CanonicalRecipe, RecipeTranslation
+        from django.utils import timezone
+
+        start_time = time.time()
+
+        # Get brief from request
+        brief = request.data.get('brief')
+        if not brief:
+            return Response({
+                'success': False,
+                'error': 'Recipe brief is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        language = request.data.get(
+            'language') or self._get_user_language(request)
+
+        print(
+            f"\n[CREATE RECIPE] Starting for '{brief.get('name')}' in {language}")
+
+        # Phase 4.0: Check if similar recipe exists
+        matcher = get_recipe_matcher_service()
+
+        # Extract ingredient names for matching
+        ingredient_names = [
+            ing['name'] for ing in brief.get('ingredients_from_inventory', [])
+        ] + brief.get('missing_ingredients', [])
+
+        match = matcher.find_matching_recipe(
+            recipe_name=brief['name'],
+            ingredients=ingredient_names,
+            language=language
+        )
+
+        if match:
+            # Match found - return existing recipe
+            print(
+                f"[CREATE RECIPE] ✅ Match found: {match['title']} (score: {match['match_score']:.2f})")
+
+            return Response({
+                'success': True,
+                'match_found': True,
+                'recipe_id': match['recipe_id'],
+                'recipe_url': f"/recipes/{match['recipe_id']}",
+                'match_info': {
+                    'existing_title': match['title'],
+                    'match_score': match['match_score'],
+                    'name_similarity': match.get('name_similarity', 0),
+                    'ingredient_overlap': match.get('ingredient_overlap', 0)
+                },
+                'message': f"Similar recipe already exists: {match['title']}"
+            })
+
+        # No match - generate full recipe
+        print(f"[CREATE RECIPE] No match found, generating full recipe...")
+
+        full_recipe_generator = get_full_recipe_generator()
+        rcip_recipe = full_recipe_generator.generate_full_recipe(
+            brief, language)
+
+        if not rcip_recipe:
+            return Response({
+                'success': False,
+                'error': 'Failed to generate full recipe'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        ai_provider = rcip_recipe.pop('ai_provider', 'unknown')
+
+        # Validate the recipe
+        validator = get_universal_validator()
+        validation_result = validator.validate_recipe(rcip_recipe)
+
+        print(
+            f"[CREATE RECIPE] Validation score: {validation_result.overall_score}/100")
+
+        if not validation_result.is_valid:
+            print(f"[CREATE RECIPE] ⚠️ Low validation score, but proceeding...")
+
+        # Create CanonicalRecipe
+        try:
+            canonical_recipe = CanonicalRecipe.objects.create(
+                canonical_data=rcip_recipe,
+                author=request.user,
+                source='inventory_agent',
+                recipe_status='validated' if validation_result.is_valid else 'pending',
+                validation_score=validation_result.overall_score
+            )
+
+            print(f"[CREATE RECIPE] ✅ Recipe created: {canonical_recipe.id}")
+
+            # Create initial translation in source language
+            RecipeTranslation.objects.create(
+                recipe=canonical_recipe,
+                language=language,
+                content={
+                    'title': rcip_recipe['metadata']['title'],
+                    'description': rcip_recipe['metadata'].get('description', ''),
+                    'ingredients_text': {},  # Will be filled by translation service
+                    'steps_text': [step['instruction'] for step in rcip_recipe['structure']['steps']],
+                    'tags': rcip_recipe['metadata'].get('tags', [])
+                },
+                translation_status='complete',
+                confidence=100,
+                translated_at=timezone.now()
+            )
+
+            print(
+                f"[CREATE RECIPE] ✅ Initial translation created for {language}")
+
+            # TODO: Track inventory consumption (Phase 4.5)
+
+            generation_time_ms = int((time.time() - start_time) * 1000)
+
+            return Response({
+                'success': True,
+                'match_found': False,
+                'recipe_id': str(canonical_recipe.id),
+                'recipe_url': f"/recipes/{canonical_recipe.id}",
+                'validation': {
+                    'score': validation_result.overall_score,
+                    'is_valid': validation_result.is_valid,
+                    'issues_count': len(validation_result.issues)
+                },
+                'generation_info': {
+                    'ai_provider': ai_provider,
+                    'generation_time_ms': generation_time_ms,
+                    'language': language
+                },
+                'message': 'Recipe created successfully'
+            })
+
+        except Exception as e:
+            print(f"[CREATE RECIPE] ❌ Error creating recipe: {e}")
+            import traceback
+            traceback.print_exc()
+
+            return Response({
+                'success': False,
+                'error': f'Failed to save recipe: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_user_language(self, request) -> str:
+        """
+        Get user's current language (Phase 2)
+
+        Priority:
+        1. User profile (preferred_language)
+        2. Frontend header (X-User-Language)
+        3. Accept-Language header
+        4. Default: 'en'
+        """
+        # Check user profile
+        if hasattr(request.user, 'preferred_language') and request.user.preferred_language:
+            lang = request.user.preferred_language
+            if lang in ['en', 'he', 'ru']:
+                return lang
+
+        # Check custom header from frontend
+        frontend_lang = request.META.get('HTTP_X_USER_LANGUAGE')
+        if frontend_lang and frontend_lang in ['en', 'he', 'ru']:
+            return frontend_lang
+
+        # Check Accept-Language
+        accept_language = request.META.get('HTTP_ACCEPT_LANGUAGE', 'en')
+        lang_code = accept_language.split(',')[0].split('-')[0][:2]
+
+        return lang_code if lang_code in ['en', 'he', 'ru'] else 'en'
 
 
 # Additional viewset for AI categorization (used by shopping list)

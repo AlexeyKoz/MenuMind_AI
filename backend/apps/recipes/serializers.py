@@ -26,7 +26,7 @@ class CanonicalRecipeSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'source_type', 'ai_source_url',
             'original_creator', 'original_creator_username',
             'base_ingredients', 'base_steps', 'cuisine', 'difficulty',
-            'diet_labels', 'prep_time_minutes', 'cook_time_minutes',
+            'diet_labels', 'allergens', 'prep_time_minutes', 'cook_time_minutes',
             'total_time_minutes', 'servings', 'recipe_hash',
             'total_saves', 'total_cooked', 'total_views',
             'average_rating', 'total_ratings', 'total_reviews',
@@ -87,7 +87,7 @@ class CanonicalRecipeListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'source_type',
             'original_creator_username', 'cuisine', 'difficulty',
-            'diet_labels', 'total_time_minutes', 'servings',
+            'diet_labels', 'allergens', 'total_time_minutes', 'servings',
             'total_saves', 'total_cooked', 'average_rating', 'total_ratings',
             'is_featured', 'created_at', 'user_liked', 'user_rating', 'user_has_fork'
         ]
@@ -146,7 +146,7 @@ class RecipeSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'author', 'source_url',
             'ingredients', 'steps', 'prep_time_minutes', 'cook_time_minutes',
             'total_time_minutes', 'servings', 'difficulty', 'cuisine',
-            'diet_labels', 'version', 'is_latest_version', 'versions_count',
+            'diet_labels', 'allergens', 'version', 'is_latest_version', 'versions_count',
             'times_added_to_lists', 'times_cooked', 'is_saved',
             'created_by_username', 'created_at', 'updated_at',
             # New fork fields
@@ -185,7 +185,7 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
             'name', 'description', 'author', 'source_url',
             'ingredients', 'steps', 'prep_time_minutes', 'cook_time_minutes',
             'total_time_minutes', 'servings', 'difficulty', 'cuisine',
-            'diet_labels'
+            'diet_labels', 'allergens'
         ]
 
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import toast from 'react-hot-toast';
+import { AllergenWarning } from '../components';
 import {
     Search, Upload, Download, BookOpen, Clock, Users,
     ChefHat, Heart, Star, ExternalLink, FileJson, Plus,
@@ -24,6 +25,7 @@ interface Recipe {
     difficulty: string;
     cuisine: string;
     diet_labels: string[];
+    allergens?: string[];
     times_cooked: number;
     times_added_to_lists: number;
     is_saved: boolean;
@@ -218,6 +220,12 @@ const RecipeLibrary: React.FC = () => {
     };
 
     const getAllergens = (recipe: Recipe): string[] => {
+        // Use recipe-level allergens if available (from RCIP 2.0)
+        if (recipe.allergens && recipe.allergens.length > 0) {
+            return recipe.allergens;
+        }
+
+        // Fallback: detect from ingredients
         const allergens = new Set<string>();
         recipe.ingredients?.forEach((ing: any) => {
             ing.allergens?.forEach((allergen: string) => allergens.add(allergen));
@@ -644,16 +652,11 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
 
                 {/* Allergen Warning */}
                 {allergens.length > 0 && (
-                    <div className="p-4 bg-amber-50 border-b border-amber-200">
-                        <div className="flex items-center gap-2 text-amber-900">
-                            <AlertTriangle className="w-5 h-5" />
-                            <strong>Contains allergens:</strong>
-                            {allergens.map((allergen, idx) => (
-                                <span key={idx} className="px-2 py-1 bg-amber-200 rounded text-sm">
-                                    {allergen}
-                                </span>
-                            ))}
-                        </div>
+                    <div className="px-6 pb-4">
+                        <AllergenWarning
+                            allergens={allergens}
+                            userAllergies={[]} // TODO: Get from user profile
+                        />
                     </div>
                 )}
 

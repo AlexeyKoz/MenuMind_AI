@@ -1199,10 +1199,14 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(instance)
         recipe_data = serializer.data
 
-        # Get user's preferred language
-        user_language = getattr(request.user, 'preferred_language', 'en')
+        # Get user's preferred language from query param (overrides saved preference)
+        user_language = self.request.query_params.get('lang', None)
+        if not user_language:
+            # Fallback to saved preference
+            user_language = getattr(request.user, 'preferred_language', 'en')
+
         print(
-            f"[RETRIEVE] Recipe {instance.id} requested by user in language: {user_language}")
+            f"[RETRIEVE] Recipe {instance.id} requested in language: {user_language} (query param: {self.request.query_params.get('lang')})")
 
         # If not English, check for translation
         if user_language != 'en':
@@ -1235,9 +1239,21 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
                         print(
                             f"[RETRIEVE] ✅ GEMINI: {instance.name} -> {translated_name}")
 
+                    # TRANSLATE UNITS in ingredients
+                    from apps.core.utils.unit_utils import translate_unit
+                    translated_ingredients = translation.base_ingredients
+                    for ing in translated_ingredients:
+                        if 'unit' in ing and ing['unit']:
+                            original_unit = ing['unit']
+                            ing['unit'] = translate_unit(
+                                original_unit, user_language)
+                            if ing['unit'] != original_unit:
+                                print(
+                                    f"[RETRIEVE]   Unit translated: {original_unit} → {ing['unit']}")
+
                     # Override with translated content
                     recipe_data['name'] = translated_name
-                    recipe_data['base_ingredients'] = translation.base_ingredients
+                    recipe_data['base_ingredients'] = translated_ingredients
                     recipe_data['base_steps'] = translation.base_steps
                     recipe_data['translation_language'] = user_language
                 else:

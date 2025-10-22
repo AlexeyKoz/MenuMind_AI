@@ -50,6 +50,33 @@ class IngredientCache(models.Model):
         help_text='Full IML data for reference'
     )
 
+    # Validation fields (Sprint 1)
+    typical_amount_min = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Typical minimum amount in grams for validation'
+    )
+    typical_amount_max = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Typical maximum amount in grams for validation'
+    )
+    typical_amount_avg = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Typical average amount in grams'
+    )
+    max_per_serving = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Maximum reasonable amount per serving in grams'
+    )
+    warning_threshold = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Threshold for suspicious amounts that should warn user (in grams)'
+    )
+
     last_synced = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -231,3 +258,100 @@ class CookingTermTranslation(models.Model):
 
     def __str__(self):
         return f"{self.term.term_english} -> {self.language_code}: {self.translation}"
+
+
+class ImportHistory(models.Model):
+    """
+    Track IML and CookLingo data import operations
+
+    Records all import/delete operations for audit trail
+    Helps monitor data quality and troubleshoot issues
+    """
+
+    IMPORT_TYPE_CHOICES = [
+        ('iml', 'IML Ingredients'),
+        ('cooklingo', 'CookLingo Terms'),
+        ('iml_delete', 'IML Delete All'),
+        ('cooklingo_delete', 'CookLingo Delete All'),
+    ]
+
+    STATUS_CHOICES = [
+        ('success', 'Success'),
+        ('partial', 'Partial Success'),
+        ('failed', 'Failed'),
+    ]
+
+    import_type = models.CharField(
+        max_length=50,
+        choices=IMPORT_TYPE_CHOICES,
+        db_index=True,
+        help_text='Type of import operation performed'
+    )
+    source_file = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Name of the source file (for SQLite imports)'
+    )
+    records_imported = models.IntegerField(
+        default=0,
+        help_text='Number of new records imported'
+    )
+    records_updated = models.IntegerField(
+        default=0,
+        help_text='Number of existing records updated'
+    )
+    records_failed = models.IntegerField(
+        default=0,
+        help_text='Number of records that failed to import'
+    )
+    imported_by = models.CharField(
+        max_length=100,
+        help_text='Username or system that performed the import'
+    )
+    imported_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text='When the import was performed'
+    )
+    status = models.CharField(
+        max_length=50,
+        choices=STATUS_CHOICES,
+        default='success',
+        help_text='Overall status of the import operation'
+    )
+    error_log = models.TextField(
+        blank=True,
+        help_text='Detailed error messages (JSON format)'
+    )
+    summary = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Additional metadata about the import'
+    )
+
+    class Meta:
+        db_table = 'import_history'
+        verbose_name = 'Import History'
+        verbose_name_plural = 'Import History'
+        ordering = ['-imported_at']
+        indexes = [
+            models.Index(fields=['import_type', '-imported_at'],
+                         name='import_type_time_idx'),
+            models.Index(fields=['-imported_at'], name='import_time_idx'),
+            models.Index(fields=['status'], name='import_status_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_import_type_display()} on {self.imported_at.strftime('%Y-%m-%d %H:%M')}"
+
+    def get_total_records(self):
+        """Get total records processed"""
+        return self.records_imported + self.records_updated + self.records_failed
+
+    def get_success_rate(self):
+        """Calculate success rate as percentage"""
+        total = self.get_total_records()
+        if total == 0:
+            return 0
+        successful = self.records_imported + self.records_updated
+        return round((successful / total) * 100, 2)

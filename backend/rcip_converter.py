@@ -65,7 +65,8 @@ class RCIPConverter:
                 "cook_time_minutes": kwargs.get('cook_time_minutes'),
                 "total_time_minutes": kwargs.get('total_time_minutes'),
                 "keywords": kwargs.get('keywords', []),
-                "diet_labels": kwargs.get('diet_labels', [])
+                "diet_labels": kwargs.get('diet_labels', []),
+                "allergens": kwargs.get('allergens', [])
             },
             "ingredients": ingredients,
             "steps": steps,
@@ -349,6 +350,49 @@ class RecipeAnalyzer:
             labels.add('dairy-free')
 
         return list(labels)
+
+    @staticmethod
+    def detect_allergens(ingredients: List[Dict]) -> List[str]:
+        """
+        Detect common allergens from ingredients
+
+        Based on major food allergen groups:
+        - Dairy (milk, cheese, butter, cream, yogurt)
+        - Eggs
+        - Fish
+        - Shellfish (shrimp, crab, lobster, etc.)
+        - Tree nuts (almonds, walnuts, cashews, etc.)
+        - Peanuts
+        - Wheat/Gluten
+        - Soy
+        - Sesame
+        """
+        allergens = set()
+
+        # Allergen keyword mappings
+        allergen_keywords = {
+            'dairy': ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose', 'ghee'],
+            'eggs': ['egg', 'mayonnaise', 'meringue', 'albumin'],
+            'fish': ['fish', 'salmon', 'tuna', 'cod', 'trout', 'bass', 'flounder', 'anchovy', 'sardine', 'halibut'],
+            'shellfish': ['shrimp', 'crab', 'lobster', 'crayfish', 'prawn', 'scallop', 'clam', 'mussel', 'oyster', 'squid', 'octopus'],
+            'tree_nuts': ['almond', 'walnut', 'cashew', 'pistachio', 'pecan', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut', 'chestnut'],
+            'peanuts': ['peanut', 'peanut butter', 'groundnut'],
+            'wheat': ['wheat', 'flour', 'bread', 'pasta', 'spaghetti', 'penne', 'macaroni', 'noodle', 'couscous', 'bulgur', 'semolina', 'spelt', 'farro'],
+            'gluten': ['wheat', 'barley', 'rye', 'flour', 'bread', 'pasta', 'spaghetti', 'penne', 'macaroni', 'noodle', 'seitan', 'malt'],
+            'soy': ['soy', 'tofu', 'tempeh', 'edamame', 'miso', 'soy sauce', 'tamari'],
+            'sesame': ['sesame', 'tahini', 'sesame oil', 'sesame seed']
+        }
+
+        # Check each ingredient against allergen keywords
+        for ing in ingredients:
+            ing_name = ing.get('name', '').lower()
+
+            for allergen, keywords in allergen_keywords.items():
+                if any(keyword in ing_name for keyword in keywords):
+                    allergens.add(allergen)
+
+        # Return sorted list for consistency
+        return sorted(list(allergens))
 
     @staticmethod
     def estimate_difficulty(steps: List[Dict], ingredients: List[Dict]) -> str:

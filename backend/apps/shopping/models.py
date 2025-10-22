@@ -675,6 +675,91 @@ class InventoryHistory(models.Model):
         ]
 
 
+class InventoryRecipeBrief(models.Model):
+    """
+    Cache for AI-generated recipe briefs from inventory
+
+    Sprint 7 - Phase 3: Backend Caching
+    Stores recipe suggestions to avoid redundant AI calls.
+    Expires after 24 hours or when inventory changes.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='cached_recipe_briefs')
+
+    # Cache key components
+    inventory_hash = models.CharField(
+        max_length=64,
+        db_index=True,
+        help_text="SHA256 hash of inventory state (items + quantities)"
+    )
+    language = models.CharField(
+        max_length=2,
+        choices=[('en', 'English'), ('he', 'Hebrew'), ('ru', 'Russian')],
+        default='en',
+        db_index=True
+    )
+
+    # Cache data
+    inventory_snapshot = models.JSONField(
+        help_text="Snapshot of inventory items at generation time"
+    )
+    recipes = models.JSONField(
+        help_text="Array of generated recipe briefs with validation"
+    )
+    generation_params = models.JSONField(
+        help_text="Parameters used: max_recipes, prioritize_expiring, etc."
+    )
+
+    # Metadata
+    generated_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(
+        db_index=True,
+        help_text="TTL: 24 hours from generation"
+    )
+
+    # AI info
+    ai_model = models.CharField(
+        max_length=50,
+        default='gemini-2.0-flash-lite',
+        help_text="AI model used for generation"
+    )
+    generation_time_ms = models.IntegerField(
+        help_text="Time taken to generate (ms)"
+    )
+
+    # Stats
+    view_count = models.IntegerField(
+        default=0,
+        help_text="How many times retrieved from cache"
+    )
+    last_viewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'inventory_recipe_briefs'
+        indexes = [
+            models.Index(fields=['user', 'inventory_hash', 'language']),
+            models.Index(fields=['expires_at']),
+            models.Index(fields=['user', 'generated_at']),
+        ]
+        verbose_name = 'Inventory Recipe Brief Cache'
+        verbose_name_plural = 'Inventory Recipe Brief Caches'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.language} - {self.generated_at.strftime('%Y-%m-%d %H:%M')}"
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if cache entry has expired"""
+        return timezone.now() > self.expires_at
+
+    def increment_view_count(self):
+        """Track cache hit"""
+        self.view_count += 1
+        self.last_viewed_at = timezone.now()
+        self.save(update_fields=['view_count', 'last_viewed_at'])
+
+
 class ShoppingEvent(models.Model):
     """Track shopping trips and purchases"""
 

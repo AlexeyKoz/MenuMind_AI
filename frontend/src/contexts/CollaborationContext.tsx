@@ -190,6 +190,18 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
                         }
                     });
 
+                    userNotificationWS.on('recipe_completed', (data: any) => {
+                        console.log('🎉 User notification: Recipe completed:', data);
+
+                        // Dispatch custom event for ShoppingList component to handle
+                        window.dispatchEvent(new CustomEvent('recipeCompleted', {
+                            detail: {
+                                recipe_name: data.recipe_name,
+                                canonical_recipe_id: data.canonical_recipe_id
+                            }
+                        }));
+                    });
+
                     userNotificationWS.on('collaboration_key_regenerated', (data: any) => {
                         console.log('🔑 *** COLLABORATION KEY REGENERATED NOTIFICATION RECEIVED ***');
                         console.log('🔑 User notification: Collaboration key regenerated:', data);

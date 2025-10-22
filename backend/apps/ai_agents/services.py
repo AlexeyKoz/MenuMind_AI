@@ -3,7 +3,8 @@ import asyncio
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 import openai
-from langchain.chat_models import ChatOpenAI
+# Deprecated - TODO: Remove if OpenAI is not being used
+# from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field

@@ -1,0 +1,29 @@
+[INFO] Loaded environment from: C:\Users\al7ko\Desktop\menumine-ai\backend\.env
+[INFO] Using Redis for caching
+[INFO] Using Redis for Django Channels (WebSocket layer)
+Traceback (most recent call last):
+  File "C:\Users\al7ko\Desktop\menumine-ai\backend\manage.py", line 22, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\al7ko\Desktop\menumine-ai\backend\manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\al7ko\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\__init__.py", line 442, in execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\al7ko\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\__init__.py", line 436, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\al7ko\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\base.py", line 412, in run_from_argv
+    self.execute(*args, **cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\al7ko\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\base.py", line 458, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\al7ko\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\core\management\commands\shell.py", line 117, in handle
+    exec(options["command"], globals())
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 1, in <module>
+  File "C:\Users\al7ko\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1251.py", line 23, in decode
+    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'charmap' codec can't decode byte 0x98 in position 830: character maps to <undefined>

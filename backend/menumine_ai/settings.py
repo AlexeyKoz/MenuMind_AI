@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'apps.ai_agents',
     'apps.nutrition',
     'apps.analytics',
-    'apps.core',
+    'apps.core.apps.CoreConfig',  # Use CoreConfig for service initialization
 ]
 
 MIDDLEWARE = [
@@ -275,6 +275,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 GROQ_API_KEY = env('GROQ_API_KEY', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')  # Gemini Flash 2.5
+GOOGLE_CLOUD_API_KEY = env('GOOGLE_CLOUD_API_KEY',
+                           default='')  # Google Translate API
 
 # Search & Scraping APIs
 BRAVE_SEARCH_API_KEY = env('BRAVE_SEARCH_API_KEY', default='')

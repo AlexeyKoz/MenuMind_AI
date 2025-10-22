@@ -407,22 +407,55 @@ Return ONLY valid JSON (no markdown, no explanations):
 
 
 class InventoryRecipeGenerator:
-    """AI service for generating recipes from inventory"""
+    """
+    AI service for generating recipes from inventory
+
+    Sprint 7 Integration:
+    - Phase 1: Validation with UniversalValidator
+    - Phase 2: Multilingual generation (single language, lazy approach)
+    - Uses Gemini PRIMARY, Groq FALLBACK
+    """
 
     def __init__(self):
+        # Initialize Gemini (PRIMARY)
+        self.gemini_client = None
+        try:
+            import google.generativeai as genai
+            gemini_key = os.getenv('GEMINI_API_KEY') or getattr(
+                settings, 'GEMINI_API_KEY', None)
+            if gemini_key:
+                genai.configure(api_key=gemini_key)
+                self.gemini_client = genai.GenerativeModel(
+                    'gemini-2.0-flash-lite')
+                print("[INVENTORY AI] Initialized Gemini 2.0 Flash Lite (PRIMARY)")
+            else:
+                print("[WARNING] GEMINI_API_KEY not found. Gemini unavailable.")
+        except Exception as e:
+            print(f"[WARNING] Gemini initialization failed: {e}")
+
+        # Initialize Groq (FALLBACK)
+        self.groq_client = None
         try:
             from groq import Groq
             groq_api_key = os.getenv('GROQ_API_KEY') or getattr(
                 settings, 'GROQ_API_KEY', None)
             if groq_api_key:
                 self.groq_client = Groq(api_key=groq_api_key)
-                self.model = "llama-3.1-8b-instant"
+                self.groq_model = "llama-3.3-70b-versatile"
+                print("[INVENTORY AI] Initialized Groq Llama 3.3 70B (FALLBACK)")
             else:
-                print("[WARNING] GROQ_API_KEY not found. Cannot generate recipes.")
-                self.groq_client = None
-        except ImportError:
-            print("[WARNING] Groq not installed. Cannot generate recipes.")
-            self.groq_client = None
+                print("[WARNING] GROQ_API_KEY not found. Groq unavailable.")
+        except Exception as e:
+            print(f"[WARNING] Groq initialization failed: {e}")
+
+        # Initialize validator (Phase 1)
+        try:
+            from apps.core.services import get_universal_validator
+            self.validator = get_universal_validator()
+            print("[INVENTORY AI] Initialized UniversalValidator")
+        except Exception as e:
+            print(f"[WARNING] Validator initialization failed: {e}")
+            self.validator = None
 
     def generate_recipes(
         self,
@@ -430,10 +463,16 @@ class InventoryRecipeGenerator:
         user_profile: Dict,
         max_recipes: int = 5,
         prioritize_expiring: bool = True,
-        max_missing_ingredients: int = 2
+        max_missing_ingredients: int = 2,
+        target_language: str = 'en'  # Phase 2: Single-language generation
     ) -> List[Dict]:
         """
-        Generate recipe suggestions from inventory
+        Generate recipe suggestions from inventory with validation
+
+        Phase 1: Validates all recipes before returning
+        Phase 2: Generates in user's target language only (lazy approach)
+
+        AI Strategy: Gemini PRIMARY, Groq FALLBACK
 
         Args:
             inventory_items: List of inventory items with name, quantity, expiration_date
@@ -441,16 +480,19 @@ class InventoryRecipeGenerator:
             max_recipes: Maximum number of recipes to generate
             prioritize_expiring: Prioritize items expiring soon
             max_missing_ingredients: Max missing ingredients allowed
+            target_language: Language for generation ('en', 'he', 'ru')
 
         Returns:
-            List of recipe suggestions
+            List of validated recipe suggestions in target language
         """
-        if not self.groq_client:
+        if not self.gemini_client and not self.groq_client:
+            print("[ERROR] No AI provider available (Gemini or Groq)")
             return []
 
         try:
             print(
-                f"[AI RECIPES] Starting generation with {len(inventory_items)} inventory items")
+                f"[INVENTORY AI] Generating {max_recipes} recipes in '{target_language}'")
+            print(f"[INVENTORY AI] Inventory items: {len(inventory_items)}")
 
             # Sort items by expiration if prioritizing
             if prioritize_expiring:
@@ -459,123 +501,66 @@ class InventoryRecipeGenerator:
                     key=lambda x: x.get('expiration_date') or '9999-12-31'
                 )
 
-            # Build inventory summary
-            inventory_summary = self._build_inventory_summary(inventory_items)
-            user_summary = self._build_user_summary(user_profile)
-
-            print(
-                f"[AI RECIPES] Inventory summary:\n{inventory_summary[:300]}...")
-            print(f"[AI RECIPES] Sending prompt to AI...")
-
-            prompt = f"""You are a recipe recommendation AI for MenuMine.
-
-Current Inventory:
-{inventory_summary}
-
-User Profile:
-{user_summary}
-
-Task: Generate {max_recipes} recipe suggestions that:
-1. PRIORITIZE items expiring within 3 days (mark priority as "urgent")
-2. Use available ingredients (minimize missing items, max {max_missing_ingredients})
-3. Fit user's nutrition goals
-4. Match user preferences
-5. Are realistic and achievable
-
-For each recipe, provide:
-- name: Recipe name
-- priority: "urgent" (uses expiring items), "high" (uses most inventory), or "normal"
-- ingredients_from_inventory: List of {{name, quantity, unit}}
-- missing_ingredients: List of ingredient names (max {max_missing_ingredients})
-- nutrition: {{calories, protein, carbs, fat}}
-- difficulty: "easy", "intermediate", or "advanced"
-- cooking_time: e.g., "20 min", "45 min"
-- reasoning: Why this recipe
-
-Return ONLY valid JSON array (no markdown):
-[
-  {{
-    "name": "...",
-    "priority": "urgent|high|normal",
-    "ingredients_from_inventory": [
-      {{"name": "...", "quantity": X, "unit": "..."}},
-      ...
-    ],
-    "missing_ingredients": ["...", ...],
-    "nutrition": {{
-      "calories": X,
-      "protein": X,
-      "carbs": X,
-      "fat": X
-    }},
-    "difficulty": "easy|intermediate|advanced",
-    "cooking_time": "X min",
-    "reasoning": "..."
-  }},
-  ...
-]"""
-
-            completion = self.groq_client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional chef and nutritionist. Return ONLY valid JSON array."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=2000
+            # Build prompt in target language (Phase 2)
+            prompt = self._build_prompt(
+                inventory_items,
+                user_profile,
+                max_recipes,
+                prioritize_expiring,
+                max_missing_ingredients,
+                target_language
             )
 
-            response_text = completion.choices[0].message.content.strip()
+            # Try Gemini PRIMARY first
+            recipe_briefs = None
+            ai_provider = None
 
-            # Debug: first 500 chars
-            print(f"[AI RECIPES] Raw AI response: {response_text[:500]}...")
+            if self.gemini_client:
+                print("[INVENTORY AI] Trying Gemini (PRIMARY)...")
+                recipe_briefs = self._generate_with_gemini(prompt)
+                if recipe_briefs:
+                    ai_provider = 'gemini'
+                    print(
+                        f"[INVENTORY AI] ✅ Gemini generated {len(recipe_briefs)} recipes")
 
-            # Remove markdown code blocks if present
-            if response_text.startswith('```'):
-                response_text = response_text.split('```')[1]
-                if response_text.startswith('json'):
-                    response_text = response_text[4:]
-                response_text = response_text.strip()
+            # Fallback to Groq if Gemini failed
+            if not recipe_briefs and self.groq_client:
+                print("[INVENTORY AI] Gemini failed, trying Groq (FALLBACK)...")
+                recipe_briefs = self._generate_with_groq(prompt)
+                if recipe_briefs:
+                    ai_provider = 'groq'
+                    print(
+                        f"[INVENTORY AI] ✅ Groq generated {len(recipe_briefs)} recipes")
 
-            # Debug
-            print(f"[AI RECIPES] Cleaned response: {response_text[:500]}...")
+            if not recipe_briefs:
+                print("[ERROR] Both Gemini and Groq failed to generate recipes")
+                # Fallback to templates
+                return self._generate_fallback_recipes(inventory_items, max_recipes)
 
-            recipes = json.loads(response_text)
+            # Phase 1: Validate recipes
+            if self.validator:
+                validated_recipes = self._validate_recipes(
+                    recipe_briefs, ai_provider)
+                print(
+                    f"[INVENTORY AI] ✅ Validated {len(validated_recipes)}/{len(recipe_briefs)} recipes")
+                return validated_recipes[:max_recipes]
+            else:
+                # No validator available, return unvalidated (mark as unvalidated)
+                for recipe in recipe_briefs:
+                    recipe['validation'] = {
+                        'score': None,
+                        'is_valid': None,
+                        'validated': False,
+                        'reason': 'Validator not available'
+                    }
+                return recipe_briefs[:max_recipes]
 
-            print(
-                f"[AI RECIPES] Generated {len(recipes)} recipe suggestions from inventory")
-
-            return recipes[:max_recipes]
-
-        except json.JSONDecodeError as e:
-            print(f"[ERROR] Failed to parse AI recipe response: {e}")
-            print(f"[ERROR] Response text was: {response_text[:1000]}")
-            print("[AI RECIPES] Falling back to template-based recipes")
-            # Fallback: generate basic recipes from inventory
-            fallback_recipes = self._generate_fallback_recipes(
-                inventory_items, max_recipes)
-            print(
-                f"[FALLBACK] Returning {len(fallback_recipes)} fallback recipes")
-            return fallback_recipes
         except Exception as e:
             print(f"[ERROR] Recipe generation error: {e}")
-            try:
-                print(f"[ERROR] Response text was: {response_text[:1000]}")
-            except:
-                print("[ERROR] No response text available")
-            print("[AI RECIPES] Falling back to template-based recipes")
-            # Fallback: generate basic recipes from inventory
-            fallback_recipes = self._generate_fallback_recipes(
-                inventory_items, max_recipes)
-            print(
-                f"[FALLBACK] Returning {len(fallback_recipes)} fallback recipes")
-            return fallback_recipes
+            import traceback
+            traceback.print_exc()
+            # Fallback to template-based recipes
+            return self._generate_fallback_recipes(inventory_items, max_recipes)
 
     def _build_inventory_summary(self, items: List[Dict]) -> str:
         """Build formatted inventory summary for AI prompt"""
@@ -740,3 +725,384 @@ Return ONLY valid JSON array (no markdown):
 
         print(f"[FALLBACK] Generated {len(recipes)} fallback recipes")
         return recipes
+
+    # ==================== SPRINT 7: NEW METHODS ====================
+
+    def _build_prompt(
+        self,
+        items: List[Dict],
+        user_profile: Dict,
+        max_recipes: int,
+        prioritize_expiring: bool,
+        max_missing: int,
+        language: str
+    ) -> str:
+        """
+        Build AI prompt in target language (Phase 2: Simplified)
+
+        Items are already in user's language from shopping!
+        No translation needed - just format them properly.
+        """
+
+        # Build inventory summary
+        inventory_summary = self._build_inventory_summary(items)
+        user_summary = self._build_user_summary(user_profile)
+
+        # Language-specific system prompts
+        SYSTEM_PROMPTS = {
+            'en': "You are a professional chef assistant. Generate practical recipe suggestions.",
+            'he': "אתה עוזר שף מקצועי. צור הצעות מתכון מעשיות.",
+            'ru': "Вы профессиональный помощник шеф-повара. Создайте практические рецепты."
+        }
+
+        # Language-specific instructions
+        INSTRUCTIONS = {
+            'en': f"""Based on the following inventory items, suggest {max_recipes} recipes.
+
+Inventory:
+{inventory_summary}
+
+User Profile:
+{user_summary}
+
+Requirements:
+1. PRIORITIZE ingredients expiring within 3 days (mark priority as "urgent")
+2. Maximum {max_missing} missing ingredients per recipe
+3. Fit user's nutrition goals
+4. Be realistic and achievable
+
+For each recipe, provide:
+- name: Recipe name
+- priority: "urgent" (uses expiring items), "high" (uses most inventory), or "normal"
+- ingredients_from_inventory: List of {{name, quantity, unit}}
+- missing_ingredients: List of ingredient names (max {max_missing})
+- nutrition: {{calories, protein, carbs, fat}}
+- difficulty: "easy", "intermediate", or "advanced"
+- cooking_time: e.g., "20 min", "45 min"
+- reasoning: Why this recipe
+
+Return ONLY valid JSON array (no markdown):
+[{{"name": "...", "priority": "urgent|high|normal", ...}}]""",
+
+            'he': f"""בהתבסס על מוצרי המלאי הבאים, הצע {max_recipes} מתכונים.
+
+מלאי:
+{inventory_summary}
+
+פרופיל משתמש:
+{user_summary}
+
+דרישות:
+1. תעדוף מרכיבים שפג תוקפם תוך 3 ימים (סמן עדיפות כ-"urgent")
+2. מקסימום {max_missing} מרכיבים חסרים למתכון
+3. התאם ליעדי התזונה של המשתמש
+4. היה ריאלי וישים
+
+לכל מתכון, ספק:
+- name: שם המתכון
+- priority: "urgent" (משתמש במרכיבים שפג תוקפם), "high" (משתמש ברוב המלאי), או "normal"
+- ingredients_from_inventory: רשימה של {{name, quantity, unit}}
+- missing_ingredients: רשימת שמות מרכיבים (מקסימום {max_missing})
+- nutrition: {{calories, protein, carbs, fat}}
+- difficulty: "easy", "intermediate", או "advanced"
+- cooking_time: למשל, "20 min", "45 min"
+- reasoning: למה המתכון הזה
+
+החזר רק מערך JSON תקין (ללא markdown):
+[{{"name": "...", "priority": "urgent|high|normal", ...}}]""",
+
+            'ru': f"""На основе следующих товаров из инвентаря предложите {max_recipes} рецептов.
+
+Инвентарь:
+{inventory_summary}
+
+Профиль пользователя:
+{user_summary}
+
+Требования:
+1. ПРИОРИТЕТ ингредиентам с истекающим сроком в течение 3 дней (отметить приоритет как "urgent")
+2. Максимум {max_missing} недостающих ингредиентов на рецепт
+3. Соответствовать целям пользователя по питанию
+4. Быть реалистичным и достижимым
+
+Для каждого рецепта укажите:
+- name: Название рецепта
+- priority: "urgent" (использует ингредиенты с истекающим сроком), "high" (использует большинство инвентаря), или "normal"
+- ingredients_from_inventory: Список {{name, quantity, unit}}
+- missing_ingredients: Список названий ингредиентов (максимум {max_missing})
+- nutrition: {{calories, protein, carbs, fat}}
+- difficulty: "easy", "intermediate", или "advanced"
+- cooking_time: например, "20 min", "45 min"
+- reasoning: Почему этот рецепт
+
+Верните только валидный JSON массив (без markdown):
+[{{"name": "...", "priority": "urgent|high|normal", ...}}]"""
+        }
+
+        system_prompt = SYSTEM_PROMPTS.get(language, SYSTEM_PROMPTS['en'])
+        instruction = INSTRUCTIONS.get(language, INSTRUCTIONS['en'])
+
+        return f"{system_prompt}\n\n{instruction}"
+
+    def _generate_with_gemini(self, prompt: str) -> Optional[List[Dict]]:
+        """Generate recipes using Gemini (PRIMARY) with retry logic"""
+        max_retries = 3
+        retry_delay = 1  # Start with 1 second
+
+        for attempt in range(max_retries):
+            try:
+                print(
+                    f"[INVENTORY AI] Gemini attempt {attempt + 1}/{max_retries}")
+
+                response = self.gemini_client.generate_content(
+                    prompt,
+                    generation_config={
+                        'temperature': 0.7,
+                        'max_output_tokens': 2000,
+                    },
+                    request_options={'timeout': 30}  # 30 second timeout
+                )
+
+                response_text = response.text.strip()
+                recipes = self._parse_json_response(response_text)
+
+                if recipes:
+                    return recipes
+                else:
+                    print(
+                        f"[INVENTORY AI] Gemini returned invalid JSON, retrying...")
+
+            except Exception as e:
+                error_str = str(e)
+                print(
+                    f"[INVENTORY AI] Gemini error (attempt {attempt + 1}): {e}")
+
+                # Check if it's a retryable error
+                if 'quota' in error_str.lower() or '429' in error_str:
+                    print(f"[INVENTORY AI] Quota/rate limit hit - not retrying")
+                    return None
+
+                if attempt < max_retries - 1:
+                    # Exponential backoff
+                    import time
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(
+                        f"[INVENTORY AI] Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"[INVENTORY AI] All {max_retries} attempts failed")
+                    return None
+
+        return None
+
+    def _generate_with_groq(self, prompt: str) -> Optional[List[Dict]]:
+        """Generate recipes using Groq (FALLBACK)"""
+        try:
+            completion = self.groq_client.chat.completions.create(
+                model=self.groq_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional chef and nutritionist. Return ONLY valid JSON array."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+
+            response_text = completion.choices[0].message.content.strip()
+            return self._parse_json_response(response_text)
+
+        except Exception as e:
+            print(f"[INVENTORY AI] Groq error: {e}")
+            return None
+
+    def _parse_json_response(self, response_text: str) -> Optional[List[Dict]]:
+        """Parse JSON response from AI (handles markdown code blocks)"""
+        try:
+            # Remove markdown code blocks if present
+            if response_text.startswith('```'):
+                response_text = response_text.split('```')[1]
+                if response_text.startswith('json'):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+
+            recipes = json.loads(response_text)
+
+            if not isinstance(recipes, list):
+                print(f"[INVENTORY AI] ERROR: Response is not a list")
+                return None
+
+            return recipes
+
+        except json.JSONDecodeError as e:
+            print(f"[INVENTORY AI] JSON parse error: {e}")
+            print(f"[INVENTORY AI] Response was: {response_text[:500]}")
+            return None
+
+    def _validate_recipes(self, recipe_briefs: List[Dict], ai_provider: str) -> List[Dict]:
+        """
+        Validate recipe briefs using UniversalValidator (Phase 1)
+
+        Returns only valid recipes with validation scores
+
+        NOTE: Recipe briefs use a lower validation threshold (30%) because they are
+        lightweight suggestions without full RCIP 2.0 structure. Full recipes (Phase 4)
+        will use the standard 75% threshold.
+        """
+        validated_recipes = []
+        validation_stats = {
+            'generated': len(recipe_briefs),
+            'validated': 0,
+            'failed': 0,
+            'issues': []
+        }
+
+        for brief in recipe_briefs:
+            # Convert brief to RCIP 2.0 format for validation
+            rcip_recipe = self._convert_brief_to_rcip(brief)
+
+            # Validate using UniversalValidator
+            try:
+                validation_result = self.validator.validate_recipe(rcip_recipe)
+
+                if validation_result.overall_score >= 30:  # Lower threshold for briefs
+                    # Add validation metadata to brief
+                    brief['validation'] = {
+                        'score': validation_result.overall_score,
+                        'is_valid': True,
+                        'validated_at': validation_result.execution_time_ms,
+                        'ai_provider': ai_provider,
+                        'brief_mode': True  # Indicates lower threshold used
+                    }
+                    validated_recipes.append(brief)
+                    validation_stats['validated'] += 1
+                else:
+                    # Log failure but don't show to user
+                    validation_stats['failed'] += 1
+                    validation_stats['issues'].append({
+                        'recipe_name': brief['name'],
+                        'score': validation_result.overall_score,
+                        'issues': [
+                            {
+                                'layer': issue.layer,
+                                'level': issue.level,
+                                'field': issue.field,
+                                'message': issue.message
+                            }
+                            for issue in validation_result.issues
+                        ]
+                    })
+                    print(
+                        f"[INVENTORY AI] ❌ Recipe '{brief['name']}' failed validation (score: {validation_result.overall_score})")
+
+            except Exception as e:
+                print(
+                    f"[INVENTORY AI] Validation error for '{brief['name']}': {e}")
+                validation_stats['failed'] += 1
+
+        # Log validation statistics
+        print(
+            f"[INVENTORY AI] Validation stats: {validation_stats['validated']} passed, {validation_stats['failed']} failed")
+
+        # Sort by validation score (best first)
+        validated_recipes.sort(
+            key=lambda r: r['validation']['score'], reverse=True)
+
+        return validated_recipes
+
+    def _convert_brief_to_rcip(self, brief: Dict) -> Dict:
+        """
+        Convert recipe brief to RCIP 2.0 format for validation
+
+        Brief structure (from AI):
+        {
+            "name": "Quick Tomato Pasta",
+            "ingredients_from_inventory": [...],
+            "missing_ingredients": [...],
+            "cooking_time": "20 min",
+            "difficulty": "easy",
+            "nutrition": {...}
+        }
+
+        RCIP 2.0 structure (for validator):
+        {
+            "metadata": {...},
+            "structure": {
+                "ingredients": [...],
+                "steps": [...]
+            }
+        }
+        """
+        # Combine all ingredients
+        all_ingredients = []
+
+        # Add inventory ingredients
+        for ing in brief.get('ingredients_from_inventory', []):
+            all_ingredients.append({
+                'iml_key': self._normalize_ingredient_name(ing['name']),
+                'amount': ing.get('quantity', 1),
+                'unit': ing.get('unit', 'unit'),
+                'from_inventory': True
+            })
+
+        # Add missing ingredients
+        for ing_name in brief.get('missing_ingredients', []):
+            all_ingredients.append({
+                'iml_key': self._normalize_ingredient_name(ing_name),
+                'amount': 1,
+                'unit': 'unit',
+                'from_inventory': False
+            })
+
+        # Build RCIP structure
+        rcip = {
+            'metadata': {
+                'title': brief['name'],
+                'source_language': 'en',  # Will be set by API endpoint
+                'servings': brief.get('servings', 2),
+                'cooking_time': brief.get('cooking_time', 'unknown'),
+                'difficulty': brief.get('difficulty', 'easy'),
+                'tags': ['inventory-generated'],
+                'nutrition': brief.get('nutrition', {})
+            },
+            'structure': {
+                'ingredients': all_ingredients,
+                'steps': self._generate_placeholder_steps(brief)
+            }
+        }
+
+        return rcip
+
+    def _normalize_ingredient_name(self, name: str) -> str:
+        """Convert ingredient name to IML key format"""
+        return name.lower().strip().replace(' ', '-')
+
+    def _generate_placeholder_steps(self, brief: Dict) -> List[Dict]:
+        """
+        Generate minimal placeholder steps for validation
+
+        NOTE: Full steps will be generated when user clicks "Create Recipe"
+        For validation, we just need basic structure
+        """
+        return [
+            {
+                'step_number': 1,
+                'instruction': f"Prepare ingredients for {brief['name']}",
+                'cooklingo_keys': []
+            },
+            {
+                'step_number': 2,
+                'instruction': "Cook according to recipe",
+                'cooklingo_keys': []
+            },
+            {
+                'step_number': 3,
+                'instruction': "Serve and enjoy",
+                'cooklingo_keys': []
+            }
+        ]

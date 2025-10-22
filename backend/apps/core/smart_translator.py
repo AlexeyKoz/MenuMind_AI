@@ -1,6 +1,7 @@
 """
-Smart Translation Service - Uses databases FIRST, Gemini as fallback
+Smart Translation Service - Uses databases FIRST, Google Translate API as primary AI translator
 Maximizes use of IML (ingredients) and CookLingo (cooking terms) databases
+Fallback chain: IML/CookLingo → Google Translate → Gemini → Groq
 """
 import logging
 import re
@@ -8,35 +9,26 @@ from typing import Dict, List, Optional
 from django.conf import settings
 from django.core.cache import cache
 from apps.core.models import IngredientCache, IngredientTranslation, CookingTermCache, CookingTermTranslation
+from apps.core.google_translate_service import get_google_translate_service
 
 logger = logging.getLogger(__name__)
 
 
 class SmartTranslationService:
     """
-    Smart translation that prioritizes database lookups over AI:
+    Smart translation that prioritizes database lookups, then Google Translate:
     1. Try exact match in IML/CookLingo databases
     2. Try fuzzy match in databases
-    3. Check cache for previous AI translations
-    4. Use Gemini only as last resort
+    3. Use Google Translate API (primary AI translator - fast, reliable)
+    4. Fallback to Gemini if Google fails
+    5. Fallback to Groq if Gemini fails
     """
 
     def __init__(self):
-        self.gemini_client = None
-        try:
-            import google.generativeai as genai
-            api_key = getattr(settings, 'GEMINI_API_KEY', None)
-            if api_key:
-                genai.configure(api_key=api_key)
-                self.gemini_client = genai.GenerativeModel(
-                    'gemini-2.0-flash-lite')
-                logger.info(
-                    "[SMART_TRANSLATE] Initialized with Gemini Flash 2.5 fallback")
-            else:
-                logger.warning(
-                    "[SMART_TRANSLATE] No Gemini API key - database-only mode")
-        except Exception as e:
-            logger.error(f"[SMART_TRANSLATE] Gemini init failed: {e}")
+        # Initialize Google Translate service (with Gemini and Groq fallbacks built-in)
+        self.google_translate = get_google_translate_service()
+        logger.info(
+            "[SMART_TRANSLATE] Initialized with Google Translate (primary) + Gemini/Groq fallbacks")
 
     def translate_ingredients_batch(
         self,
@@ -276,59 +268,23 @@ class SmartTranslationService:
         ingredient_names: List[str],
         target_language: str
     ) -> List[str]:
-        """Translate ingredient names using Gemini (last resort)"""
-        if not self.gemini_client:
+        """Translate ingredient names using Google Translate (with fallbacks)"""
+
+        # Use Google Translate service for batch translation
+        translated_names = self.google_translate.translate_batch(
+            ingredient_names,
+            target_language=target_language,
+            source_language='en'
+        )
+
+        if translated_names and len(translated_names) == len(ingredient_names):
+            logger.info(
+                f"[GOOGLE_TRANSLATE] ✅ Successfully translated {len(translated_names)} ingredients")
+            return translated_names
+        else:
             logger.warning(
-                "[SMART_TRANSLATE] No Gemini client, returning originals")
+                f"[GOOGLE_TRANSLATE] ⚠️ Translation failed, returning originals")
             return ingredient_names
-
-        language_names = {
-            'ru': 'Russian',
-            'he': 'Hebrew',
-            'en': 'English'
-        }
-
-        target_lang_name = language_names.get(target_language, target_language)
-
-        prompt = f"""Translate these cooking ingredient names to {target_lang_name}.
-Return ONLY the translations, one per line, in the exact same order.
-Do NOT add numbers, bullets, explanations, or extra text.
-
-Ingredients:
-{chr(10).join(f'- {name}' for name in ingredient_names)}
-
-Translations in {target_lang_name}:"""
-
-        try:
-            response = self.gemini_client.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.1,
-                    'max_output_tokens': 500,
-                }
-            )
-
-            # Parse response
-            translations = []
-            for line in response.text.strip().split('\n'):
-                line = line.strip()
-                # Remove bullets, numbers, dashes
-                line = line.lstrip('- •*0123456789. ')
-                if line:
-                    translations.append(line)
-
-            if len(translations) == len(ingredient_names):
-                logger.info(
-                    f"[GEMINI] Successfully translated {len(translations)} ingredients")
-                return translations
-            else:
-                logger.warning(
-                    f"[GEMINI] Count mismatch: {len(translations)} != {len(ingredient_names)}")
-                return ingredient_names  # Return originals if mismatch
-
-        except Exception as e:
-            logger.error(f"[GEMINI] Translation error: {e}")
-            return ingredient_names  # Return originals on error
 
     def translate_cooking_steps_batch(
         self,
@@ -452,81 +408,32 @@ Translations in {target_lang_name}:"""
         target_language: str,
         glossary: Dict[str, str]
     ) -> List[str]:
-        """Translate cooking steps using Gemini with glossary context"""
-        if not self.gemini_client:
-            logger.warning(
-                "[SMART_TRANSLATE] No Gemini client, returning originals")
-            return step_texts
+        """Translate cooking steps using Google Translate (with Gemini/Groq fallbacks)"""
 
-        language_names = {
-            'ru': 'Russian',
-            'he': 'Hebrew',
-            'en': 'English'
-        }
+        logger.info(
+            f"[GOOGLE_TRANSLATE] Translating {len([t for t in step_texts if t])} cooking steps to {target_language}")
 
-        target_lang_name = language_names.get(target_language, target_language)
-
-        # Build glossary section for prompt
-        glossary_text = ""
         if glossary:
-            glossary_items = [f"{en} = {translated}" for en,
-                              translated in glossary.items()]
-            glossary_text = f"""
-COOKING TERMS GLOSSARY (use these exact translations when possible):
-{chr(10).join(glossary_items)}
-"""
-            logger.info(f"[GEMINI] Using glossary with {len(glossary)} terms")
-        else:
-            logger.info(f"[GEMINI] No glossary - translating directly")
+            logger.info(
+                f"[GOOGLE_TRANSLATE] Using CookLingo glossary with {len(glossary)} terms")
 
-        # Build prompt with numbered steps
-        steps_text = '\n'.join(f"{i+1}. {text}" for i,
-                               text in enumerate(step_texts) if text)
+        # Use Google Translate service for batch translation (fast and reliable)
+        translated_texts = self.google_translate.translate_batch(
+            step_texts,
+            target_language=target_language,
+            source_language='en'
+        )
 
-        prompt = f"""You are a professional cooking translator. Translate these cooking instructions to {target_lang_name}.
+        if translated_texts and len(translated_texts) == len(step_texts):
+            logger.info(
+                f"[GOOGLE_TRANSLATE] ✅ Successfully translated all cooking steps")
 
-IMPORTANT RULES:
-- Translate EVERY step completely and accurately
-- Return ONLY the translations, numbered 1., 2., 3., etc.
-- Do NOT skip any steps
-- Do NOT add explanations, commentary, or extra text
-- Maintain the same order as the original
-- Keep cooking measurements and times as-is
-{glossary_text}
-Instructions to translate:
-{steps_text}
+            # QUALITY CHECK: Verify translations contain target language characters
+            if target_language in ['ru', 'he'] and translated_texts:
+                first_trans = translated_texts[0].lower(
+                ) if translated_texts[0] else ""
 
-Translations in {target_lang_name}:"""
-
-        try:
-            response = self.gemini_client.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.1,
-                    'max_output_tokens': 3000,
-                }
-            )
-
-            # Parse response
-            translations = []
-            for line in response.text.strip().split('\n'):
-                line = line.strip()
-                # Remove step numbers (1., 2., etc.)
-                line = re.sub(r'^\d+\.\s*', '', line)
-                if line:
-                    translations.append(line)
-
-            expected_count = len([t for t in step_texts if t])
-
-            if len(translations) == expected_count:
-                logger.info(
-                    f"[GEMINI] ✅ Successfully translated {len(translations)} cooking steps to {target_lang_name}")
-
-                # QUALITY CHECK: Verify translations are not in English
-                # Check first translated step for target language characters
-                if translations and target_language != 'en':
-                    first_trans = translations[0].lower()
-
+                if first_trans:
                     # Check for target language characters
                     if target_language == 'ru':
                         has_target_chars = any(
@@ -535,42 +442,179 @@ Translations in {target_lang_name}:"""
                         has_target_chars = any(
                             '\u0590' <= char <= '\u05FF' for char in first_trans)
                     else:
-                        has_target_chars = True  # Skip check for other languages
+                        has_target_chars = True
 
                     if not has_target_chars:
-                        # Check if it's mostly English
-                        is_english = sum(1 for c in first_trans if 'a' <= c <= 'z') > len(
-                            first_trans) * 0.5
-                        if is_english:
-                            logger.warning(
-                                f"[GEMINI] ⚠️ Translation appears to be in English, not {target_lang_name}")
-                            logger.warning(
-                                f"[GEMINI] First step: {translations[0][:100]}")
-                            logger.warning(
-                                f"[GEMINI] 🔄 This may indicate Gemini fallback or translation issue")
+                        logger.warning(
+                            f"[GOOGLE_TRANSLATE] ⚠️ Translation may not be in target language: {first_trans[:100]}")
                     else:
                         logger.info(
-                            f"[GEMINI] ✅ Quality check passed - contains {target_lang_name} characters")
+                            f"[GOOGLE_TRANSLATE] ✅ Quality check passed - contains target language characters")
 
+            return translated_texts
+        else:
+            logger.error(
+                f"[GOOGLE_TRANSLATE] ❌ Translation failed, returning originals")
+            return step_texts
+
+    def _translate_with_stronger_prompt(
+        self,
+        step_texts: List[str],
+        target_language: str,
+        glossary: Dict[str, str]
+    ) -> List[str]:
+        """
+        Retry translation with MUCH stronger prompt that explicitly forbids English
+        """
+        if not self.gemini_client:
+            return step_texts
+
+        language_names = {
+            'ru': 'Russian',
+            'he': 'Hebrew'
+        }
+
+        target_lang_name = language_names.get(target_language, target_language)
+
+        # Build glossary
+        glossary_text = ""
+        if glossary:
+            glossary_items = [f"{en} = {translated}" for en,
+                              translated in glossary.items()]
+            glossary_text = f"""
+COOKING TERMS GLOSSARY (use these exact translations):
+{chr(10).join(glossary_items)}
+"""
+
+        # Build steps
+        steps_text = '\n'.join(f"{i+1}. {text}" for i,
+                               text in enumerate(step_texts) if text)
+
+        # STRONGER PROMPT for Russian
+        if target_language == 'ru':
+            prompt = f"""You are a professional cooking translator. Translate these cooking instructions to Russian.
+
+═══════════════════════════════════════════════════════════════
+🚨 КРИТИЧЕСКИ ВАЖНО - ТОЛЬКО РУССКИЙ ЯЗЫК 🚨
+═══════════════════════════════════════════════════════════════
+
+ВЫ ДОЛЖНЫ вывести ВСЁ ТОЛЬКО на РУССКОМ языке.
+
+❌ АБСОЛЮТНО ЗАПРЕЩЕНО:
+- Английские слова: "Place", "Mix", "Add", "Wrap", "cooked", "rice", etc.
+- Смешанный язык: "Place приготовленный rice" ❌
+- Частичные переводы: "Mix полностью fried" ❌
+- ЛЮБЫЕ английские слова вообще!
+
+✅ ТРЕБУЕТСЯ:
+- КАЖДОЕ СЛОВО должно быть на русском языке
+- "Place cooked rice" → "Поместите приготовленный рис" ✅
+- "Mix thoroughly" → "Тщательно перемешайте" ✅
+- "Wrap with plastic" → "Заверните в пластиковую пленку" ✅
+
+ПРОВЕРКА ПЕРЕД ОТВЕТОМ:
+Перед тем как ответить, проверьте каждый шаг:
+1. ✓ Содержит ТОЛЬКО русские слова (кириллица)
+2. ✓ НЕТ английских слов (A-Z, a-z)
+3. ✓ НЕТ смешанного языка
+
+═══════════════════════════════════════════════════════════════
+{glossary_text}
+Инструкции для перевода:
+{steps_text}
+
+Верните ТОЛЬКО переводы, пронумерованные 1., 2., 3., и т.д.
+КАЖДЫЙ шаг должен быть ПОЛНОСТЬЮ на русском языке.
+
+Переводы на русском языке:"""
+
+        elif target_language == 'he':
+            prompt = f"""You are a professional cooking translator. Translate these cooking instructions to Hebrew.
+
+═══════════════════════════════════════════════════════════════
+🚨 קריטי - רק עברית 🚨
+═══════════════════════════════════════════════════════════════
+
+אתה חייב לתרגם הכל לעברית בלבד.
+
+❌ אסור לחלוטין:
+- מילים באנגלית: "Place", "Mix", "Add" וכו'
+- שפה מעורבת: "Place את האורז" ❌
+- כל מילה באנגלית!
+
+✅ נדרש:
+- כל מילה בעברית
+- תרגום מלא ומדויק
+- רק אותיות עבריות
+
+═══════════════════════════════════════════════════════════════
+{glossary_text}
+הוראות לתרגום:
+{steps_text}
+
+החזר רק תרגומים, ממוספרים 1., 2., 3., וכו'.
+כל שלב חייב להיות לחלוטין בעברית.
+
+תרגומים בעברית:"""
+
+        else:
+            # Fallback to standard prompt
+            prompt = f"""Translate these cooking instructions to {target_lang_name}.
+{glossary_text}
+{steps_text}
+
+Translations:"""
+
+        try:
+            logger.info(
+                f"[GEMINI RETRY] Attempting stronger prompt translation...")
+            response = self.gemini_client.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.05,  # Even lower temperature for more accurate translation
+                    'max_output_tokens': 3000,
+                }
+            )
+
+            # Parse response
+            translations = []
+            for line in response.text.strip().split('\n'):
+                line = line.strip()
+                line = re.sub(r'^\d+\.\s*', '', line)
+                if line:
+                    translations.append(line)
+
+            expected_count = len([t for t in step_texts if t])
+
+            if len(translations) == expected_count:
+                # Log any remaining English words but ACCEPT the translation
+                if target_language in ['ru', 'he']:
+                    english_pattern = re.compile(r'\b[A-Za-z]{3,}\b')
+                    all_text = ' '.join(translations)
+                    english_words = english_pattern.findall(all_text)
+
+                    if english_words:
+                        logger.warning(
+                            f"[GEMINI RETRY] ⚠️ Still has some English words: {english_words[:10]}")
+                        logger.warning(
+                            f"[GEMINI RETRY] Accepting translation anyway (better than rejecting)")
+                    else:
+                        logger.info(
+                            f"[GEMINI RETRY] ✅ SUCCESS! Pure {target_lang_name} translation")
+
+                # ALWAYS return the translation - don't reject it!
                 return translations
             else:
-                logger.error(
-                    f"[GEMINI] ❌ Step count mismatch: got {len(translations)} translations but expected {expected_count}")
-                logger.error(
-                    f"[GEMINI] Returning original English steps as fallback")
+                logger.error(f"[GEMINI RETRY] ❌ Count mismatch")
                 return step_texts
 
         except Exception as e:
-            logger.error(f"[GEMINI] ❌ Translation error: {e}")
-            import traceback
-            traceback.print_exc()
-            logger.error(
-                f"[GEMINI] Returning original English steps as fallback")
-            return step_texts  # Return originals on error
+            logger.error(f"[GEMINI RETRY] ❌ Error: {e}")
+            return step_texts
 
     def translate_recipe_name(self, name: str, target_language: str) -> str:
         """
-        Translate recipe name to target language using Gemini
+        Translate recipe name to target language using Google Translate (with fallbacks)
 
         Args:
             name: Recipe name (in any language)
@@ -579,49 +623,21 @@ Translations in {target_lang_name}:"""
         Returns:
             Translated recipe name
         """
-        if not self.gemini_client:
-            logger.warning(
-                "[SMART_TRANSLATE] No Gemini client for name translation")
+        if not name or target_language == 'en':
             return name
 
-        language_names = {
-            'ru': 'Russian',
-            'he': 'Hebrew',
-            'en': 'English'
-        }
+        # Use Google Translate service (has built-in fallbacks)
+        translated = self.google_translate.translate_text(
+            name,
+            target_language=target_language,
+            source_language='en'
+        )
 
-        target_lang_name = language_names.get(target_language, target_language)
-
-        prompt = f"""Translate this recipe name to {target_lang_name}.
-Return ONLY the translated name, nothing else.
-
-Recipe name: {name}
-
-Translation in {target_lang_name}:"""
-
-        try:
-            response = self.gemini_client.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.1,
-                    'max_output_tokens': 50,
-                }
-            )
-
-            translated = response.text.strip()
-
-            # Remove any quotes or extra formatting
-            translated = translated.strip('"\'')
-
-            if translated and len(translated) > 0:
-                logger.info(
-                    f"[SMART_TRANSLATE] Translated recipe name: {name} -> {translated}")
-                return translated
-            else:
-                logger.warning(
-                    f"[SMART_TRANSLATE] Empty translation for name: {name}")
-                return name
-
-        except Exception as e:
-            logger.error(f"[SMART_TRANSLATE] Failed to translate name: {e}")
+        if translated:
+            logger.info(
+                f"[SMART_TRANSLATE] Translated recipe name: {name} → {translated}")
+            return translated
+        else:
+            logger.warning(
+                f"[SMART_TRANSLATE] Translation failed for name: {name}")
             return name

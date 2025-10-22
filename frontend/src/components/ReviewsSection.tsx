@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import StarRating from './StarRating';
 
 interface Review {
@@ -42,6 +43,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
     onDeleteReview,
     onMarkHelpful
 }) => {
+    const { t } = useTranslation();
     const [reviews, setReviews] = useState<Review[]>([]);
     const [totalReviews, setTotalReviews] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -94,7 +96,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
     };
 
     const handleDeleteReview = async (reviewId: string) => {
-        if (!window.confirm('Are you sure you want to delete this review?')) return;
+        if (!window.confirm(t('reviews.deleteConfirm'))) return;
 
         try {
             await onDeleteReview(recipeId, reviewId);
@@ -139,13 +141,13 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
             {/* Header */}
             <div className="flex justify-between items-center">
                 <h3 className="text-2xl font-bold text-gray-900">
-                    Reviews ({totalReviews})
+                    {t('reviews.title')} ({totalReviews})
                 </h3>
                 <button
                     onClick={() => setShowAddReview(!showAddReview)}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                    {showAddReview ? 'Cancel' : 'Write Review'}
+                    {showAddReview ? t('reviews.cancel') : t('reviews.writeReview')}
                 </button>
             </div>
 
@@ -154,7 +156,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
                 <form onSubmit={handleSubmitReview} className="bg-gray-50 rounded-lg p-6 space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Rating
+                            {t('reviews.rating')}
                         </label>
                         <div className="flex gap-2">
                             {[1, 2, 3, 4, 5].map((star) => (
@@ -184,13 +186,13 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Title
+                            {t('reviews.titleLabel')}
                         </label>
                         <input
                             type="text"
                             value={formData.title}
                             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                            placeholder="Sum up your review"
+                            placeholder={t('reviews.titlePlaceholder')}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             required
                         />
@@ -198,12 +200,12 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Review
+                            {t('reviews.reviewLabel')}
                         </label>
                         <textarea
                             value={formData.content}
                             onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                            placeholder="Share your thoughts about this recipe"
+                            placeholder={t('reviews.reviewPlaceholder')}
                             rows={4}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             required
@@ -214,7 +216,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
                         type="submit"
                         className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                     >
-                        {editingReview ? 'Update Review' : 'Submit Review'}
+                        {editingReview ? t('reviews.updateReview') : t('reviews.submitReview')}
                     </button>
                 </form>
             )}
@@ -228,7 +230,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                 >
-                    Most Helpful
+                    {t('reviews.mostHelpful')}
                 </button>
                 <button
                     onClick={() => setSortBy('-created_at')}
@@ -237,7 +239,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                 >
-                    Most Recent
+                    {t('reviews.mostRecent')}
                 </button>
                 <button
                     onClick={() => setSortBy('-rating')}
@@ -246,16 +248,16 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                 >
-                    Highest Rated
+                    {t('reviews.highestRated')}
                 </button>
             </div>
 
             {/* Reviews List */}
             {loading ? (
-                <div className="text-center py-8 text-gray-500">Loading reviews...</div>
+                <div className="text-center py-8 text-gray-500">{t('reviews.loadingReviews')}</div>
             ) : reviews.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                    No reviews yet. Be the first to review!
+                    {t('reviews.noReviews')}
                 </div>
             ) : (
                 <div className="space-y-4">
@@ -302,13 +304,13 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
                                             onClick={() => startEdit(review)}
                                             className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                                         >
-                                            Edit
+                                            {t('reviews.edit')}
                                         </button>
                                         <button
                                             onClick={() => handleDeleteReview(review.id)}
                                             className="text-red-600 hover:text-red-700 text-sm font-medium"
                                         >
-                                            Delete
+                                            {t('reviews.delete')}
                                         </button>
                                     </div>
                                 )}
@@ -328,7 +330,7 @@ const ReviewsSection: React.FC<ReviewsSectionProps> = ({
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
                                 </svg>
-                                Helpful ({review.helpful_count})
+                                {t('reviews.helpful')} ({review.helpful_count})
                             </button>
                         </div>
                     ))}

@@ -49,6 +49,8 @@ const ShoppingList: React.FC = () => {
         name: string;
         query: string;
         timestamp: Date;
+        isGenerating?: boolean;
+        isNew?: boolean;
     }>>([]);
 
     // State for AI messages (separate from shopping items)
@@ -669,6 +671,35 @@ const ShoppingList: React.FC = () => {
         };
     }, [api, activeList, loadCollaborators, disconnect]);
 
+    // Listen for recipe completion events
+    useEffect(() => {
+        const handleRecipeCompleted = (event: any) => {
+            const { recipe_name, canonical_recipe_id } = event.detail;
+            console.log('🎉 Recipe completed:', recipe_name, canonical_recipe_id);
+
+            // Update the generatedRecipes state to mark as complete
+            setGeneratedRecipes(prev =>
+                prev.map(recipe =>
+                    recipe.canonicalId === canonical_recipe_id
+                        ? { ...recipe, isGenerating: false }
+                        : recipe
+                )
+            );
+
+            // Show success notification
+            toast.success(
+                `🎉 Full recipe for "${recipe_name}" is ready! View it in your recipes.`,
+                { duration: 6000 }
+            );
+        };
+
+        window.addEventListener('recipeCompleted', handleRecipeCompleted);
+
+        return () => {
+            window.removeEventListener('recipeCompleted', handleRecipeCompleted);
+        };
+    }, []);
+
     const handleAddItem = async () => {
         console.log('🛒 Attempting to add item:', {
             newItem: newItem.trim(),
@@ -742,9 +773,22 @@ const ShoppingList: React.FC = () => {
         try {
             const response = await api.aiAddItems(activeList.id, aiInput);
             if (response.success) {
-                // Add new items to state
-                const newItems = response.new_items || response.items || [];
-                setItems([...items, ...newItems]);
+                // NEW: Handle fast recipe response
+                const recipeName = response.recipe_name || currentQuery;
+                const isGenerating = response.is_generating || false;
+                const isNew = response.is_new || false;
+
+                // Add new items to state (from items_created)
+                const newItems = response.items_created || response.new_items || response.items || [];
+                const updatedItems = response.items_updated || [];
+
+                // Merge updated items with existing items
+                const updatedItemsMap = new Map(updatedItems.map((item: any) => [item.id, item]));
+                const mergedItems = items.map(item =>
+                    updatedItemsMap.has(item.id) ? updatedItemsMap.get(item.id) : item
+                );
+
+                setItems([...mergedItems, ...newItems]);
 
                 // Auto-enable counters ONLY for items with weight or liquid
                 newItems.forEach((item: any) => {
@@ -759,26 +803,28 @@ const ShoppingList: React.FC = () => {
                     // Otherwise leave as 'none' (default) - button will show "Enable"
                 });
 
-                // Capture AI messages (separate from shopping items)
-                if (response.ai_messages && response.ai_messages.length > 0) {
-                    const newMessages = response.ai_messages.map((msg: any) => ({
-                        id: `msg-${Date.now()}-${Math.random()}`,
-                        text: msg.text,
-                        timestamp: new Date(msg.timestamp),
-                        type: msg.type || 'info'
-                    }));
-                    setAiMessages(prev => [...newMessages, ...prev]); // Add to beginning
-                    console.log(`📝 Captured ${newMessages.length} AI messages`);
+                // Show appropriate toast message
+                if (isNew && isGenerating) {
+                    toast.success(
+                        `✅ Added ${newItems.length} ingredients from "${recipeName}"\n🔄 Full recipe generating in background...`,
+                        { duration: 5000 }
+                    );
+                } else if (isNew) {
+                    toast.success(`✅ Added ${newItems.length} ingredients from "${recipeName}"`);
+                } else {
+                    toast.success(`✅ Added ingredients from existing recipe "${recipeName}"`);
                 }
 
-                // Store recipe link for display
-                if (response.recipe && response.recipe.canonical_id) {
+                // Store recipe link for display (with generation status)
+                if (response.canonical_recipe_id) {
                     const newRecipeLink = {
-                        id: response.recipe.id,
-                        canonicalId: response.recipe.canonical_id,
-                        name: response.recipe.canonical_name || response.recipe.name,
+                        id: response.canonical_recipe_id,
+                        canonicalId: response.canonical_recipe_id,
+                        name: recipeName,
                         query: currentQuery,
-                        timestamp: new Date()
+                        timestamp: new Date(),
+                        isGenerating: isGenerating,
+                        isNew: isNew
                     };
                     setGeneratedRecipes(prev => [newRecipeLink, ...prev]); // Add to beginning
                 }
@@ -787,6 +833,7 @@ const ShoppingList: React.FC = () => {
             }
         } catch (error) {
             console.error('AI add error:', error);
+            toast.error('Failed to add recipe ingredients');
         } finally {
             setLoading(false);
         }

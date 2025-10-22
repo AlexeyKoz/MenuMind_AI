@@ -492,8 +492,19 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def ai_add_items(self, request, pk=None):
         """
-        AI-powered recipe finder: User types dish name (e.g., "pasta carbonara")
-        Agent searches recipe, converts to RCIP, saves it, and adds ingredients to shopping list
+        IMPROVED: Fast AI-powered recipe finder with two-phase processing
+
+        PHASE 1 (FAST - 5-10 seconds):
+        - Check deduplication (existing recipe)
+        - If not exists: Fast extract ingredients only
+        - Translate to user's language
+        - Add to shopping list immediately
+
+        PHASE 2 (BACKGROUND - 30-40 seconds):
+        - Extract full recipe (steps, nutrition)
+        - Translate to remaining languages
+        - Create canonical recipe
+        - Notify user via WebSocket
         """
         shopping_list = self.get_object()
         query = request.data.get('text', '')
@@ -504,117 +515,174 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 'message': 'Please describe what you want to cook'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        print(f"[AI RECIPE REQUEST] User query: '{query}'")
+        print(f"[FAST AI RECIPE] User query: '{query}'")
 
-        # Import recipe agent service
+        # Import services
         try:
-            from apps.recipes.services import RecipeAgentService, RecipeDeduplicationService
-            from apps.recipes.models import Recipe
+            from apps.recipes.services import RecipeAgentService
+            from apps.recipes.models import CanonicalRecipe, Recipe
+            from apps.shopping.fast_recipe_service import FastRecipeIngredientService
+            from apps.shopping.tasks import complete_shopping_list_recipe
+            from apps.recipes.brave_firecrawl_scraper import BraveFirecrawlScraper
         except ImportError as e:
-            print(f"[ERROR] Recipe app not available: {e}")
+            print(f"[ERROR] Required service not available: {e}")
             return Response({
                 'success': False,
                 'message': 'Recipe service is not available'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Get user preferences
+        user_language = getattr(request.user, 'preferred_language', 'en')
+        user_weight_unit = getattr(request.user, 'weight_unit', 'kg')
+        user_unit_system = 'metric' if user_weight_unit == 'kg' else 'imperial'
+
         user_preferences = {
             'dietary_restrictions': getattr(request.user, 'dietary_restrictions', ''),
-            'allergies': getattr(request.user, 'allergies', '')
+            'allergies': getattr(request.user, 'allergies', ''),
+            'language': user_language,
+            'unit_system': user_unit_system
         }
 
-        # Run recipe agent to find recipe
-        agent = RecipeAgentService()
+        print(
+            f"[FAST AI RECIPE] User language: {user_language}, Unit system: {user_unit_system}")
 
         try:
-            print(f"[RECIPE AGENT] Searching for: {query}")
-            success, recipe_data, message = async_to_sync(agent.process_recipe_query)(
-                query, request.user, user_preferences
-            )
-
-            if not success:
-                print(f"[ERROR] Recipe agent failed: {message}")
-                return Response({
-                    'success': False,
-                    'message': message or 'Could not find recipe'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # ✅ Extract recipe objects from the returned data
-            # The service returns: {'canonical_recipe': {...}, 'user_recipe': {...}, 'is_new': bool}
-            user_recipe_data = recipe_data.get('user_recipe', {})
-            canonical_recipe_data = recipe_data.get('canonical_recipe', {})
-
-            # Get the actual model objects by ID
-            from apps.recipes.models import Recipe, CanonicalRecipe
-
-            recipe = Recipe.objects.get(id=user_recipe_data['id'])
-            canonical_recipe = recipe.canonical_recipe
-
-            print(f"[SUCCESS] Using recipe: {canonical_recipe.name}")
-            print(f"[OK] User fork ID: {recipe.id}")
-
-            # Add ingredients to shopping list with duplicate detection and unit conversion
-            items_created = []
-            items_updated = []
-            items_counter_types = {}  # Track which counter type each item uses
-            user_color = getattr(request.user, 'personal_color', '#4F46E5')
-
-            # Get user preferences for unit conversion
-            user_weight_preference = getattr(
-                request.user, 'weight_unit_preference', 'metric')  # 'metric' or 'imperial'
-            user_liquid_preference = getattr(
-                request.user, 'liquid_unit_preference', 'metric')  # 'metric' or 'imperial'
+            # STEP 1: Check deduplication - does recipe already exist?
+            agent = RecipeAgentService()
+            normalized_name = agent._normalize_recipe_name(query)
 
             print(
-                f"[USER PREFS] Weight: {user_weight_preference}, Liquid: {user_liquid_preference}")
+                f"[FAST AI RECIPE] Checking deduplication for: {normalized_name}")
 
-            # Track AI messages (these are NOT shopping items)
-            ai_messages = []
+            existing_canonical = CanonicalRecipe.objects.filter(
+                normalized_name=normalized_name
+            ).first()
 
-            # Use canonical recipe's base ingredients
-            for ingredient in canonical_recipe.base_ingredients:
-                ingredient_name = ingredient.get('name', '')
+            if existing_canonical:
+                print(
+                    f"[FAST AI RECIPE] ✅ Found existing recipe: {existing_canonical.name}")
+
+                # Use existing recipe - get ingredients in user's language
+                recipe_name = existing_canonical.name
+                ingredients_data = existing_canonical.base_ingredients
+                canonical_recipe_id = str(existing_canonical.id)
+                is_new = False
+
+            else:
+                # STEP 2: Recipe doesn't exist - FAST EXTRACTION
+                print(
+                    f"[FAST AI RECIPE] Recipe not found, starting fast extraction...")
+
+                # Search and scrape (Brave + Firecrawl)
+                scraper = BraveFirecrawlScraper()
+                scraped_recipes = scraper.search_and_scrape(
+                    query, max_results=1)
+
+                if not scraped_recipes:
+                    return Response({
+                        'success': False,
+                        'message': 'Could not find recipe online'
+                    }, status=status.HTTP_404_NOT_FOUND)
+
+                scraped_data = scraped_recipes[0]
+                print(
+                    f"[FAST AI RECIPE] ✅ Scraped from: {scraped_data['url']}")
+
+                # FAST EXTRACTION: Ingredients only + user language translation
+                fast_service = FastRecipeIngredientService()
+
+                fast_result = async_to_sync(fast_service.extract_ingredients_fast)(
+                    scraped_data=scraped_data,
+                    recipe_name=query,
+                    user_language=user_language,
+                    user_unit_system=user_unit_system
+                )
+
+                if not fast_result:
+                    return Response({
+                        'success': False,
+                        'message': 'Could not extract ingredients from recipe'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                print(
+                    f"[FAST AI RECIPE] ✅ Fast extraction complete: {len(fast_result['ingredients'])} ingredients")
+
+                # Use translated name
+                recipe_name = fast_result['recipe_name_translated']
+                ingredients_data = fast_result['ingredients']
+                recipe_hash = fast_result['recipe_hash']
+                canonical_recipe_id = None  # Will be created in background
+                is_new = True
+
+                # STEP 3: Trigger BACKGROUND TASK for full recipe processing
+                print(
+                    f"[FAST AI RECIPE] Triggering background task for full recipe...")
+
+                complete_shopping_list_recipe.delay(
+                    recipe_hash=recipe_hash,
+                    scraped_data=scraped_data,
+                    recipe_name=fast_result['recipe_name'],  # English name
+                    user_id=request.user.id,
+                    shopping_list_id=shopping_list.id,
+                    user_language=user_language
+                )
+
+                print(f"[FAST AI RECIPE] ✅ Background task triggered")
+
+            # STEP 4: Add ingredients to shopping list (FAST)
+            items_created = []
+            items_updated = []
+            user_color = getattr(request.user, 'personal_color', '#4F46E5')
+
+            print(
+                f"[FAST AI RECIPE] Adding {len(ingredients_data)} ingredients to shopping list...")
+
+            # Process each ingredient
+            for ing_data in ingredients_data:
+                # Get ingredient name (translated to user's language)
+                ingredient_name = ing_data.get(
+                    'name_translated') or ing_data.get('name', '')
+
                 if not ingredient_name:
                     continue
 
-                # FILTER OUT AI MESSAGES (text that's not an actual ingredient)
-                # Detect long text that's clearly a message, not an ingredient
-                if len(ingredient_name) > 100 or any(phrase in ingredient_name.lower() for phrase in [
-                    'there are no', 'however,', 'i can provide', 'the text appears',
-                    'wikipedia', 'article about', 'i cannot', 'unfortunately',
-                    'please note', 'here are the', 'standard recipe'
-                ]):
+                # Skip if it looks like an AI message
+                if len(ingredient_name) > 100:
                     print(
-                        f"📝 [AI MESSAGE] Detected AI message, not adding as item: {ingredient_name[:100]}...")
-                    ai_messages.append({
-                        'text': ingredient_name,
-                        'type': 'info',
-                        'timestamp': timezone.now().isoformat()
-                    })
-                    continue  # Skip this "ingredient" - it's actually a message
+                        f"[FAST AI RECIPE] Skipping long text: {ingredient_name[:50]}...")
+                    continue
 
-                # STEP 1: Validate and fix ingredient measurements (intelligent fallbacks)
-                # This ensures EVERY ingredient gets proper weight/liquid/count classification
-                quantity, unit, counter_type = self._validate_and_fix_ingredient(
-                    ingredient, ingredient_name
-                )
+                # Get quantity and unit from IML mapping
+                quantity = ing_data.get('quantity', 1)
+                unit = ing_data.get('unit', 'pieces')
+                unit_type = ing_data.get('unit_type', 'none')
+                ingredient_key = ing_data.get('ingredient_key')
+
+                # Determine counter type from unit_type
+                if unit_type == 'weight':
+                    counter_type = 'weight'
+                    # Convert to grams (base unit for weight)
+                    weight_in_grams = self._convert_to_grams(quantity, unit)
+                    weight_quantity = weight_in_grams
+                    liquid_quantity = 0
+                    standard_quantity = 0
+                elif unit_type == 'volume':
+                    counter_type = 'liquid'
+                    # Convert to ml (base unit for liquid)
+                    liquid_in_ml = self._convert_to_ml(quantity, unit)
+                    weight_quantity = 0
+                    liquid_quantity = liquid_in_ml
+                    standard_quantity = 0
+                else:
+                    counter_type = 'none'
+                    weight_quantity = 0
+                    liquid_quantity = 0
+                    standard_quantity = quantity
 
                 print(
-                    f"✅ [VALIDATED] {ingredient_name}: {quantity} {unit} ({counter_type})")
+                    f"[FAST AI RECIPE] {ingredient_name}: {quantity} {unit} ({counter_type})")
 
-                # STEP 2: Convert units based on user preferences
-                # This preserves the counter type while converting to user's preferred units
-                quantity, unit = self._convert_to_user_preference(
-                    quantity, unit, user_weight_preference, user_liquid_preference
-                )
-
-                print(
-                    f"[USER PREF] {ingredient_name}: {quantity} {unit} (will store in base units for {counter_type})")
-
-                # Normalize ingredient name for comparison
-                normalized_name = ingredient_name.lower().strip()
-
-                # Check for existing item with same name
+                # Check for existing item
                 existing_item = ShoppingItem.objects.filter(
                     shopping_list=shopping_list,
                     name__iexact=ingredient_name,
@@ -624,161 +692,60 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 from decimal import Decimal
 
                 if existing_item:
-                    # Update the appropriate counter
+                    # Update existing item
                     if counter_type == 'weight':
-                        old_weight = existing_item.weight_quantity
-                        # Convert to grams and add
-                        weight_in_grams = self._convert_to_grams(
-                            quantity, unit)
-                        existing_item.weight_quantity = Decimal(
-                            str(existing_item.weight_quantity)) + Decimal(str(weight_in_grams))
-                        print(
-                            f"[MERGED WEIGHT] {ingredient_name}: {old_weight}g + {weight_in_grams}g = {existing_item.weight_quantity}g")
+                        existing_item.weight_quantity += Decimal(
+                            str(weight_quantity))
                     elif counter_type == 'liquid':
-                        old_liquid = existing_item.liquid_quantity
-                        # Convert to ml and add
-                        liquid_in_ml = self._convert_to_ml(quantity, unit)
-                        existing_item.liquid_quantity = Decimal(
-                            str(existing_item.liquid_quantity)) + Decimal(str(liquid_in_ml))
-                        print(
-                            f"[MERGED LIQUID] {ingredient_name}: {old_liquid}ml + {liquid_in_ml}ml = {existing_item.liquid_quantity}ml")
+                        existing_item.liquid_quantity += Decimal(
+                            str(liquid_quantity))
                     else:
-                        old_quantity = existing_item.quantity
-                        existing_item.quantity = Decimal(
-                            str(existing_item.quantity)) + Decimal(str(quantity))
-                        existing_item.unit = unit  # Update unit for count items
-                        print(
-                            f"[MERGED QUANTITY] {ingredient_name}: {old_quantity} + {quantity} = {existing_item.quantity} {unit}")
+                        existing_item.standard_quantity += Decimal(
+                            str(standard_quantity))
 
-                    existing_item.notes = (
-                        f"{existing_item.notes}\n+ {quantity} {unit} from recipe: {recipe.name}"
-                        if existing_item.notes
-                        else f"From recipe: {recipe.name} ({quantity} {unit})"
-                    )
                     existing_item.save()
                     items_updated.append(existing_item)
+                    print(f"[FAST AI RECIPE] ✅ Updated: {ingredient_name}")
                 else:
-                    # Create new shopping item with proper counter
-                    item_data = {
-                        'shopping_list': shopping_list,
-                        'name': ingredient_name,
-                        'quantity': 1,  # Default quantity
-                        'unit': 'unit',  # Default unit
-                        'weight_quantity': 0,
-                        'liquid_quantity': 0,
-                        'category': 'other',
-                        'notes': f"From recipe: {recipe.name}",
-                        'added_by': request.user,
-                        'user_color': user_color,
-                        'ai_suggested': True
-                    }
-
-                    # Set the appropriate counter
-                    if counter_type == 'weight':
-                        # Convert to grams for weight_quantity storage
-                        weight_in_grams = self._convert_to_grams(
-                            quantity, unit)
-                        item_data['weight_quantity'] = weight_in_grams
-                        print(
-                            f"[WEIGHT COUNTER] {ingredient_name}: {quantity} {unit} = {weight_in_grams}g")
-                    elif counter_type == 'liquid':
-                        # Convert to ml for liquid_quantity storage
-                        liquid_in_ml = self._convert_to_ml(quantity, unit)
-                        item_data['liquid_quantity'] = liquid_in_ml
-                        print(
-                            f"[LIQUID COUNTER] {ingredient_name}: {quantity} {unit} = {liquid_in_ml}ml")
-                    else:
-                        # Use quantity field for count items
-                        item_data['quantity'] = quantity
-                        item_data['unit'] = unit
-                        print(
-                            f"[QUANTITY COUNTER] {ingredient_name}: {quantity} {unit}")
-
-                    item = ShoppingItem(**item_data)
-                    item.save()
-                    items_created.append(item)
-                    # Track counter type for this item
-                    items_counter_types[str(item.id)] = counter_type
-                    print(
-                        f"[NEW] Added ingredient: {ingredient_name} (counter: {counter_type})")
-
-            # Update recipe stats
-            recipe.times_added_to_lists += 1
-            recipe.save()
-
-            # Send WebSocket notifications
-            channel_layer = get_channel_layer()
-            if channel_layer:
-                # Notify about new items
-                if items_created:
-                    items_data = [ShoppingItemSerializer(
-                        i).data for i in items_created]
-                    serialized_items = serialize_for_channels(items_data)
-
-                    # Add counter type info to each item
-                    for item_data in serialized_items:
-                        item_id = str(item_data['id'])
-                        if item_id in items_counter_types:
-                            item_data['auto_enable_counter'] = items_counter_types[item_id]
-                            print(
-                                f"[AUTO-ENABLE] {item_data['name']}: {items_counter_types[item_id]} counter")
-
-                    async_to_sync(channel_layer.group_send)(
-                        f'shopping_list_{shopping_list.id}',
-                        {
-                            'type': 'items_batch_added',
-                            'items': serialized_items,
-                            'user': request.user.username
-                        }
+                    # Create new item
+                    new_item = ShoppingItem.objects.create(
+                        shopping_list=shopping_list,
+                        name=ingredient_name,
+                        standard_quantity=Decimal(str(standard_quantity)),
+                        weight_quantity=Decimal(str(weight_quantity)),
+                        liquid_quantity=Decimal(str(liquid_quantity)),
+                        added_by=request.user,
+                        added_by_color=user_color,
+                        ingredient_key=ingredient_key
                     )
-                    print(
-                        f"[WEBSOCKET] Sent notification for {len(items_created)} new items with counter info")
+                    items_created.append(new_item)
+                    print(f"[FAST AI RECIPE] ✅ Created: {ingredient_name}")
 
-                # Notify about updated items
-                if items_updated:
-                    for item in items_updated:
-                        item_data = serialize_for_channels(
-                            ShoppingItemSerializer(item).data)
-                        async_to_sync(channel_layer.group_send)(
-                            f'shopping_list_{shopping_list.id}',
-                            {
-                                'type': 'item_updated',
-                                'item': item_data,
-                                'user': request.user.username
-                            }
-                        )
-                    print(
-                        f"[WEBSOCKET] Sent notification for {len(items_updated)} updated items")
+            # STEP 5: Return success response
+            print(
+                f"[FAST AI RECIPE] ✅ Successfully added {len(items_created)} new items and updated {len(items_updated)} items")
 
-            # Prepare response message
-            total_items = len(items_created) + len(items_updated)
-            if items_created and items_updated:
-                message = f"Added {len(items_created)} new ingredients and updated {len(items_updated)} existing items from {recipe.name}"
-            elif items_created:
-                message = f"Added {len(items_created)} ingredients from {recipe.name}"
-            else:
-                message = f"Updated {len(items_updated)} existing ingredients from {recipe.name}"
+            # Serialize items for response
+            from .serializers import ShoppingItemSerializer
+            created_serializer = ShoppingItemSerializer(
+                items_created, many=True)
+            updated_serializer = ShoppingItemSerializer(
+                items_updated, many=True)
+
+            # Prepare message
+            message_content = f"Added {len(items_created)} ingredients from {recipe_name}"
+            if is_new:
+                message_content += " (full recipe generating in background...)"
 
             return Response({
                 'success': True,
-                'recipe': {
-                    'id': str(recipe.id),
-                    'name': recipe.name,
-                    'description': recipe.description,
-                    'source_url': canonical_recipe.ai_source_url or '',
-                    'servings': canonical_recipe.servings,
-                    'created': recipe_data.get('is_new', False),
-                    'canonical_id': str(canonical_recipe.id),
-                    'canonical_name': canonical_recipe.name,
-                    'user_query': query  # The original search query
-                },
-                'items_added': len(items_created),
-                'items_updated': len(items_updated),
-                'total_items': total_items,
-                'new_items': [ShoppingItemSerializer(i).data for i in items_created],
-                'updated_items': [ShoppingItemSerializer(i).data for i in items_updated],
-                'ai_messages': ai_messages,  # AI messages separated from shopping items
-                'message': message
+                'message': message_content,
+                'recipe_name': recipe_name,
+                'canonical_recipe_id': canonical_recipe_id,
+                'is_new': is_new,
+                'is_generating': is_new,
+                'items_created': created_serializer.data,
+                'items_updated': updated_serializer.data
             })
 
         except Exception as e:

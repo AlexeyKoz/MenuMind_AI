@@ -15,4 +15,6 @@ export interface User {
     // ⬇️ ADD THESE TWO LINES:
     preferred_language?: 'en' | 'ru' | 'he';
     unit_system?: 'metric' | 'imperial';
+    allergies?: string[];
+    temperature_unit?: 'celsius' | 'fahrenheit';
 }

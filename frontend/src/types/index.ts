@@ -13,6 +13,9 @@ export interface User {
     collaboration_key?: string;
     personal_color?: string;
     shopping_role?: 'creator' | 'collaborator' | 'both';
+    allergies?: string[];  // User's food allergies
+    temperature_unit?: 'celsius' | 'fahrenheit';  // Temperature preference
+    preferred_language?: 'en' | 'ru' | 'he';  // Language preference
 }
 
 // Shopping types

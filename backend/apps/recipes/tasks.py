@@ -9,8 +9,9 @@ Tasks:
 """
 
 from celery import shared_task
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, Q
 from django.core.cache import cache
+from typing import Optional
 from apps.recipes.models import (
     CanonicalRecipe,
     RecipeLike,
@@ -360,12 +361,12 @@ def translate_recipe_to_language(self, recipe_id: str, target_language: str):
         # Translate recipe name using SmartTranslationService
         from apps.core.smart_translator import SmartTranslationService
         smart_translator = SmartTranslationService()
-        translated_name = smart_translator.translate_recipe_name(
+        translated_recipe_name = smart_translator.translate_recipe_name(
             recipe.name,
             target_language
         )
         logger.info(
-            f"[TRANSLATION] Recipe name: {recipe.name} -> {translated_name}")
+            f"[TRANSLATION] Recipe name: {recipe.name} -> {translated_recipe_name}")
 
         # Unit translation dictionary
         unit_translations = {
@@ -457,63 +458,39 @@ def translate_recipe_to_language(self, recipe_id: str, target_language: str):
 
             translated_ingredients.append(translated_ing)
 
-        # Translate cooking steps (using CookLingo database + Gemini fallback)
+        # Translate cooking steps using Google Translate (via SmartTranslationService)
+        # NOTE: We skip CookLingo because it does word-by-word translation which causes
+        # mixed Latin/Cyrillic characters when encountering untranslated words
+        logger.info(
+            f"[TRANSLATION] Translating {len(recipe.base_steps)} steps using Google Translate")
+
         translated_steps = []
-        for step in recipe.base_steps:
-            translated_step = step.copy()
+        if recipe.base_steps:
+            try:
+                # Use SmartTranslationService which calls Google Translate
+                gemini_steps = smart_translator.translate_cooking_steps_batch(
+                    recipe.base_steps,
+                    target_language
+                )
 
-            # Get step text (can be 'text' or 'instruction')
-            step_text = step.get('instruction') or step.get('text')
-
-            if step_text:
-                # Try CookLingo translation first
-                try:
-                    translated_text = cooking_terms_service.translate_text(
-                        step_text,
-                        target_language
-                    )
-
-                    # Check if translation actually happened (not just returned English)
-                    if translated_text and translated_text != step_text:
-                        translated_step['instruction'] = translated_text
-                        if 'text' in translated_step:
-                            translated_step['text'] = translated_text
-                        logger.info(
-                            f"[TRANSLATION] CookLingo: Step {step.get('order')}")
-                    else:
-                        # No translation from CookLingo, use Gemini
-                        raise Exception("CookLingo translation not available")
-
-                except Exception as e:
-                    # Fallback to Gemini for full step translation
+                if gemini_steps and len(gemini_steps) == len(recipe.base_steps):
+                    translated_steps = gemini_steps
                     logger.info(
-                        f"[TRANSLATION] Using Gemini for step {step.get('order')}: {e}")
-                    try:
-                        from apps.core.smart_translator import SmartTranslationService
-                        smart_translator = SmartTranslationService()
-
-                        # Use cooking steps translation with Gemini fallback
-                        gemini_steps = smart_translator.translate_cooking_steps_batch(
-                            [step],
-                            target_language
-                        )
-                        if gemini_steps and len(gemini_steps) > 0:
-                            gemini_text = gemini_steps[0].get(
-                                'instruction') or gemini_steps[0].get('text')
-                            if gemini_text:
-                                translated_step['instruction'] = gemini_text
-                                if 'text' in translated_step:
-                                    translated_step['text'] = gemini_text
-                                logger.info(
-                                    f"[TRANSLATION] GEMINI: Step {step.get('order')} translated")
-                    except Exception as gemini_err:
-                        logger.error(
-                            f"[TRANSLATION] Gemini step translation failed: {gemini_err}")
-
-            translated_steps.append(translated_step)
+                        f"[TRANSLATION] ✅ Successfully translated all {len(gemini_steps)} steps")
+                else:
+                    logger.warning(
+                        f"[TRANSLATION] ⚠️ Translation mismatch: expected {len(recipe.base_steps)}, got {len(gemini_steps) if gemini_steps else 0}")
+                    translated_steps = recipe.base_steps  # Fallback to original
+            except Exception as e:
+                logger.error(f"[TRANSLATION] ❌ Step translation failed: {e}")
+                translated_steps = recipe.base_steps  # Fallback to original
+        else:
+            logger.warning(
+                f"[TRANSLATION] ⚠️ No base_steps found for recipe {recipe_id}")
 
         # Save translation
-        translation.name = translated_name
+        # FIXED: Use recipe name, not ingredient name!
+        translation.name = translated_recipe_name
         translation.description = recipe.description
         translation.base_ingredients = translated_ingredients
         translation.base_steps = translated_steps
@@ -688,3 +665,445 @@ def translate_recipe_name_background(self, recipe_id, target_language, original_
 
         # Retry with exponential backoff
         raise self.retry(exc=e, countdown=2 ** self.request.retries)
+
+
+# ===================================================================
+# SPRINT 4: 3-Phase Translation Tasks (Groq Primary, Gemini Fallback)
+# ===================================================================
+
+@shared_task(bind=True, max_retries=2)
+def translate_recipe_immediate(self, recipe_id: str, target_lang: str):
+    """
+    PHASE 1: Immediate Translation
+
+    Triggered when user opens a recipe in their language.
+    Translates complete recipe in ~2-3s using Groq (primary) or Gemini (fallback).
+
+    Args:
+        recipe_id: Recipe UUID
+        target_lang: Target language code ('en', 'he', 'ru')
+
+    Returns:
+        Dict with translation result
+    """
+    try:
+        from apps.recipes.models import CanonicalRecipe, RecipeTranslation
+        from apps.core.services import get_smart_translation_service
+
+        logger.info(
+            f"[PHASE 1] Immediate translation: recipe={recipe_id}, lang={target_lang}")
+
+        # Get recipe
+        recipe = CanonicalRecipe.objects.get(id=recipe_id)
+
+        # Check if already translated
+        existing = RecipeTranslation.objects.filter(
+            canonical_recipe=recipe,
+            language=target_lang,
+            status='completed'
+        ).first()
+
+        if existing:
+            logger.info(f"[PHASE 1] ✅ Already translated, skipping")
+            return {'success': True, 'cached': True}
+
+        # Get or create translation record
+        translation, created = RecipeTranslation.objects.get_or_create(
+            canonical_recipe=recipe,
+            language=target_lang,
+            defaults={'status': 'in_progress'}
+        )
+
+        if not created:
+            translation.status = 'in_progress'
+            translation.save(update_fields=['status'])
+
+        # Prepare recipe data
+        recipe_data = {
+            'canonical': {
+                'metadata': {
+                    'title': recipe.name,
+                    'description': recipe.description or '',
+                    'servings': 4,  # Default
+                },
+                'structure': {
+                    'ingredients': recipe.base_ingredients or [],
+                    'steps': recipe.base_steps or []
+                }
+            }
+        }
+
+        # Translate
+        translator = get_smart_translation_service()
+        result = translator.translate_recipe(
+            recipe_data, target_lang, phase='immediate')
+
+        if result.success:
+            # Save translation
+            translation.name = result.translated_content.get(
+                'title', recipe.name)
+            translation.description = result.translated_content.get(
+                'description', '')
+            translation.content = result.translated_content
+            translation.status = 'completed'
+            translation.error_message = None
+            translation.save()
+
+            # Queue Phase 2 (background translation to third language)
+            third_lang = get_third_language(target_lang)
+            if third_lang:
+                translate_recipe_background.delay(recipe_id, third_lang)
+
+            logger.info(
+                f"[PHASE 1] ✅ Complete: {result.execution_time_ms:.2f}ms using {result.ai_provider}")
+
+            return {
+                'success': True,
+                'execution_time_ms': result.execution_time_ms,
+                'ai_provider': result.ai_provider,
+                'cached': False
+            }
+        else:
+            # Mark as failed
+            translation.status = 'failed'
+            translation.error_message = result.error_message
+            translation.save()
+
+            logger.error(f"[PHASE 1] ❌ Failed: {result.error_message}")
+            return {'success': False, 'error': result.error_message}
+
+    except Exception as e:
+        logger.error(f"[PHASE 1] ❌ Error: {e}")
+        # Retry with exponential backoff
+        raise self.retry(exc=e, countdown=2 ** self.request.retries * 10)
+
+
+@shared_task(bind=True, max_retries=2)
+def translate_recipe_background(self, recipe_id: str, target_lang: str):
+    """
+    PHASE 2: Background Translation
+
+    Runs asynchronously after Phase 1 completes.
+    Translates to popular third language (e.g., if user=ru, translate to he).
+
+    Args:
+        recipe_id: Recipe UUID
+        target_lang: Target language code
+
+    Returns:
+        Dict with translation result
+    """
+    try:
+        from apps.recipes.models import CanonicalRecipe, RecipeTranslation
+        from apps.core.services import get_smart_translation_service
+
+        logger.info(
+            f"[PHASE 2] Background translation: recipe={recipe_id}, lang={target_lang}")
+
+        # Get recipe
+        recipe = CanonicalRecipe.objects.get(id=recipe_id)
+
+        # Check if already translated
+        existing = RecipeTranslation.objects.filter(
+            canonical_recipe=recipe,
+            language=target_lang,
+            status='completed'
+        ).first()
+
+        if existing:
+            logger.info(f"[PHASE 2] ✅ Already translated, skipping")
+            return {'success': True, 'cached': True}
+
+        # Get or create translation record
+        translation, created = RecipeTranslation.objects.get_or_create(
+            canonical_recipe=recipe,
+            language=target_lang,
+            defaults={'status': 'in_progress'}
+        )
+
+        if not created:
+            translation.status = 'in_progress'
+            translation.save(update_fields=['status'])
+
+        # Prepare recipe data
+        recipe_data = {
+            'canonical': {
+                'metadata': {
+                    'title': recipe.name,
+                    'description': recipe.description or '',
+                },
+                'structure': {
+                    'ingredients': recipe.base_ingredients or [],
+                    'steps': recipe.base_steps or []
+                }
+            }
+        }
+
+        # Translate
+        translator = get_smart_translation_service()
+        result = translator.translate_recipe(
+            recipe_data, target_lang, phase='background')
+
+        if result.success:
+            # Save translation
+            translation.name = result.translated_content.get(
+                'title', recipe.name)
+            translation.description = result.translated_content.get(
+                'description', '')
+            translation.content = result.translated_content
+            translation.status = 'completed'
+            translation.error_message = None
+            translation.save()
+
+            logger.info(
+                f"[PHASE 2] ✅ Complete: {result.execution_time_ms:.2f}ms using {result.ai_provider}")
+
+            return {
+                'success': True,
+                'execution_time_ms': result.execution_time_ms,
+                'ai_provider': result.ai_provider
+            }
+        else:
+            # Mark as failed
+            translation.status = 'failed'
+            translation.error_message = result.error_message
+            translation.save()
+
+            logger.error(f"[PHASE 2] ❌ Failed: {result.error_message}")
+            return {'success': False, 'error': result.error_message}
+
+    except Exception as e:
+        logger.error(f"[PHASE 2] ❌ Error: {e}")
+        raise self.retry(exc=e, countdown=2 ** self.request.retries * 10)
+
+
+@shared_task(bind=True, max_retries=2)
+def translate_recipe_on_demand(self, recipe_id: str, target_lang: str):
+    """
+    PHASE 3: On-Demand Translation
+
+    Triggered when user explicitly requests a language that hasn't been translated yet.
+    Same implementation as Phase 1 but triggered differently.
+
+    Args:
+        recipe_id: Recipe UUID
+        target_lang: Target language code
+
+    Returns:
+        Dict with translation result
+    """
+    # Reuse Phase 1 logic
+    return translate_recipe_immediate(recipe_id, target_lang)
+
+
+def get_third_language(user_lang: str) -> Optional[str]:
+    """
+    Determine the third language for Phase 2 background translation
+
+    Logic:
+    - If user_lang=en, translate to he (Hebrew - primary market)
+    - If user_lang=he, translate to ru (Russian - large community)
+    - If user_lang=ru, translate to he (Hebrew - local language)
+
+    Args:
+        user_lang: User's language code
+
+    Returns:
+        Third language code or None
+    """
+    third_lang_map = {
+        'en': 'he',  # English users -> Hebrew (primary market)
+        'he': 'ru',  # Hebrew users -> Russian (large community)
+        'ru': 'he',  # Russian users -> Hebrew (local language)
+    }
+
+    return third_lang_map.get(user_lang)
+
+
+# ===================================================================
+# SPRINT 5: Background Agents (Celery Beat Scheduled Tasks)
+# ===================================================================
+
+@shared_task
+def hourly_translation_scan():
+    """
+    BACKGROUND AGENT: Hourly Translation Scan
+
+    Scans for recipes with incomplete translations and queues translation tasks.
+
+    Schedule: Every hour
+    Purpose: Ensure all popular recipes are translated to all languages
+
+    Returns:
+        Dict with scan results
+    """
+    from apps.recipes.models import CanonicalRecipe, RecipeTranslation
+
+    logger.info("[AGENT] Starting hourly translation scan...")
+
+    SUPPORTED_LANGUAGES = ['en', 'he', 'ru']
+    recipes_queued = 0
+
+    try:
+        # Get published recipes
+        recipes = CanonicalRecipe.objects.filter(is_published=True)[
+            :100]  # Limit to top 100
+
+        for recipe in recipes:
+            for lang in SUPPORTED_LANGUAGES:
+                # Check if translation exists and is complete
+                translation = RecipeTranslation.objects.filter(
+                    canonical_recipe=recipe,
+                    language=lang,
+                    status='completed'
+                ).first()
+
+                if not translation:
+                    # Queue background translation
+                    logger.info(
+                        f"[AGENT] Queuing translation: recipe={recipe.id}, lang={lang}")
+                    translate_recipe_background.delay(str(recipe.id), lang)
+                    recipes_queued += 1
+
+        logger.info(
+            f"[AGENT] ✅ Hourly scan complete: {recipes_queued} translations queued")
+
+        return {
+            'success': True,
+            'recipes_scanned': len(recipes),
+            'translations_queued': recipes_queued
+        }
+
+    except Exception as e:
+        logger.error(f"[AGENT] ❌ Hourly scan failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@shared_task
+def cleanup_stale_translations():
+    """
+    BACKGROUND AGENT: Stale Translation Cleanup
+
+    Removes failed or stuck translation records to prevent queue buildup.
+
+    Schedule: Daily at 3 AM
+    Purpose: Clean up failed translations older than 7 days
+
+    Returns:
+        Dict with cleanup results
+    """
+    from apps.recipes.models import RecipeTranslation
+    from django.utils import timezone
+    from datetime import timedelta
+
+    logger.info("[AGENT] Starting stale translation cleanup...")
+
+    try:
+        cutoff_date = timezone.now() - timedelta(days=7)
+
+        # Find stale translations
+        stale_translations = RecipeTranslation.objects.filter(
+            Q(status='failed') | Q(status='in_progress'),
+            updated_at__lt=cutoff_date
+        )
+
+        count = stale_translations.count()
+
+        if count > 0:
+            # Delete or reset them
+            stale_translations.update(
+                status='failed', error_message='Cleaned up by agent')
+            logger.info(f"[AGENT] ✅ Cleaned up {count} stale translations")
+        else:
+            logger.info("[AGENT] ✅ No stale translations found")
+
+        return {
+            'success': True,
+            'cleaned_up': count
+        }
+
+    except Exception as e:
+        logger.error(f"[AGENT] ❌ Cleanup failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@shared_task
+def refresh_discovery_cache():
+    """
+    BACKGROUND AGENT: Discovery Cache Refresh
+
+    Refreshes discovery page cache for all languages.
+
+    Schedule: Every hour
+    Purpose: Keep discovery cache fresh with latest translations
+
+    Returns:
+        Dict with refresh results
+    """
+    from apps.core.services import get_discovery_cache_service
+
+    logger.info("[AGENT] Starting discovery cache refresh...")
+
+    SUPPORTED_LANGUAGES = ['en', 'he', 'ru']
+    results = {}
+
+    try:
+        cache_service = get_discovery_cache_service()
+
+        for lang in SUPPORTED_LANGUAGES:
+            try:
+                refreshed = cache_service.refresh_all(lang)
+                results[lang] = refreshed
+                logger.info(
+                    f"[AGENT] Refreshed {refreshed} entries for {lang}")
+            except Exception as e:
+                logger.error(f"[AGENT] Failed to refresh {lang}: {e}")
+                results[lang] = 0
+
+        total_refreshed = sum(results.values())
+        logger.info(
+            f"[AGENT] ✅ Cache refresh complete: {total_refreshed} total entries")
+
+        return {
+            'success': True,
+            'results': results,
+            'total_refreshed': total_refreshed
+        }
+
+    except Exception as e:
+        logger.error(f"[AGENT] ❌ Cache refresh failed: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+@shared_task
+def cleanup_stale_discovery_cache():
+    """
+    BACKGROUND AGENT: Stale Discovery Cache Cleanup
+
+    Removes old discovery cache entries.
+
+    Schedule: Weekly on Sunday at 4 AM
+    Purpose: Clean up entries older than 30 days
+
+    Returns:
+        Dict with cleanup results
+    """
+    from apps.core.services import get_discovery_cache_service
+
+    logger.info("[AGENT] Starting stale discovery cache cleanup...")
+
+    try:
+        cache_service = get_discovery_cache_service()
+        deleted_count = cache_service.cleanup_stale(days_old=30)
+
+        logger.info(
+            f"[AGENT] ✅ Cleaned up {deleted_count} stale cache entries")
+
+        return {
+            'success': True,
+            'deleted_count': deleted_count
+        }
+
+    except Exception as e:
+        logger.error(f"[AGENT] ❌ Cache cleanup failed: {e}")
+        return {'success': False, 'error': str(e)}

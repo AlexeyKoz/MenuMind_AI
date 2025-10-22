@@ -1,0 +1,51 @@
+RECIPE TITLE BUG - FIX APPLIED
+================================
+
+PROBLEM:
+- Recipes showing "Untitled Recipe" in English
+- Recipes showing "черный перец" instead of "Carbonara" in Russian
+- User search query not being used as recipe name
+
+ROOT CAUSE:
+- AI extraction was getting title from webpage
+- If AI failed to extract title, it used search query BUT didn't capitalize it properly
+- Result: "carbonara" became "Untitled Recipe" when AI extraction failed
+
+SOLUTION APPLIED:
+File: backend/apps/recipes/services.py
+Line: 1765-1771
+
+Changed fallback logic to:
+1. Try to extract title from webpage
+2. If extraction fails OR title is just the search query repeated
+3. Use search query with proper capitalization: recipe_name.title()
+
+Example:
+- Search: "carbonara" 
+- AI fails to extract → Fallback: "Carbonara" (capitalized)
+- Search: "черный перец"
+- AI fails to extract → Fallback: "Черный Перец" (capitalized)
+
+CODE CHANGE:
+```python
+# BEFORE:
+if not extracted_title or len(extracted_title) > 200:
+    extracted_title = recipe_name  # lowercase!
+    
+# AFTER:
+if not extracted_title or len(extracted_title) > 200 or extracted_title.lower() == recipe_name.lower():
+    extracted_title = recipe_name.title()  # Properly capitalized!
+```
+
+TESTING:
+1. Deleted existing "Untitled Recipe" entries: 1 recipe deleted
+2. Backend needs restart to apply fix
+3. Generate new recipe to test
+
+EXPECTED RESULT:
+- Search "carbonara" → Recipe name: "Carbonara" (if AI fails) or "Spaghetti alla Carbonara" (if AI succeeds)
+- Search "черный перец" → Recipe name: "Черный Перец" (if AI fails) or extracted Russian title (if AI succeeds)
+- NO MORE "Untitled Recipe"
+
+STATUS: FIX APPLIED - RESTART BACKEND TO TEST
+

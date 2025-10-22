@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
-import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner } from '../components';
+import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner, AllergenWarning } from '../components';
 import RecipeProgressModal from '../components/RecipeProgressModal';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { Heart, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { convertTemperaturesInText, getUserTemperatureUnit } from '../utils/recipeTextUtils';
 
 /**
  * CanonicalRecipesPage - Browse and discover deduplicated recipes
@@ -246,7 +247,9 @@ const CanonicalRecipesPage: React.FC = () => {
 
     const handleBuilderComplete = (result: any) => {
         setShowBuilder(false);
-        alert(t('discover.recipeCreatedSuccessfully', { name: result.recipe_summary.name }));
+        // Fix: Use canonical_recipe.name instead of recipe_summary.name
+        const recipeName = result?.canonical_recipe?.name || result?.recipe_summary?.name || 'Unknown Recipe';
+        alert(t('discover.recipeCreatedSuccessfully', { name: recipeName }));
         loadRecipes();
     };
 
@@ -496,6 +499,17 @@ const CanonicalRecipesPage: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* Allergen Warning - Prominent display before ingredients */}
+                        {selectedRecipe.allergens && selectedRecipe.allergens.length > 0 && (
+                            <div className="mb-8">
+                                <AllergenWarning
+                                    allergens={selectedRecipe.allergens}
+                                    userAllergies={user?.allergies || []}
+                                    className="shadow-md"
+                                />
+                            </div>
+                        )}
+
                         {/* Ingredients & Steps */}
                         {translationLoading ? (
                             <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -558,15 +572,14 @@ const CanonicalRecipesPage: React.FC = () => {
                                                         <p className="text-gray-900 leading-relaxed">
                                                             {(() => {
                                                                 const currentLang = i18n.language;
-                                                                const hasTranslations = !!step.text_translations;
                                                                 const translated = step.text_translations?.[currentLang];
-                                                                console.log(`[RECIPE STEP] lang=${currentLang}, has_translations=${hasTranslations}`);
-                                                                console.log(`[RECIPE STEP] text_translations KEYS=`, step.text_translations ? Object.keys(step.text_translations) : 'none');
-                                                                console.log(`[RECIPE STEP] text_translations.en="${step.text_translations?.en?.substring(0, 50)}..."`);
-                                                                console.log(`[RECIPE STEP] text_translations.ru="${step.text_translations?.ru?.substring(0, 50)}..."`);
-                                                                console.log(`[RECIPE STEP] text_translations.he="${step.text_translations?.he?.substring(0, 50)}..."`);
-                                                                console.log(`[RECIPE STEP] Using currentLang="${currentLang}", showing="${(translated || step.text || step.instruction)?.substring(0, 50)}..."`);
-                                                                return translated || step.text || step.instruction || step;
+                                                                const text = translated || step.text || step.instruction || step;
+
+                                                                // Convert temperatures based on user preference
+                                                                const tempUnit = getUserTemperatureUnit(user);
+                                                                const textWithConvertedTemp = convertTemperaturesInText(text, tempUnit);
+
+                                                                return textWithConvertedTemp;
                                                             })()}
                                                         </p>
                                                         {step.time_minutes && (

@@ -52,6 +52,11 @@ class CanonicalRecipe(models.Model):
         default='intermediate'
     )
     diet_labels = models.JSONField(default=list)
+    allergens = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of allergens: ["dairy", "eggs", "fish", "shellfish", "tree_nuts", "peanuts", "wheat", "gluten", "soy", "sesame"]'
+    )
     prep_time_minutes = models.IntegerField(null=True, blank=True)
     cook_time_minutes = models.IntegerField(null=True, blank=True)
     total_time_minutes = models.IntegerField(null=True, blank=True)
@@ -167,7 +172,8 @@ class CanonicalRecipe(models.Model):
                 "cook_time_minutes": self.cook_time_minutes,
                 "total_time_minutes": self.total_time_minutes,
                 "keywords": [self.cuisine] if self.cuisine else [],
-                "diet_labels": self.diet_labels
+                "diet_labels": self.diet_labels,
+                "allergens": self.allergens
             },
             "ingredients": self.base_ingredients,
             "steps": self.base_steps,
@@ -256,6 +262,11 @@ class Recipe(models.Model):
     )
     cuisine = models.CharField(max_length=100, blank=True)
     diet_labels = models.JSONField(default=list)
+    allergens = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of allergens detected in this recipe'
+    )
 
     # Deduplication & Versioning (kept for legacy support)
     recipe_hash = models.CharField(
@@ -351,6 +362,7 @@ class Recipe(models.Model):
                 'difficulty': self.difficulty,
                 'cuisine': self.cuisine,
                 'diet_labels': self.diet_labels,
+                'allergens': self.allergens,
             }
 
         # Fork - merge canonical with modifications
@@ -370,6 +382,7 @@ class Recipe(models.Model):
             'difficulty': canonical.difficulty,
             'cuisine': canonical.cuisine,
             'diet_labels': list(canonical.diet_labels),
+            'allergens': list(canonical.allergens),
         }
 
         # Apply user modifications
@@ -421,7 +434,8 @@ class Recipe(models.Model):
                     "cook_time_minutes": effective['cook_time_minutes'],
                     "total_time_minutes": effective['total_time_minutes'],
                     "keywords": [effective['cuisine']] if effective['cuisine'] else [],
-                    "diet_labels": effective['diet_labels']
+                    "diet_labels": effective['diet_labels'],
+                    "allergens": effective.get('allergens', [])
                 },
                 "ingredients": effective['ingredients'],
                 "steps": effective['steps'],
@@ -453,7 +467,8 @@ class Recipe(models.Model):
                 "cook_time_minutes": self.cook_time_minutes,
                 "total_time_minutes": self.total_time_minutes,
                 "keywords": [self.cuisine] if self.cuisine else [],
-                "diet_labels": self.diet_labels
+                "diet_labels": self.diet_labels,
+                "allergens": self.allergens
             },
             "ingredients": self.ingredients,
             "steps": self.steps,
@@ -676,3 +691,87 @@ class RecipeTranslation(models.Model):
 
     def __str__(self):
         return f"{self.canonical_recipe.name} ({self.language})"
+
+
+class DiscoveryCache(models.Model):
+    """
+    Cached recipe cards for fast discovery page loading
+
+    Two-tier caching strategy:
+    1. This PostgreSQL cache (permanent, ~200ms)
+    2. Redis cache (temporary, <50ms)
+
+    One entry per (recipe, language) pair
+    Updated automatically when translation completes
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    canonical_recipe = models.ForeignKey(
+        CanonicalRecipe,
+        on_delete=models.CASCADE,
+        related_name='discovery_cache_entries',
+        help_text='Reference to the canonical recipe'
+    )
+
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('ru', 'Russian'),
+        ('he', 'Hebrew'),
+    ]
+    language = models.CharField(
+        max_length=2,
+        choices=LANGUAGE_CHOICES,
+        db_index=True,
+        help_text='Language code for this cached entry'
+    )
+
+    # Cached display data
+    title = models.CharField(
+        max_length=200,
+        db_index=True,
+        help_text='Translated recipe title for quick display'
+    )
+    brief = models.TextField(
+        help_text='Short description (first 200 chars) for preview'
+    )
+    image_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text='Recipe image URL'
+    )
+    tags = models.JSONField(
+        default=list,
+        help_text='Recipe tags for filtering'
+    )
+
+    # Timestamps
+    cached_at = models.DateTimeField(
+        auto_now=True,
+        help_text='Last time this cache entry was updated'
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text='When this cache entry was created'
+    )
+
+    class Meta:
+        db_table = 'discovery_cache'
+        verbose_name = 'Discovery Cache Entry'
+        verbose_name_plural = 'Discovery Cache Entries'
+        ordering = ['-cached_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['canonical_recipe', 'language'],
+                name='unique_recipe_language_cache'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['language', '-cached_at'],
+                         name='discovery_lang_time_idx'),
+            models.Index(fields=['canonical_recipe', 'language'],
+                         name='discovery_recipe_lang_idx'),
+            models.Index(fields=['-cached_at'], name='discovery_time_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.language})"
