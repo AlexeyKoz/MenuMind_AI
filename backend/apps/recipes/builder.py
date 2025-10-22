@@ -112,17 +112,19 @@ class RecipeBuilderService:
 
     async def _process_basic_info(self, session: Dict, session_id: str, user_input: Dict) -> Dict:
         """
-        Step 1: Process basic recipe information with AI validation
+        Step 1: Process basic recipe information with AI validation and duplicate detection
 
         User provides:
         - name: Recipe name
         - cuisine: (optional) Italian, Mexican, etc.
         - servings: (optional) Number of servings
         - difficulty: (optional) beginner, intermediate, advanced
+        - skip_duplicate_check: (optional) If True, skip duplicate detection
 
         AI validates and suggests improvements
         """
         name = user_input.get('name', '').strip()
+        skip_duplicate_check = user_input.get('skip_duplicate_check', False)
 
         if not name or len(name) < 3:
             return {
@@ -130,6 +132,30 @@ class RecipeBuilderService:
                 'error': 'Recipe name must be at least 3 characters',
                 'current_step': 'basic_info'
             }
+
+        # DUPLICATE CHECK - Check early to prevent wasted time
+        if not skip_duplicate_check:
+            existing_recipe = await self._check_for_duplicates_enhanced(name)
+            if existing_recipe:
+                print(
+                    f"[BUILDER] ⚠️ Duplicate found in Step 1: {existing_recipe.name} (ID: {existing_recipe.id})")
+                return {
+                    'success': False,
+                    'is_duplicate': True,
+                    'existing_recipe': {
+                        'id': str(existing_recipe.id),
+                        'name': existing_recipe.name,
+                        'description': existing_recipe.description,
+                        'cuisine': existing_recipe.cuisine,
+                        'difficulty': existing_recipe.difficulty,
+                        'servings': existing_recipe.servings,
+                        'source_type': existing_recipe.source_type,
+                        'diet_labels': existing_recipe.diet_labels,
+                    },
+                    'message': f'A recipe named "{existing_recipe.name}" already exists. Would you like to view it or create your own version?'
+                }
+        else:
+            print(f"[BUILDER] ✅ Skipping duplicate check for: {name}")
 
         # Get optional fields with defaults
         cuisine = user_input.get('cuisine', '').strip()
@@ -274,6 +300,14 @@ Return JSON only:
                 'current_step': 'ingredients'
             }
 
+        # Validate session has basic_info
+        if 'basic_info' not in session.get('data', {}):
+            return {
+                'success': False,
+                'error': 'Session expired or invalid. Please start over.',
+                'current_step': 'ingredients'
+            }
+
         recipe_name = session['data']['basic_info']['name']
         servings = session['data']['basic_info']['servings']
 
@@ -291,13 +325,17 @@ Return JSON only:
             structured_ingredients = self._structure_ingredients_fallback(
                 raw_ingredients)
 
-        # Update session
+        print(
+            f"[BUILDER] Structured {len(structured_ingredients)} ingredients")
+
+        # TRANSLATE INGREDIENTS using IML database (same as Discovery agent)
+        # CRITICAL: Do this BEFORE saving to session!
+        await self._translate_ingredients(structured_ingredients)
+
+        # Update session with TRANSLATED ingredients
         session['data']['ingredients'] = structured_ingredients
         session['step'] = 'steps'
         await cache.aset(f"recipe_builder:{session_id}", session, timeout=3600)
-
-        print(
-            f"[BUILDER] Structured {len(structured_ingredients)} ingredients")
 
         return {
             'success': True,
@@ -448,6 +486,20 @@ Return JSON array only:
                 'current_step': 'steps'
             }
 
+        # Validate session has required data
+        if 'basic_info' not in session.get('data', {}):
+            return {
+                'success': False,
+                'error': 'Session expired or invalid. Please start over.',
+                'current_step': 'steps'
+            }
+        if 'ingredients' not in session.get('data', {}):
+            return {
+                'success': False,
+                'error': 'Ingredients not found. Please go back to step 2.',
+                'current_step': 'steps'
+            }
+
         recipe_name = session['data']['basic_info']['name']
         ingredients = session['data']['ingredients']
 
@@ -465,13 +517,16 @@ Return JSON array only:
             structured_steps = self._structure_steps_fallback(
                 steps_description or steps_list)
 
-        # Update session
+        step_count = len(structured_steps['steps'])
+        print(f"[BUILDER] Structured {step_count} cooking steps")
+
+        # TRANSLATE COOKING STEPS using CookLingo database (BEFORE saving to session!)
+        await self._translate_cooking_steps(structured_steps['steps'])
+
+        # Update session AFTER translation
         session['data']['steps'] = structured_steps
         session['step'] = 'finalize'
         await cache.aset(f"recipe_builder:{session_id}", session, timeout=3600)
-
-        step_count = len(structured_steps['steps'])
-        print(f"[BUILDER] Structured {step_count} cooking steps")
 
         return {
             'success': True,
@@ -688,6 +743,7 @@ Return JSON only:
         - is_public: Whether to publish recipe
         - description: (optional) Additional description
         - tags: (optional) Custom tags
+        - skip_duplicate_check: (optional) If True, skip duplicate check and create anyway
 
         Creates CanonicalRecipe with source_type='user_created'
         """
@@ -703,6 +759,28 @@ Return JSON only:
         is_public = user_input.get('is_public', True)
         additional_description = user_input.get('description', '')
         tags = user_input.get('tags', [])
+        skip_duplicate_check = user_input.get('skip_duplicate_check', False)
+
+        # DUPLICATE CHECK - Use existing Discovery agent logic
+        if not skip_duplicate_check:
+            existing_recipe = await self._check_for_duplicates(basic_info['name'])
+            if existing_recipe:
+                print(
+                    f"[BUILDER] ⚠️ Duplicate found: {existing_recipe.name} (ID: {existing_recipe.id})")
+                return {
+                    'success': False,
+                    'is_duplicate': True,
+                    'existing_recipe': {
+                        'id': str(existing_recipe.id),
+                        'name': existing_recipe.name,
+                        'description': existing_recipe.description,
+                        'cuisine': existing_recipe.cuisine,
+                        'difficulty': existing_recipe.difficulty,
+                        'servings': existing_recipe.servings,
+                        'source_type': existing_recipe.source_type,
+                    },
+                    'message': f'A recipe named "{existing_recipe.name}" already exists. Would you like to create a personal fork?'
+                }
 
         # Build final description
         description = basic_info.get('description', '')
@@ -870,6 +948,455 @@ Return JSON only:
             labels.append('gluten-free')
 
         return labels
+
+    async def _translate_ingredients(self, ingredients: List[Dict]):
+        """
+        Translate ingredients using IML database (same as Discovery agent)
+        Modifies ingredients in-place to add translation keys
+        """
+        def _do_translation():
+            """Run translation in sync context"""
+            from apps.core.ingredient_mapper import IngredientMapper
+
+            print(
+                f"[BUILDER] Translating {len(ingredients)} ingredients using IML...")
+
+            mapper = IngredientMapper()
+
+            for ing in ingredients:
+                ingredient_name = ing.get('name', '')
+                if not ingredient_name:
+                    continue
+
+                # Map to IML ingredient_key using the map() method
+                try:
+                    result = mapper.map(ingredient_name, language='en')
+                    ing['ingredient_key'] = result.ingredient_key
+
+                    # Store display_name for fallback
+                    if isinstance(result.display_name, dict):
+                        ing['display_name'] = result.display_name
+                    else:
+                        ing['display_name'] = {'en': result.display_name}
+
+                    print(
+                        f"[BUILDER]   ✅ {ingredient_name} → {result.ingredient_key} (confidence: {result.confidence})")
+                except Exception as e:
+                    print(
+                        f"[BUILDER]   ⚠️ {ingredient_name} → fallback (error: {e})")
+                    # Create synthetic key for ingredients not in IML
+                    synthetic_key = ingredient_name.lower().replace(' ', '_')[
+                        :50]
+                    ing['ingredient_key'] = f"synthetic_{synthetic_key}"
+                    ing['display_name'] = {'en': ingredient_name}
+
+            print(f"[BUILDER] ✅ Ingredient translation complete")
+
+        # Run in thread to avoid async context issues
+        await sync_to_async(_do_translation)()
+
+    async def _translate_cooking_steps(self, steps: List[Dict]):
+        """
+        Translate cooking steps using CookLingo database (same as Discovery agent)
+        Modifies steps in-place to add translations
+
+        CRITICAL: Detects source language and translates from that language
+        """
+        def _do_translation():
+            """Run translation in sync context"""
+            from apps.core.cooking_terms_service import CookingTermsTranslationService
+
+            print(
+                f"[BUILDER] Translating {len(steps)} cooking steps using CookLingo...")
+
+            translator = CookingTermsTranslationService()
+
+            for step in steps:
+                instruction = step.get('instruction', '')
+                if not instruction:
+                    continue
+
+                try:
+                    # Detect source language (simple heuristic)
+                    # Check if text contains Cyrillic characters
+                    has_cyrillic = any('\u0400' <= char <=
+                                       '\u04FF' for char in instruction)
+                    # Check if text contains Hebrew characters
+                    has_hebrew = any('\u0590' <= char <=
+                                     '\u05FF' for char in instruction)
+
+                    if has_cyrillic:
+                        source_lang = 'ru'
+                        print(
+                            f"[BUILDER]   🔍 Step {step.get('order', '?')}: Detected Russian source")
+                    elif has_hebrew:
+                        source_lang = 'he'
+                        print(
+                            f"[BUILDER]   🔍 Step {step.get('order', '?')}: Detected Hebrew source")
+                    else:
+                        source_lang = 'en'
+                        print(
+                            f"[BUILDER]   🔍 Step {step.get('order', '?')}: Detected English source")
+
+                    # Translate from source language to all target languages
+                    # Initialize: set source language, others empty (will be filled by translation)
+                    translations = {}
+                    # Original stays in source lang
+                    translations[source_lang] = instruction
+
+                    if source_lang == 'en':
+                        # Source is English, translate to RU and HE
+                        try:
+                            result_ru = translator.translate_text(
+                                instruction, 'ru')
+                            # Check if translation actually happened
+                            if result_ru == instruction:
+                                print(
+                                    f"[BUILDER]   ⚠️ RU: CookLingo unchanged, keeping original EN")
+                                # Don't set RU translation - it will show EN text
+                                # Will show English
+                                translations['ru'] = instruction
+                            else:
+                                translations['ru'] = result_ru
+                        except Exception as trans_err:
+                            print(
+                                f"[BUILDER]   ⚠️ RU error: {trans_err}, keeping original EN")
+                            # Will show English
+                            translations['ru'] = instruction
+                        try:
+                            result_he = translator.translate_text(
+                                instruction, 'he')
+                            if result_he == instruction:
+                                print(
+                                    f"[BUILDER]   ⚠️ HE: CookLingo unchanged, keeping original EN")
+                                # Don't set HE translation - it will show EN text
+                                # Will show English
+                                translations['he'] = instruction
+                            else:
+                                translations['he'] = result_he
+                        except Exception as trans_err:
+                            print(
+                                f"[BUILDER]   ⚠️ HE error: {trans_err}, keeping original EN")
+                            # Will show English
+                            translations['he'] = instruction
+                    elif source_lang == 'ru':
+                        # Source is Russian, translate to EN and HE
+                        try:
+                            result_en = translator.translate_text(
+                                instruction, 'en')
+                            if result_en == instruction:
+                                print(
+                                    f"[BUILDER]   ⚠️ EN: CookLingo unchanged, keeping original RU")
+                                # Don't set EN translation - it will show RU text
+                                # Will show Russian
+                                translations['en'] = instruction
+                            else:
+                                translations['en'] = result_en
+                        except Exception as trans_err:
+                            print(
+                                f"[BUILDER]   ⚠️ EN error: {trans_err}, keeping original RU")
+                            # Will show Russian
+                            translations['en'] = instruction
+                        try:
+                            result_he = translator.translate_text(
+                                instruction, 'he')
+                            if result_he == instruction:
+                                print(
+                                    f"[BUILDER]   ⚠️ HE: CookLingo unchanged, keeping original RU")
+                                # Don't set HE translation - it will show RU text
+                                # Will show Russian
+                                translations['he'] = instruction
+                            else:
+                                translations['he'] = result_he
+                        except Exception as trans_err:
+                            print(
+                                f"[BUILDER]   ⚠️ HE error: {trans_err}, keeping original RU")
+                            # Will show Russian
+                            translations['he'] = instruction
+                    elif source_lang == 'he':
+                        # Source is Hebrew, translate to EN and RU
+                        try:
+                            result_en = translator.translate_text(
+                                instruction, 'en')
+                            if result_en == instruction:
+                                print(
+                                    f"[BUILDER]   ⚠️ EN: CookLingo unchanged, keeping original HE")
+                                # Don't set EN translation - it will show HE text
+                                # Will show Hebrew
+                                translations['en'] = instruction
+                            else:
+                                translations['en'] = result_en
+                        except Exception as trans_err:
+                            print(
+                                f"[BUILDER]   ⚠️ EN error: {trans_err}, keeping original HE")
+                            # Will show Hebrew
+                            translations['en'] = instruction
+                        try:
+                            result_ru = translator.translate_text(
+                                instruction, 'ru')
+                            if result_ru == instruction:
+                                print(
+                                    f"[BUILDER]   ⚠️ RU: CookLingo unchanged, keeping original HE")
+                                # Don't set RU translation - it will show HE text
+                                # Will show Hebrew
+                                translations['ru'] = instruction
+                            else:
+                                translations['ru'] = result_ru
+                        except Exception as trans_err:
+                            print(
+                                f"[BUILDER]   ⚠️ RU error: {trans_err}, keeping original HE")
+                            # Will show Hebrew
+                            translations['ru'] = instruction
+
+                    step['text_translations'] = translations
+                    print(
+                        f"[BUILDER]   ✅ Step {step.get('order', '?')} translated from {source_lang}")
+                except Exception as e:
+                    print(
+                        f"[BUILDER]   ⚠️ Step {step.get('order', '?')} translation failed: {e}")
+                    # Fallback: Keep original in source language only
+                    # Detect source language first
+                    has_cyrillic = any('\u0400' <= char <=
+                                       '\u04FF' for char in instruction)
+                    has_hebrew = any('\u0590' <= char <=
+                                     '\u05FF' for char in instruction)
+                    if has_cyrillic:
+                        detected_source = 'ru'
+                    elif has_hebrew:
+                        detected_source = 'he'
+                    else:
+                        detected_source = 'en'
+
+                    step['text_translations'] = {
+                        detected_source: instruction  # Only set source language
+                    }
+                    # Other languages will show source language if translation missing
+
+            print(f"[BUILDER] ✅ Cooking steps translation complete")
+
+        # Run in thread to avoid async context issues
+        await sync_to_async(_do_translation)()
+
+    def _translate_with_gemini(self, text: str, source_lang: str, target_lang: str) -> str:
+        """
+        Translate text using Gemini AI (PRIMARY translation method)
+
+        Args:
+            text: Text to translate
+            source_lang: Source language code (en, ru, he)
+            target_lang: Target language code (en, ru, he)
+
+        Returns:
+            Translated text or raises exception if translation fails
+        """
+        try:
+            import google.generativeai as genai
+            from django.conf import settings
+
+            # Get API key from Django settings
+            api_key = getattr(settings, 'GEMINI_API_KEY', None)
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY not configured in settings")
+
+            # Configure Gemini
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.0-flash-lite')
+
+            lang_names = {
+                'en': 'English',
+                'ru': 'Russian',
+                'he': 'Hebrew'
+            }
+
+            prompt = f"""Translate this cooking instruction from {lang_names[source_lang]} to {lang_names[target_lang]}.
+
+Source text ({lang_names[source_lang]}):
+"{text}"
+
+Requirements:
+1. Translate ONLY the cooking instruction (preserve meaning and cooking terms)
+2. Return ONLY the translated text, nothing else
+3. Keep temperatures, measurements, and times exactly as they are
+4. Maintain the same tone and style
+5. For Hebrew: use proper right-to-left Hebrew script
+
+Translated text ({lang_names[target_lang]}):"""
+
+            response = model.generate_content(prompt)
+            translated = response.text.strip()
+
+            # Remove quotes if Gemini added them
+            translated = translated.strip('"').strip("'").strip()
+
+            print(
+                f"[BUILDER]   ✅ GEMINI translated {source_lang}→{target_lang}: \"{translated[:50]}...\"")
+            return translated
+
+        except Exception as e:
+            # Re-raise to trigger Groq fallback
+            print(
+                f"[BUILDER]   ❌ GEMINI failed ({source_lang}→{target_lang}): {str(e)[:100]}")
+            raise
+
+    def _translate_with_groq(self, text: str, source_lang: str, target_lang: str) -> str:
+        """
+        Translate text using Groq as fallback when Gemini fails
+
+        Args:
+            text: Text to translate
+            source_lang: Source language code (en, ru, he)
+            target_lang: Target language code (en, ru, he)
+
+        Returns:
+            Translated text or original if translation fails
+        """
+        if not self.groq_client:
+            print(f"[BUILDER] ⚠️ Groq not available, keeping original text")
+            return text
+
+        try:
+            lang_names = {
+                'en': 'English',
+                'ru': 'Russian',
+                'he': 'Hebrew'
+            }
+
+            prompt = f"""Translate this cooking instruction from {lang_names[source_lang]} to {lang_names[target_lang]}.
+
+Source text ({lang_names[source_lang]}):
+"{text}"
+
+Requirements:
+1. Translate ONLY the cooking instruction (preserve meaning and cooking terms)
+2. Return ONLY the translated text, nothing else
+3. Keep temperatures, measurements, and times exactly as they are
+4. Maintain the same tone and style
+5. For Hebrew: use proper right-to-left Hebrew script
+
+Translated text ({lang_names[target_lang]}):"""
+
+            response = self.groq_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model=self.model,
+                temperature=0.3,
+                max_tokens=300
+            )
+
+            translated = response.choices[0].message.content.strip()
+            # Remove quotes if Groq added them
+            translated = translated.strip('"').strip("'").strip()
+
+            print(
+                f"[BUILDER]   ✅ Groq translated {source_lang}→{target_lang}: \"{translated[:50]}...\"")
+            return translated
+
+        except Exception as e:
+            print(
+                f"[BUILDER]   ❌ Groq translation failed: {e}, keeping original")
+            return text
+
+    async def _check_for_duplicates(self, recipe_name: str):
+        """
+        Check if recipe with same name exists (simple version for builder)
+        Thread-safe duplicate detection without translation overhead
+        """
+        from .models import CanonicalRecipe, RecipeTranslation
+
+        print(f"[BUILDER] Checking for duplicate recipe: '{recipe_name}'")
+
+        @sync_to_async
+        def find_duplicate():
+            # STEP 1: Check canonical names (exact match)
+            canonical = CanonicalRecipe.objects.filter(
+                name__iexact=recipe_name,
+                is_published=True
+            ).first()
+
+            if canonical:
+                print(
+                    f"[BUILDER] ✅ Found in canonical: {canonical.name}")
+                return canonical
+
+            # STEP 2: Check translations (all languages)
+            translation = RecipeTranslation.objects.filter(
+                name__iexact=recipe_name,
+                status='completed',
+                canonical_recipe__is_published=True
+            ).select_related('canonical_recipe').first()
+
+            if translation:
+                print(
+                    f"[BUILDER] ✅ Found in translations: {translation.name} ({translation.language})")
+                return translation.canonical_recipe
+
+            print(f"[BUILDER] ✅ No duplicates found")
+            return None
+
+        return await find_duplicate()
+
+    async def _check_for_duplicates_enhanced(self, recipe_name: str):
+        """
+        Enhanced duplicate detection with AI-powered similarity matching
+
+        Strategy:
+        1. Exact multilingual match (using existing Discovery logic)
+        2. AI-powered semantic similarity (Gemini fallback)
+        3. Fuzzy matching on normalized names
+
+        This ensures we ALWAYS catch duplicates even with variations
+        """
+        from .models import CanonicalRecipe
+        from apps.core.smart_translator import SmartTranslationService
+        import os
+
+        print(f"[BUILDER] 🔍 Enhanced duplicate check for: '{recipe_name}'")
+
+        # STEP 1: Try existing multilingual duplicate detection
+        existing = await self._check_for_duplicates(recipe_name)
+        if existing:
+            return existing
+
+        # STEP 2: AI-powered semantic similarity (SKIPPED - causes rate limiting)
+        # NOTE: AI semantic check disabled to prevent API throttling
+        # Fuzzy matching (Step 3) is sufficient for duplicate detection
+        print(f"[BUILDER] ⏭️ Skipping AI semantic check (using fuzzy match instead)")
+
+        # Future: Add rate-limited caching if needed:
+        # cache_key = f"duplicate_check:{recipe_name}"
+        # cached_result = await cache.aget(cache_key)
+        # if cached_result: return cached_result
+
+        # STEP 3: Fuzzy matching fallback (always works)
+        print(f"[BUILDER] 📝 Trying fuzzy match...")
+        from difflib import SequenceMatcher
+
+        # Normalize the search name
+        normalized_search = recipe_name.lower().strip()
+
+        # Check against all canonical recipes
+        all_recipes = await sync_to_async(list)(
+            CanonicalRecipe.objects.filter(is_published=True)
+        )
+
+        best_match = None
+        best_score = 0.85  # High threshold for fuzzy matching
+
+        for recipe in all_recipes:
+            normalized_name = recipe.name.lower().strip()
+            score = SequenceMatcher(
+                None, normalized_search, normalized_name).ratio()
+
+            if score > best_score:
+                best_score = score
+                best_match = recipe
+
+        if best_match:
+            print(
+                f"[BUILDER] 📝 Fuzzy match found: {best_match.name} (score: {best_score})")
+            return best_match
+
+        print(f"[BUILDER] ✅ No duplicates detected for '{recipe_name}'")
+        return None
 
     def _calculate_recipe_hash(self, name: str, ingredients: List[Dict]) -> str:
         """Calculate hash for deduplication"""

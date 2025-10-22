@@ -251,6 +251,18 @@ class IngredientMapper:
         normalized = re.sub(r'\s+', '_', normalized.strip())
         return f"synthetic_{normalized}"
 
+    def _get_all_translations(self, ingredient) -> Dict[str, str]:
+        """
+        Get all language translations for an ingredient
+
+        Returns:
+            {'en': 'tomato', 'ru': 'помидор', 'he': 'עגבנייה'}
+        """
+        translations = {}
+        for trans in ingredient.translations.all():
+            translations[trans.language] = trans.name
+        return translations
+
     def _exact_match(self, name: str, language: str) -> Optional[Dict]:
         """Exact match (case-sensitive)"""
         translation = IngredientTranslation.objects.filter(
@@ -259,10 +271,14 @@ class IngredientMapper:
         ).select_related('ingredient').first()
 
         if translation:
+            # Get ALL language translations for this ingredient
+            all_translations = self._get_all_translations(
+                translation.ingredient)
+
             return {
                 'key': translation.ingredient.ingredient_key,
                 'confidence': 1.0,
-                'display_name': translation.name,
+                'display_name': all_translations,  # Dict with en, ru, he
                 'matched_translation': name
             }
         return None
@@ -275,10 +291,13 @@ class IngredientMapper:
         ).select_related('ingredient').first()
 
         if translation:
+            all_translations = self._get_all_translations(
+                translation.ingredient)
+
             return {
                 'key': translation.ingredient.ingredient_key,
                 'confidence': 0.95,
-                'display_name': translation.name,
+                'display_name': all_translations,
                 'matched_translation': name
             }
         return None
@@ -294,10 +313,13 @@ class IngredientMapper:
         for translation in translations:
             # Verify exact alias match (case-insensitive)
             if any(alias.lower() == name.lower() for alias in translation.aliases):
+                all_translations = self._get_all_translations(
+                    translation.ingredient)
+
                 return {
                     'key': translation.ingredient.ingredient_key,
                     'confidence': 0.90,
-                    'display_name': translation.name,
+                    'display_name': all_translations,
                     'matched_translation': name
                 }
         return None
@@ -329,10 +351,13 @@ class IngredientMapper:
                 best_match = translation
 
         if best_match:
+            all_translations = self._get_all_translations(
+                best_match.ingredient)
+
             return {
                 'key': best_match.ingredient.ingredient_key,
                 'confidence': round(best_score, 2),
-                'display_name': best_match.name,
+                'display_name': all_translations,
                 'matched_translation': name
             }
 
@@ -350,18 +375,13 @@ class IngredientMapper:
             ).select_related('ingredient').first()
 
             if translation:
-                # Get correct translation in user's language
-                correct_translation = IngredientTranslation.objects.filter(
-                    ingredient=translation.ingredient,
-                    language=language
-                ).first()
-
-                display_name = correct_translation.name if correct_translation else translation.name
+                all_translations = self._get_all_translations(
+                    translation.ingredient)
 
                 return {
                     'key': translation.ingredient.ingredient_key,
                     'confidence': 0.85,
-                    'display_name': display_name,
+                    'display_name': all_translations,
                     'matched_translation': name
                 }
 

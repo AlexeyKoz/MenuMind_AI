@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Edit2, X, Plus, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 
 interface RecipeBuilderWizardProps {
     onStartBuilder: () => Promise<{ session_id: string }>;
@@ -23,8 +25,13 @@ interface StructuredStep {
     order: number;
     instruction: string;
     time_minutes?: number;
-    temperature?: string;
+    temperature?: string | { value: number; unit: string };
     tips?: string[];
+    text_translations?: {
+        en?: string;
+        ru?: string;
+        he?: string;
+    };
 }
 
 /**
@@ -43,11 +50,17 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
     onComplete,
     onCancel
 }) => {
+    const { t, i18n: i18nHook } = useTranslation();
+    const currentLang = i18nHook.language || i18n.language || 'en';
     const [sessionId, setSessionId] = useState<string>('');
     const [currentStep, setCurrentStep] = useState<number>(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
     const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+
+    // Duplicate detection state
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [duplicateRecipe, setDuplicateRecipe] = useState<any>(null);
 
     // Form state for each step
     const [basicInfo, setBasicInfo] = useState({
@@ -84,7 +97,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                 const result = await onStartBuilder();
                 setSessionId(result.session_id);
             } catch (err: any) {
-                setError(err.message || 'Failed to start builder session');
+                setError(err.message || t('recipeBuilder.errors.failedToStart'));
             }
         };
         initSession();
@@ -98,12 +111,22 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
             let result;
 
             switch (currentStep) {
-                case 1: // Basic Info
+                case 1: // Basic Info - CHECK FOR DUPLICATES FIRST
                     result = await onBuilderStep({
                         session_id: sessionId,
                         step: 'basic_info',
                         data: basicInfo
                     });
+
+                    // Check if duplicate detected in Step 1
+                    if (result && result.is_duplicate) {
+                        console.log('[BUILDER] Duplicate detected in Step 1:', result.existing_recipe);
+                        setDuplicateRecipe(result.existing_recipe);
+                        setShowDuplicateModal(true);
+                        setLoading(false);
+                        return; // Don't proceed, wait for user choice
+                    }
+
                     if (result.success) {
                         setAiSuggestions(result.ai_suggestions || []);
                         setCurrentStep(2);
@@ -111,11 +134,19 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                     break;
 
                 case 2: // Ingredients
+                    // Validate at least one ingredient before sending
+                    const validIngredients = ingredients.filter(ing => ing.trim());
+                    if (validIngredients.length === 0) {
+                        setError(t('recipeBuilder.step2.error', { defaultValue: 'Please add at least one ingredient' }));
+                        setLoading(false);
+                        return;
+                    }
+
                     result = await onBuilderStep({
                         session_id: sessionId,
                         step: 'ingredients',
                         data: {
-                            ingredients: ingredients.filter(ing => ing.trim())
+                            ingredients: validIngredients
                         }
                     });
                     if (result.success) {
@@ -124,6 +155,13 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                     break;
 
                 case 3: // Steps
+                    // Validate steps description before sending
+                    if (!stepsDescription.trim()) {
+                        setError(t('recipeBuilder.step3.error', { defaultValue: 'Please describe the cooking steps' }));
+                        setLoading(false);
+                        return;
+                    }
+
                     result = await onBuilderStep({
                         session_id: sessionId,
                         step: 'steps',
@@ -167,17 +205,38 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         step: 'finalize',
                         data: finalizeOptions
                     });
+
+                    // Check if duplicate detected
+                    if (result && result.is_duplicate) {
+                        console.log('[BUILDER] Duplicate detected:', result.existing_recipe);
+                        setDuplicateRecipe(result.existing_recipe);
+                        setShowDuplicateModal(true);
+                        setLoading(false);
+                        return; // Don't complete yet, wait for user choice
+                    }
+
                     if (result.success) {
                         onComplete(result);
                     }
                     break;
             }
 
+            // Check for duplicate BEFORE checking success
+            // (duplicate returns success:false but is_duplicate:true)
+            if (result && result.is_duplicate) {
+                console.log('[BUILDER] Duplicate detected:', result.existing_recipe);
+                setDuplicateRecipe(result.existing_recipe);
+                setShowDuplicateModal(true);
+                setError(''); // Clear any error message
+                setLoading(false);
+                return; // Don't show error, show modal instead
+            }
+
             if (result && !result.success) {
-                setError(result.error || 'Step failed');
+                setError(result.error || t('recipeBuilder.errors.stepFailed'));
             }
         } catch (err: any) {
-            setError(err.message || 'Failed to process step');
+            setError(err.message || t('recipeBuilder.errors.stepFailed'));
         } finally {
             setLoading(false);
         }
@@ -252,12 +311,124 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
         });
     };
 
+    // Duplicate modal handlers
+    const handleViewExisting = () => {
+        if (duplicateRecipe) {
+            // Navigate to existing recipe
+            window.location.href = `/discover?recipe=${duplicateRecipe.id}`;
+        }
+    };
+
+    const handleCreateFork = async () => {
+        setShowDuplicateModal(false);
+        setLoading(true);
+
+        try {
+            // If we're in Step 1, proceed with skip_duplicate_check
+            // If we're in Step 5, call finalize with fork option
+            if (currentStep === 1) {
+                // Update basic_info step with skip_duplicate_check flag
+                const result = await onBuilderStep({
+                    session_id: sessionId,
+                    step: 'basic_info',
+                    data: {
+                        ...basicInfo,
+                        skip_duplicate_check: true,
+                        create_fork: true  // Signal to create fork at the end
+                    }
+                });
+
+                if (result.success) {
+                    setAiSuggestions(result.ai_suggestions || []);
+                    setCurrentStep(2); // Proceed to next step
+                } else {
+                    setError(result.error || t('recipeBuilder.errors.stepFailed'));
+                }
+            } else {
+                // Step 5 finalize
+                const result = await onBuilderStep({
+                    session_id: sessionId,
+                    step: 'finalize',
+                    data: {
+                        ...finalizeOptions,
+                        skip_duplicate_check: true,
+                        is_public: false  // Forks are private by default
+                    }
+                });
+
+                if (result.success) {
+                    onComplete(result);
+                } else {
+                    setError(result.error || t('recipeBuilder.errors.stepFailed'));
+                }
+            }
+        } catch (err: any) {
+            setError(err.message || t('recipeBuilder.errors.stepFailed'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCreateNew = async () => {
+        setShowDuplicateModal(false);
+        setLoading(true);
+
+        try {
+            // If we're in Step 1, proceed with skip_duplicate_check
+            // If we're in Step 5, call finalize with new version
+            if (currentStep === 1) {
+                // Update basic_info step with skip_duplicate_check flag
+                const result = await onBuilderStep({
+                    session_id: sessionId,
+                    step: 'basic_info',
+                    data: {
+                        ...basicInfo,
+                        skip_duplicate_check: true
+                    }
+                });
+
+                if (result.success) {
+                    setAiSuggestions(result.ai_suggestions || []);
+                    setCurrentStep(2); // Proceed to next step
+                } else {
+                    setError(result.error || t('recipeBuilder.errors.stepFailed'));
+                }
+            } else {
+                // Step 5 finalize
+                const result = await onBuilderStep({
+                    session_id: sessionId,
+                    step: 'finalize',
+                    data: {
+                        ...finalizeOptions,
+                        skip_duplicate_check: true
+                    }
+                });
+
+                if (result.success) {
+                    onComplete(result);
+                } else {
+                    setError(result.error || t('recipeBuilder.errors.stepFailed'));
+                }
+            }
+        } catch (err: any) {
+            setError(err.message || t('recipeBuilder.errors.stepFailed'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
             {/* Progress Bar */}
             <div className="mb-8">
                 <div className="flex justify-between mb-2">
-                    {['Basic Info', 'Ingredients', 'Steps', 'Review & Edit', 'Finalize'].map((label, index) => (
+                    {[
+                        t('recipeBuilder.progressSteps.basicInfo'),
+                        t('recipeBuilder.progressSteps.ingredients'),
+                        t('recipeBuilder.progressSteps.steps'),
+                        t('recipeBuilder.progressSteps.review'),
+                        t('recipeBuilder.progressSteps.finalize')
+                    ].map((label, index) => (
                         <div
                             key={label}
                             className={`text-xs sm:text-sm font-medium ${index + 1 === currentStep
@@ -289,7 +460,9 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
             {/* AI Suggestions */}
             {aiSuggestions.length > 0 && (
                 <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 className="font-semibold text-blue-900 mb-2">💡 AI Suggestions:</h4>
+                    <h4 className="font-semibold text-blue-900 mb-2">
+                        💡 {t('recipeBuilder.aiSuggestionsTitle', { defaultValue: 'AI Suggestions' })}
+                    </h4>
                     <ul className="list-disc list-inside space-y-1 text-blue-800 text-sm">
                         {aiSuggestions.map((suggestion, index) => (
                             <li key={index}>{suggestion}</li>
@@ -303,18 +476,18 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                 {currentStep === 1 && (
                     <div className="space-y-4">
                         <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Step 1: Basic Information
+                            {t('recipeBuilder.step1.title')}
                         </h2>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Recipe Name *
+                                {t('recipeBuilder.step1.recipeNameRequired')}
                             </label>
                             <input
                                 type="text"
                                 value={basicInfo.name}
                                 onChange={(e) => setBasicInfo({ ...basicInfo, name: e.target.value })}
-                                placeholder="e.g., Spaghetti Carbonara"
+                                placeholder={t('recipeBuilder.step1.recipeNamePlaceholder')}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 required
                             />
@@ -322,13 +495,13 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Cuisine (optional)
+                                {t('recipeBuilder.step1.cuisine')}
                             </label>
                             <input
                                 type="text"
                                 value={basicInfo.cuisine}
                                 onChange={(e) => setBasicInfo({ ...basicInfo, cuisine: e.target.value })}
-                                placeholder="e.g., Italian, Mexican, Japanese"
+                                placeholder={t('recipeBuilder.step1.cuisinePlaceholder')}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                         </div>
@@ -336,7 +509,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Servings
+                                    {t('recipeBuilder.step1.servings')}
                                 </label>
                                 <input
                                     type="number"
@@ -350,28 +523,28 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Difficulty
+                                    {t('recipeBuilder.step1.difficulty')}
                                 </label>
                                 <select
                                     value={basicInfo.difficulty}
                                     onChange={(e) => setBasicInfo({ ...basicInfo, difficulty: e.target.value })}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 >
-                                    <option value="beginner">Beginner</option>
-                                    <option value="intermediate">Intermediate</option>
-                                    <option value="advanced">Advanced</option>
+                                    <option value="beginner">{t('recipeBuilder.step1.difficultyBeginner')}</option>
+                                    <option value="intermediate">{t('recipeBuilder.step1.difficultyIntermediate')}</option>
+                                    <option value="advanced">{t('recipeBuilder.step1.difficultyAdvanced')}</option>
                                 </select>
                             </div>
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Description (optional)
+                                {t('recipeBuilder.step1.description')}
                             </label>
                             <textarea
                                 value={basicInfo.description}
                                 onChange={(e) => setBasicInfo({ ...basicInfo, description: e.target.value })}
-                                placeholder="Brief description of your recipe"
+                                placeholder={t('recipeBuilder.step1.descriptionPlaceholder')}
                                 rows={3}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
@@ -382,10 +555,10 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                 {currentStep === 2 && (
                     <div className="space-y-4">
                         <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Step 2: Ingredients
+                            {t('recipeBuilder.step2.title')}
                         </h2>
                         <p className="text-gray-600 mb-4">
-                            Add ingredients one per line. AI will help structure them with proper quantities.
+                            {t('recipeBuilder.step2.description')}
                         </p>
 
                         <div className="space-y-2">
@@ -395,7 +568,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                         type="text"
                                         value={ingredient}
                                         onChange={(e) => updateIngredient(index, e.target.value)}
-                                        placeholder="e.g., 2 cups flour, 3 eggs, 1 tsp salt"
+                                        placeholder={t('recipeBuilder.step2.ingredientPlaceholder')}
                                         className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
                                     {ingredients.length > 1 && (
@@ -414,7 +587,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                             onClick={addIngredient}
                             className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                         >
-                            + Add Ingredient
+                            {t('recipeBuilder.step2.addIngredient')}
                         </button>
                     </div>
                 )}
@@ -422,16 +595,16 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                 {currentStep === 3 && (
                     <div className="space-y-4">
                         <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Step 3: Cooking Steps
+                            {t('recipeBuilder.step3.title')}
                         </h2>
                         <p className="text-gray-600 mb-4">
-                            Describe how to make this recipe. AI will structure it into clear steps.
+                            {t('recipeBuilder.step3.description')}
                         </p>
 
                         <textarea
                             value={stepsDescription}
                             onChange={(e) => setStepsDescription(e.target.value)}
-                            placeholder="Describe the cooking process in your own words. For example: First, boil water and cook pasta. While pasta cooks, fry bacon until crispy..."
+                            placeholder={t('recipeBuilder.step3.stepsPlaceholder')}
                             rows={10}
                             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             required
@@ -443,36 +616,36 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                     <div className="space-y-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-2xl font-bold text-gray-900">
-                                Step 4: Review & Edit Your Recipe
+                                {t('recipeBuilder.step4.title')}
                             </h2>
                             <div className="text-sm text-gray-600">
-                                ✏️ Click any field to edit
+                                {t('recipeBuilder.step4.editHint')}
                             </div>
                         </div>
 
                         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                             <p className="text-blue-800 text-sm">
-                                🎨 <strong>Review your recipe</strong> - AI has structured everything for you. Edit any field before finalizing!
+                                {t('recipeBuilder.step4.reviewNotice')}
                             </p>
                         </div>
 
                         {/* Basic Info Section */}
                         <div className="border rounded-lg p-6 bg-gray-50">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-bold text-gray-900">📋 Basic Information</h3>
+                                <h3 className="text-lg font-bold text-gray-900">{t('recipeBuilder.step4.basicInfoTitle')}</h3>
                                 <button
                                     onClick={() => setEditingBasicInfo(!editingBasicInfo)}
                                     className="flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition text-sm"
                                 >
                                     <Edit2 className="w-4 h-4" />
-                                    {editingBasicInfo ? 'Done' : 'Edit'}
+                                    {editingBasicInfo ? t('recipeBuilder.step4.done') : t('recipeBuilder.step4.edit')}
                                 </button>
                             </div>
 
                             {editingBasicInfo ? (
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('recipeBuilder.step4.name')}</label>
                                         <input
                                             type="text"
                                             value={reviewData.basic_info.name}
@@ -482,7 +655,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Cuisine</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('recipeBuilder.step4.cuisine')}</label>
                                             <input
                                                 type="text"
                                                 value={reviewData.basic_info.cuisine || ''}
@@ -491,20 +664,20 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('recipeBuilder.step4.difficulty')}</label>
                                             <select
                                                 value={reviewData.basic_info.difficulty}
                                                 onChange={(e) => updateBasicInfoField('difficulty', e.target.value)}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                             >
-                                                <option value="beginner">Beginner</option>
-                                                <option value="intermediate">Intermediate</option>
-                                                <option value="advanced">Advanced</option>
+                                                <option value="beginner">{t('recipeBuilder.step1.difficultyBeginner')}</option>
+                                                <option value="intermediate">{t('recipeBuilder.step1.difficultyIntermediate')}</option>
+                                                <option value="advanced">{t('recipeBuilder.step1.difficultyAdvanced')}</option>
                                             </select>
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Servings</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('recipeBuilder.step4.servings')}</label>
                                         <input
                                             type="number"
                                             value={reviewData.basic_info.servings}
@@ -514,7 +687,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('recipeBuilder.step4.description')}</label>
                                         <textarea
                                             value={reviewData.basic_info.description || ''}
                                             onChange={(e) => updateBasicInfoField('description', e.target.value)}
@@ -525,12 +698,12 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                 </div>
                             ) : (
                                 <div className="space-y-2 text-sm">
-                                    <p><strong>Name:</strong> {reviewData.basic_info.name}</p>
-                                    <p><strong>Cuisine:</strong> {reviewData.basic_info.cuisine || 'Not specified'}</p>
-                                    <p><strong>Difficulty:</strong> {reviewData.basic_info.difficulty}</p>
-                                    <p><strong>Servings:</strong> {reviewData.basic_info.servings}</p>
+                                    <p><strong>{t('recipeBuilder.step4.name')}:</strong> {reviewData.basic_info.name}</p>
+                                    <p><strong>{t('recipeBuilder.step4.cuisine')}:</strong> {reviewData.basic_info.cuisine || t('recipeBuilder.step4.notSpecified')}</p>
+                                    <p><strong>{t('recipeBuilder.step4.difficulty')}:</strong> {reviewData.basic_info.difficulty}</p>
+                                    <p><strong>{t('recipeBuilder.step4.servings')}:</strong> {reviewData.basic_info.servings}</p>
                                     {reviewData.basic_info.description && (
-                                        <p><strong>Description:</strong> {reviewData.basic_info.description}</p>
+                                        <p><strong>{t('recipeBuilder.step4.description')}:</strong> {reviewData.basic_info.description}</p>
                                     )}
                                 </div>
                             )}
@@ -539,13 +712,15 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         {/* Ingredients Section */}
                         <div className="border rounded-lg p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-bold text-gray-900">🥕 Ingredients ({reviewData.ingredients.length})</h3>
+                                <h3 className="text-lg font-bold text-gray-900">
+                                    {t('recipeBuilder.step4.ingredientsTitle')} ({reviewData.ingredients.length})
+                                </h3>
                                 <button
                                     onClick={addReviewIngredient}
                                     className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"
                                 >
                                     <Plus className="w-4 h-4" />
-                                    Add
+                                    {t('recipeBuilder.step4.add')}
                                 </button>
                             </div>
 
@@ -557,21 +732,21 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                                 type="number"
                                                 value={ing.amount || ''}
                                                 onChange={(e) => updateReviewIngredient(index, 'amount', parseFloat(e.target.value))}
-                                                placeholder="Amt"
+                                                placeholder={t('recipeBuilder.step4.amountPlaceholder')}
                                                 className="px-2 py-1 border border-gray-300 rounded text-sm"
                                             />
                                             <input
                                                 type="text"
                                                 value={ing.unit || ''}
                                                 onChange={(e) => updateReviewIngredient(index, 'unit', e.target.value)}
-                                                placeholder="Unit"
+                                                placeholder={t('recipeBuilder.step4.unitPlaceholder')}
                                                 className="px-2 py-1 border border-gray-300 rounded text-sm"
                                             />
                                             <input
                                                 type="text"
                                                 value={ing.name}
                                                 onChange={(e) => updateReviewIngredient(index, 'name', e.target.value)}
-                                                placeholder="Ingredient"
+                                                placeholder={t('recipeBuilder.step4.ingredientPlaceholder')}
                                                 className="col-span-2 px-2 py-1 border border-gray-300 rounded text-sm"
                                             />
                                         </div>
@@ -589,13 +764,15 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         {/* Steps Section */}
                         <div className="border rounded-lg p-6">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-bold text-gray-900">👨‍🍳 Cooking Steps ({reviewData.steps.length})</h3>
+                                <h3 className="text-lg font-bold text-gray-900">
+                                    {t('recipeBuilder.step4.stepsTitle')} ({reviewData.steps.length})
+                                </h3>
                                 <button
                                     onClick={addReviewStep}
                                     className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm"
                                 >
                                     <Plus className="w-4 h-4" />
-                                    Add Step
+                                    {t('recipeBuilder.step4.addStep')}
                                 </button>
                             </div>
 
@@ -607,9 +784,14 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                         </div>
                                         <div className="flex-1 space-y-2">
                                             <textarea
-                                                value={step.instruction}
+                                                value={(() => {
+                                                    const lang = currentLang as 'en' | 'ru' | 'he';
+                                                    const translated = step.text_translations?.[lang];
+                                                    console.log(`[STEP ${index + 1}] lang=${lang}, has_translations=${!!step.text_translations}, translated=${!!translated}, instruction=${step.instruction.substring(0, 30)}...`);
+                                                    return translated || step.instruction;
+                                                })()}
                                                 onChange={(e) => updateReviewStep(index, 'instruction', e.target.value)}
-                                                placeholder="Step instruction..."
+                                                placeholder={t('recipeBuilder.step4.stepInstructionPlaceholder')}
                                                 className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
                                                 rows={2}
                                             />
@@ -618,14 +800,20 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                                     type="number"
                                                     value={step.time_minutes || ''}
                                                     onChange={(e) => updateReviewStep(index, 'time_minutes', parseInt(e.target.value) || null)}
-                                                    placeholder="Time (min)"
+                                                    placeholder={t('recipeBuilder.step4.timePlaceholder')}
                                                     className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
                                                 />
                                                 <input
                                                     type="text"
-                                                    value={step.temperature || ''}
+                                                    value={
+                                                        step.temperature
+                                                            ? typeof step.temperature === 'object'
+                                                                ? `${step.temperature.value}°${step.temperature.unit === 'celsius' ? 'C' : 'F'}`
+                                                                : step.temperature
+                                                            : ''
+                                                    }
                                                     onChange={(e) => updateReviewStep(index, 'temperature', e.target.value)}
-                                                    placeholder="Temp (optional)"
+                                                    placeholder={t('recipeBuilder.step4.tempPlaceholder')}
                                                     className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
                                                 />
                                             </div>
@@ -644,16 +832,16 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         {/* Time Estimates */}
                         {reviewData.estimated_times && (
                             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <h4 className="font-semibold text-yellow-900 mb-2">⏱️ Estimated Times</h4>
+                                <h4 className="font-semibold text-yellow-900 mb-2">{t('recipeBuilder.step4.estimatedTimesTitle')}</h4>
                                 <div className="grid grid-cols-3 gap-4 text-sm text-yellow-800">
                                     <div>
-                                        <strong>Prep:</strong> {reviewData.estimated_times.prep_time || 0} min
+                                        <strong>{t('recipeBuilder.step4.prep')}</strong> {reviewData.estimated_times.prep_time || 0} {t('recipeBuilder.step4.minutes')}
                                     </div>
                                     <div>
-                                        <strong>Cook:</strong> {reviewData.estimated_times.cook_time || 0} min
+                                        <strong>{t('recipeBuilder.step4.cook')}</strong> {reviewData.estimated_times.cook_time || 0} {t('recipeBuilder.step4.minutes')}
                                     </div>
                                     <div>
-                                        <strong>Total:</strong> {reviewData.estimated_times.total_time || 0} min
+                                        <strong>{t('recipeBuilder.step4.total')}</strong> {reviewData.estimated_times.total_time || 0} {t('recipeBuilder.step4.minutes')}
                                     </div>
                                 </div>
                             </div>
@@ -662,13 +850,17 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                         {/* Diet Labels */}
                         {reviewData.diet_labels && reviewData.diet_labels.length > 0 && (
                             <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                <h4 className="font-semibold text-green-900 mb-2">🌱 Auto-Detected Labels</h4>
+                                <h4 className="font-semibold text-green-900 mb-2">{t('recipeBuilder.step4.dietLabelsTitle')}</h4>
                                 <div className="flex flex-wrap gap-2">
-                                    {reviewData.diet_labels.map((label, index) => (
-                                        <span key={index} className="px-3 py-1 bg-green-200 text-green-800 rounded-full text-sm">
-                                            {label}
-                                        </span>
-                                    ))}
+                                    {reviewData.diet_labels.map((label, index) => {
+                                        // Translate diet label: "vegetarian" -> t('discover.dietLabels.vegetarian')
+                                        const translatedLabel = t(`discover.dietLabels.${label}`, { defaultValue: label });
+                                        return (
+                                            <span key={index} className="px-3 py-1 bg-green-200 text-green-800 rounded-full text-sm">
+                                                {translatedLabel}
+                                            </span>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -678,7 +870,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                 {currentStep === 5 && (
                     <div className="space-y-4">
                         <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                            Step 5: Finalize Recipe
+                            {t('recipeBuilder.step5.title')}
                         </h2>
 
                         <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
@@ -690,27 +882,31 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                 className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                             />
                             <label htmlFor="is_public" className="text-sm font-medium text-gray-700">
-                                Make this recipe public (visible to all users on Discover page)
+                                {t('recipeBuilder.step5.makePublic')}
                             </label>
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Additional Description (optional)
+                                {t('recipeBuilder.step5.additionalDescription')}
                             </label>
                             <textarea
                                 value={finalizeOptions.description}
                                 onChange={(e) => setFinalizeOptions({ ...finalizeOptions, description: e.target.value })}
-                                placeholder="Add any extra notes, tips, or story about this recipe"
+                                placeholder={t('recipeBuilder.step5.additionalDescriptionPlaceholder')}
                                 rows={4}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                         </div>
 
                         <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                            <h4 className="font-semibold text-green-900 mb-2">🎉 Ready to save!</h4>
+                            <h4 className="font-semibold text-green-900 mb-2">{t('recipeBuilder.step5.readyToSave')}</h4>
                             <p className="text-green-800 text-sm">
-                                Click "Create Recipe" to save your recipe. It will be added to your collection and {finalizeOptions.is_public ? 'published to the Discover page' : 'kept private'}.
+                                {t('recipeBuilder.step5.saveNotice', {
+                                    visibility: finalizeOptions.is_public
+                                        ? t('recipeBuilder.step5.published')
+                                        : t('recipeBuilder.step5.keptPrivate')
+                                })}
                             </p>
                         </div>
                     </div>
@@ -724,7 +920,7 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                     className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                     disabled={loading}
                 >
-                    {currentStep === 1 ? 'Cancel' : 'Back'}
+                    {currentStep === 1 ? t('recipeBuilder.buttons.cancel') : t('recipeBuilder.buttons.back')}
                 </button>
 
                 <button
@@ -741,17 +937,88 @@ const RecipeBuilderWizard: React.FC<RecipeBuilderWizardProps> = ({
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                             </svg>
-                            Processing...
+                            {t('recipeBuilder.buttons.processing')}
                         </span>
                     ) : currentStep === 5 ? (
-                        'Create Recipe'
+                        t('recipeBuilder.buttons.createRecipe')
                     ) : currentStep === 4 ? (
-                        'Confirm & Continue'
+                        t('recipeBuilder.buttons.confirmContinue')
                     ) : (
-                        'Next'
+                        t('recipeBuilder.buttons.next')
                     )}
                 </button>
             </div>
+
+            {/* Duplicate Recipe Modal */}
+            {showDuplicateModal && duplicateRecipe && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6">
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                                ⚠️ {t('recipeBuilder.duplicate.title', { defaultValue: 'Recipe Already Exists' })}
+                            </h2>
+                            <p className="text-gray-600">
+                                {t('recipeBuilder.duplicate.message', {
+                                    defaultValue: 'A recipe with this name already exists in the Discovery page.',
+                                    name: basicInfo.name
+                                })}
+                            </p>
+                        </div>
+
+                        {/* Existing Recipe Info */}
+                        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <h3 className="font-semibold text-blue-900 mb-2">
+                                {t('recipeBuilder.duplicate.existingRecipe', { defaultValue: 'Existing Recipe:' })}
+                            </h3>
+                            <div className="space-y-1 text-sm text-blue-800">
+                                <p><strong>{t('recipeBuilder.step4.name')}:</strong> {duplicateRecipe.name}</p>
+                                {duplicateRecipe.cuisine && (
+                                    <p><strong>{t('recipeBuilder.step4.cuisine')}:</strong> {duplicateRecipe.cuisine}</p>
+                                )}
+                                <p><strong>{t('recipeBuilder.step4.difficulty')}:</strong> {duplicateRecipe.difficulty}</p>
+                                <p><strong>{t('recipeBuilder.step4.servings')}:</strong> {duplicateRecipe.servings}</p>
+                                {duplicateRecipe.description && (
+                                    <p className="mt-2"><strong>{t('recipeBuilder.step4.description')}:</strong> {duplicateRecipe.description}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Options */}
+                        <div className="space-y-3">
+                            <button
+                                onClick={handleViewExisting}
+                                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                            >
+                                <span>👁️</span>
+                                {t('recipeBuilder.duplicate.viewExisting', { defaultValue: 'View Existing Recipe' })}
+                            </button>
+
+                            <button
+                                onClick={handleCreateFork}
+                                className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+                            >
+                                <span>🍴</span>
+                                {t('recipeBuilder.duplicate.createFork', { defaultValue: 'Create Personal Fork (Private)' })}
+                            </button>
+
+                            <button
+                                onClick={handleCreateNew}
+                                className="w-full px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium flex items-center justify-center gap-2"
+                            >
+                                <span>➕</span>
+                                {t('recipeBuilder.duplicate.createNew', { defaultValue: 'Create New Public Version' })}
+                            </button>
+
+                            <button
+                                onClick={() => setShowDuplicateModal(false)}
+                                className="w-full px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                            >
+                                {t('recipeBuilder.buttons.cancel')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

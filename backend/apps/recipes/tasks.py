@@ -598,3 +598,93 @@ def translate_recipe_to_all_languages(recipe_id: str, priority_language: str = N
         'task_ids': task_ids,
         'total_languages': len(task_ids)
     }
+
+
+# ============================================================================
+# SMART TRANSLATION TASKS (Background, Non-Blocking)
+# ============================================================================
+
+@shared_task(bind=True, max_retries=3)
+def translate_recipe_name_background(self, recipe_id, target_language, original_name):
+    """
+    Background task to translate ONLY recipe name (fast, minimal API usage)
+
+    This is called from Discovery page when user switches language.
+    - Non-blocking: User doesn't wait
+    - Cached: Result saved to DB forever
+    - Smart: Only runs once per recipe per language
+
+    API Usage: 1 call per recipe per language (one-time)
+    """
+    from apps.recipes.models import CanonicalRecipe, RecipeTranslation
+    from apps.core.smart_translator import SmartTranslationService
+    from django.utils import timezone
+
+    try:
+        print(
+            f"[TASK] 🚀 Starting NAME translation: {original_name} → {target_language}")
+
+        # Get or create translation record
+        translation, created = RecipeTranslation.objects.get_or_create(
+            canonical_recipe_id=recipe_id,
+            language=target_language,
+            defaults={
+                'status': 'in_progress',
+                'name': '',
+                'description': '',
+                'base_ingredients': [],
+                'base_steps': []
+            }
+        )
+
+        if not created and translation.name:
+            # Already translated
+            print(f"[TASK] ✅ Already translated, skipping: {translation.name}")
+            return
+
+        # Update status
+        translation.status = 'in_progress'
+        translation.save()
+
+        # Translate name only
+        translator = SmartTranslationService()
+        translated_name = translator.translate_recipe_name(
+            original_name,
+            target_language
+        )
+
+        if translated_name and translated_name != original_name:
+            translation.name = translated_name
+            translation.status = 'completed'  # Name done
+            translation.completed_at = timezone.now()
+            translation.save()
+
+            print(f"[TASK] ✅ SUCCESS: {original_name} → {translated_name}")
+        else:
+            # Translation failed
+            translation.name = original_name  # Keep original
+            translation.status = 'failed'
+            translation.error_message = "Translation returned same as original"
+            translation.save()
+
+            print(f"[TASK] ⚠️ FAILED: Keeping original name {original_name}")
+
+    except Exception as e:
+        print(f"[TASK] ❌ ERROR translating recipe name: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Update translation record with error
+        try:
+            translation = RecipeTranslation.objects.get(
+                canonical_recipe_id=recipe_id,
+                language=target_language
+            )
+            translation.status = 'failed'
+            translation.error_message = str(e)
+            translation.save()
+        except:
+            pass
+
+        # Retry with exponential backoff
+        raise self.retry(exc=e, countdown=2 ** self.request.retries)

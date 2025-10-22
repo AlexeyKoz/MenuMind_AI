@@ -1645,7 +1645,7 @@ START YOUR RESPONSE WITH "INGREDIENTS:" - NOTHING BEFORE IT."""
                     raise ImportError("No Gemini API key")
 
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
                 # Run in executor
                 loop = asyncio.get_event_loop()

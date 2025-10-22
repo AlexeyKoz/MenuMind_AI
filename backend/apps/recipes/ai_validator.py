@@ -23,7 +23,7 @@ class AIRecipeValidator:
         api_key = getattr(settings, 'GEMINI_API_KEY', '')
         if api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         else:
             self.model = None
             logger.warning("[AI_VALIDATOR] Gemini API key not found")

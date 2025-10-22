@@ -940,6 +940,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
             result = async_to_sync(builder.process_step)(
                 session_id, step, data)
 
+            # Special case: Duplicate detection should return 200 OK (not an error)
+            if result.get('is_duplicate'):
+                return Response(result, status=status.HTTP_200_OK)
+
             if not result.get('success'):
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1112,15 +1116,15 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         print(
             f"[LIST] User language: {user_language} (from query param: {self.request.query_params.get('lang')})")
 
-        # Translate recipe names to user's language (always check for translations)
+        # Translate recipe names to user's language (DATABASE ONLY - NO API CALLS)
         from .models import RecipeTranslation
-        from apps.core.smart_translator import SmartTranslationService
+        from .tasks import translate_recipe_name_background
 
         print(
-            f"[LIST] Translating {len(recipes_data)} recipe names to {user_language}")
+            f"[LIST] Checking DB translations for {len(recipes_data)} recipe names in {user_language}")
 
         # Initialize translator for fallback
-        smart_translator = None
+        # smart_translator = None  # REMOVED - No more sync API calls!
 
         for recipe_data in recipes_data:
             try:
@@ -1135,25 +1139,40 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
                         f"[LIST] ✅ DB: {recipe_data['name']} -> {translation.name}")
                     recipe_data['name'] = translation.name
                 else:
-                    # FALLBACK: Use Gemini to translate on-the-fly
+                    # SMART: Create pending translation and queue background task
+                    # User doesn't wait - sees original name for now
                     print(
-                        f"[LIST] ⚠️ No translation in DB for {recipe_data['name']}, using Gemini fallback...")
+                        f"[LIST] ⚠️ No translation in DB for {recipe_data['name']}, queueing background task...")
 
-                    if smart_translator is None:
-                        smart_translator = SmartTranslationService()
+                    # Check if translation already pending or in progress
+                    existing = RecipeTranslation.objects.filter(
+                        canonical_recipe_id=recipe_data['id'],
+                        language=user_language
+                    ).first()
 
-                    translated_name = smart_translator.translate_recipe_name(
-                        recipe_data['name'],
-                        user_language
+                    if not existing:
+                        # Create new pending translation
+                        RecipeTranslation.objects.create(
+                            canonical_recipe_id=recipe_data['id'],
+                            language=user_language,
+                            status='pending',
+                            name='',  # Will be filled by background task
+                            description='',
+                            base_ingredients=[],
+                            base_steps=[]
+                        )
+                        print(f"[LIST] 📝 Created pending translation record")
+
+                    # Queue background translation (non-blocking)
+                    translate_recipe_name_background.delay(
+                        recipe_data['id'],
+                        user_language,
+                        recipe_data['name']  # Original name
                     )
+                    print(f"[LIST] 🚀 Queued background translation task")
 
-                    if translated_name and translated_name != recipe_data['name']:
-                        print(
-                            f"[LIST] ✅ GEMINI: {recipe_data['name']} -> {translated_name}")
-                        recipe_data['name'] = translated_name
-                    else:
-                        print(
-                            f"[LIST] ❌ FALLBACK FAILED: Keeping original name {recipe_data['name']}")
+                    # Keep original name (user doesn't wait)
+                    # Frontend can poll for updates if needed
 
             except Exception as e:
                 print(
@@ -1233,74 +1252,48 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
                     ).exists()
 
                     if not in_progress:
-                        # No translation exists, create one NOW (synchronously)
+                        # No translation exists, queue background task
                         print(
-                            f"[RETRIEVE] 🔄 Creating {user_language} translation NOW for recipe {instance.id}")
+                            f"[RETRIEVE] 🔄 Queuing background translation task for {user_language} recipe {instance.id}")
 
                         try:
-                            from apps.core.smart_translator import SmartTranslationService
-                            from django.utils import timezone
-
-                            # Create translation record
-                            translation = RecipeTranslation.objects.create(
+                            # Get or create translation record with pending status
+                            translation, created = RecipeTranslation.objects.get_or_create(
                                 canonical_recipe=instance,
                                 language=user_language,
-                                status='in_progress'
+                                defaults={
+                                    'status': 'pending',
+                                    'name': '',
+                                    'description': '',
+                                    'base_ingredients': [],
+                                    'base_steps': []
+                                }
                             )
 
-                            # Initialize SMART translator (uses databases + Gemini fallback)
-                            smart_translator = SmartTranslationService()
+                            # If already completed, use it immediately
+                            if translation.status == 'completed' and translation.name:
+                                print(
+                                    f"[RETRIEVE] ✅ Translation already completed, using cached version")
+                                recipe_data['name'] = translation.name
+                                recipe_data['base_ingredients'] = translation.base_ingredients
+                                recipe_data['base_steps'] = translation.base_steps
+                                recipe_data['translation_language'] = user_language
+                                return Response(recipe_data)
 
-                            # Translate recipe name
-                            translated_name = smart_translator.translate_recipe_name(
-                                instance.name,
-                                user_language
-                            )
+                            # Queue background translation task (non-blocking)
+                            if translation.status in ['pending', 'failed']:
+                                print(
+                                    f"[RETRIEVE] 🚀 Starting background task for recipe {instance.id} -> {user_language}")
+                                translate_recipe_to_language.delay(
+                                    instance.id, user_language)
+                                translation.status = 'in_progress'
+                                translation.save()
 
-                            # Translate ingredients using SMART approach
-                            print(
-                                f"[RETRIEVE] Translating {len(instance.base_ingredients)} ingredients...")
-                            translated_ingredients = smart_translator.translate_ingredients_batch(
-                                instance.base_ingredients,
-                                user_language
-                            )
-
-                            # Translate cooking steps using SMART approach with CookLingo glossary
-                            print(
-                                f"[RETRIEVE] Translating {len(instance.base_steps)} cooking steps...")
-                            translated_steps = smart_translator.translate_cooking_steps_batch(
-                                instance.base_steps,
-                                user_language
-                            )
-
-                            # Save translation
-                            translation.name = translated_name  # Use translated name
-                            translation.description = instance.description
-                            translation.base_ingredients = translated_ingredients
-                            translation.base_steps = translated_steps
-                            translation.status = 'completed'
-                            translation.completed_at = timezone.now()
-                            translation.save()
-
-                            print(
-                                f"[RETRIEVE] ✅ Translation completed! Returning {user_language} version")
-
-                            # Return translated version
-                            # Add translated name
-                            recipe_data['name'] = translated_name
-                            recipe_data['base_ingredients'] = translated_ingredients
-                            recipe_data['base_steps'] = translated_steps
+                            # Return English version with pending status
+                            recipe_data['translation_status'] = 'pending'
                             recipe_data['translation_language'] = user_language
-                            recipe_data['translation_just_created'] = True
-
-                            print(f"[RETRIEVE] 📤 Returning data:")
                             print(
-                                f"   - Ingredients count: {len(translated_ingredients)}")
-                            print(
-                                f"   - First ingredient: {translated_ingredients[0] if translated_ingredients else 'None'}")
-                            print(f"   - Steps count: {len(translated_steps)}")
-                            print(
-                                f"   - First step: {translated_steps[0] if translated_steps else 'None'}")
+                                f"[RETRIEVE] ⏳ Returning English version with pending translation status")
 
                         except Exception as trans_error:
                             print(
@@ -1762,11 +1755,17 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
             # Translation doesn't exist yet - queue it
             from apps.recipes.tasks import translate_recipe_to_language
 
-            # Create pending translation
-            translation = RecipeTranslation.objects.create(
+            # Get or create pending translation (avoid UNIQUE constraint error)
+            translation, created = RecipeTranslation.objects.get_or_create(
                 canonical_recipe=canonical,
                 language=language,
-                status='pending'
+                defaults={
+                    'status': 'pending',
+                    'name': '',
+                    'description': '',
+                    'base_ingredients': [],
+                    'base_steps': []
+                }
             )
 
             # Queue translation task

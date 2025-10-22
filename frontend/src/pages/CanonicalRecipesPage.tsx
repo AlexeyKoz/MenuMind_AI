@@ -35,6 +35,8 @@ const CanonicalRecipesPage: React.FC = () => {
     const [showBuilder, setShowBuilder] = useState(false);
     const [recipeLiked, setRecipeLiked] = useState(false);
     const [liking, setLiking] = useState(false);
+    const [translationLoading, setTranslationLoading] = useState(false);
+    const [translationPollInterval, setTranslationPollInterval] = useState<NodeJS.Timeout | null>(null);
 
     // AI Search
     const [aiQuery, setAiQuery] = useState('');
@@ -138,6 +140,46 @@ const CanonicalRecipesPage: React.FC = () => {
         }
     };
 
+    const startTranslationPolling = (recipeId: string) => {
+        // Clear any existing interval
+        if (translationPollInterval) {
+            clearInterval(translationPollInterval);
+        }
+
+        // Poll every 2 seconds
+        const interval = setInterval(async () => {
+            try {
+                const updatedRecipe = await api.getCanonicalRecipe(recipeId);
+
+                // Check if translation is complete
+                if (updatedRecipe.translation_language && !updatedRecipe.translation_status && !updatedRecipe.translation_in_progress) {
+                    console.log('[TRANSLATION] Translation complete!');
+                    setSelectedRecipe(updatedRecipe);
+                    setTranslationLoading(false);
+                    clearInterval(interval);
+                    setTranslationPollInterval(null);
+                }
+            } catch (err) {
+                console.error('[TRANSLATION] Polling error:', err);
+                // Stop polling on error
+                setTranslationLoading(false);
+                clearInterval(interval);
+                setTranslationPollInterval(null);
+            }
+        }, 2000);
+
+        setTranslationPollInterval(interval);
+    };
+
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => {
+            if (translationPollInterval) {
+                clearInterval(translationPollInterval);
+            }
+        };
+    }, [translationPollInterval]);
+
     const handleLike = async (recipeId: string) => {
         const result = await api.likeCanonicalRecipe(recipeId);
         return result;
@@ -162,6 +204,13 @@ const CanonicalRecipesPage: React.FC = () => {
             }
 
             setSelectedRecipe(recipe);
+
+            // Check if translation is pending or in progress
+            if (recipe.translation_status === 'pending' || recipe.translation_in_progress) {
+                console.log('[TRANSLATION] Translation pending/in_progress, starting poll...');
+                setTranslationLoading(true);
+                startTranslationPolling(recipeId);
+            }
         } catch (err: any) {
             alert(err.message || 'Failed to load recipe details');
         }
@@ -448,69 +497,93 @@ const CanonicalRecipesPage: React.FC = () => {
                         </div>
 
                         {/* Ingredients & Steps */}
-                        <div className="grid md:grid-cols-2 gap-8">
-                            {/* Ingredients */}
-                            <div>
-                                <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
-                                    <span className="text-3xl">🥘</span>
-                                    {t('discover.ingredients')}
-                                </h3>
-                                {selectedRecipe.base_ingredients && selectedRecipe.base_ingredients.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {selectedRecipe.base_ingredients.map((ing: any, idx: number) => (
-                                            <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                                                <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-sm font-semibold">
-                                                    {idx + 1}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <span className="font-semibold text-blue-600">
-                                                        {(ing.amount || ing.quantity) && ing.unit ? `${ing.amount || ing.quantity} ${ing.unit}` : ''}
-                                                    </span>
-                                                    {' '}
-                                                    <span className="text-gray-900">{ing.name}</span>
-                                                    {ing.notes && (
-                                                        <p className="text-sm text-gray-500 mt-1">{ing.notes}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-gray-500 italic">{t('discover.noIngredientsListed')}</p>
-                                )}
+                        {translationLoading ? (
+                            <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                                <LoadingSpinner />
+                                <p className="text-gray-600 text-lg">
+                                    {t('discover.translating')}
+                                </p>
+                                <p className="text-gray-500 text-sm">
+                                    {t('discover.translatingDescription')}
+                                </p>
                             </div>
+                        ) : (
+                            <div className="grid md:grid-cols-2 gap-8">{/* Ingredients */}
+                                <div>
+                                    <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
+                                        <span className="text-3xl">🥘</span>
+                                        {t('discover.ingredients')}
+                                    </h3>
+                                    {selectedRecipe.base_ingredients && selectedRecipe.base_ingredients.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {selectedRecipe.base_ingredients.map((ing: any, idx: number) => (
+                                                <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                                                    <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-600 rounded-full text-sm font-semibold">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <span className="font-semibold text-blue-600">
+                                                            {(ing.amount || ing.quantity) && ing.unit ? `${ing.amount || ing.quantity} ${ing.unit}` : ''}
+                                                        </span>
+                                                        {' '}
+                                                        <span className="text-gray-900">
+                                                            {ing.display_name?.[i18n.language] || ing.display_name?.en || ing.name}
+                                                        </span>
+                                                        {ing.notes && (
+                                                            <p className="text-sm text-gray-500 mt-1">{ing.notes}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500 italic">{t('discover.noIngredientsListed')}</p>
+                                    )}
+                                </div>
 
-                            {/* Steps */}
-                            <div>
-                                <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
-                                    <span className="text-3xl">📝</span>
-                                    {t('discover.instructions')}
-                                </h3>
-                                {selectedRecipe.base_steps && selectedRecipe.base_steps.length > 0 ? (
-                                    <div className="space-y-4">
-                                        {selectedRecipe.base_steps.map((step: any, idx: number) => (
-                                            <div key={idx} className="flex items-start gap-3">
-                                                <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-green-100 text-green-700 rounded-full font-bold">
-                                                    {step.step_number || idx + 1}
-                                                </div>
-                                                <div className="flex-1 pt-1">
-                                                    <p className="text-gray-900 leading-relaxed">
-                                                        {step.text || step.instruction || step}
-                                                    </p>
-                                                    {step.time_minutes && (
-                                                        <p className="text-sm text-gray-500 mt-1">
-                                                            ⏱️ {t('discover.minutesLabel', { time: step.time_minutes })}
+                                {/* Steps */}
+                                <div>
+                                    <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 text-gray-900">
+                                        <span className="text-3xl">📝</span>
+                                        {t('discover.instructions')}
+                                    </h3>
+                                    {selectedRecipe.base_steps && selectedRecipe.base_steps.length > 0 ? (
+                                        <div className="space-y-4">
+                                            {selectedRecipe.base_steps.map((step: any, idx: number) => (
+                                                <div key={idx} className="flex items-start gap-3">
+                                                    <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-green-100 text-green-700 rounded-full font-bold">
+                                                        {step.step_number || idx + 1}
+                                                    </div>
+                                                    <div className="flex-1 pt-1">
+                                                        <p className="text-gray-900 leading-relaxed">
+                                                            {(() => {
+                                                                const currentLang = i18n.language;
+                                                                const hasTranslations = !!step.text_translations;
+                                                                const translated = step.text_translations?.[currentLang];
+                                                                console.log(`[RECIPE STEP] lang=${currentLang}, has_translations=${hasTranslations}`);
+                                                                console.log(`[RECIPE STEP] text_translations KEYS=`, step.text_translations ? Object.keys(step.text_translations) : 'none');
+                                                                console.log(`[RECIPE STEP] text_translations.en="${step.text_translations?.en?.substring(0, 50)}..."`);
+                                                                console.log(`[RECIPE STEP] text_translations.ru="${step.text_translations?.ru?.substring(0, 50)}..."`);
+                                                                console.log(`[RECIPE STEP] text_translations.he="${step.text_translations?.he?.substring(0, 50)}..."`);
+                                                                console.log(`[RECIPE STEP] Using currentLang="${currentLang}", showing="${(translated || step.text || step.instruction)?.substring(0, 50)}..."`);
+                                                                return translated || step.text || step.instruction || step;
+                                                            })()}
                                                         </p>
-                                                    )}
+                                                        {step.time_minutes && (
+                                                            <p className="text-sm text-gray-500 mt-1">
+                                                                ⏱️ {t('discover.minutesLabel', { time: step.time_minutes })}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-gray-500 italic">{t('discover.noInstructionsListed')}</p>
-                                )}
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500 italic">{t('discover.noInstructionsListed')}</p>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Reviews Section */}

@@ -378,7 +378,9 @@
             "vegetarian": "vegetarian",
             "vegan": "vegan",
             "glutenFree": "gluten-free",
+            "gluten-free": "gluten-free",
             "dairyFree": "dairy-free",
+            "dairy-free": "dairy-free",
             "keto": "keto",
             "paleo": "paleo"
         },
@@ -400,7 +402,7 @@
         "ingredients": "Ingredients",
         "noIngredientsListed": "No ingredients listed",
         "instructions": "Instructions",
-        "minutesLabel": "{time} minutes",
+        "minutesLabel": "{{time}} minutes",
         "noInstructionsListed": "No instructions listed",
         "noRecipesFound": "No recipes found. Try adjusting your filters.",
         "sessionExpired": "Your session has expired. Please log in again.",
@@ -435,7 +437,9 @@
                 "communityCurated": "Community Curated",
                 "fromWeb": "From Web"
             }
-        }
+        },
+        "translating": "Translating recipe...",
+        "translatingDescription": "Please wait while we translate this recipe to your language"
     },
     "dashboard": {
         "title": "Dashboard",
@@ -906,6 +910,105 @@
                 "finalizing": "Almost done! Finalizing...",
                 "complete": "Recipe ready! 🎉"
             }
+        }
+    },
+    "recipeBuilder": {
+        "progressSteps": {
+            "basicInfo": "Basic Info",
+            "ingredients": "Ingredients",
+            "steps": "Steps",
+            "review": "Review & Edit",
+            "finalize": "Finalize"
+        },
+        "aiSuggestionsTitle": "💡 AI Suggestions:",
+        "step1": {
+            "title": "Step 1: Basic Information",
+            "recipeName": "Recipe Name",
+            "recipeNameRequired": "Recipe Name *",
+            "recipeNamePlaceholder": "e.g., Spaghetti Carbonara",
+            "cuisine": "Cuisine (optional)",
+            "cuisinePlaceholder": "e.g., Italian, Mexican, Japanese",
+            "servings": "Servings",
+            "difficulty": "Difficulty",
+            "difficultyBeginner": "Beginner",
+            "difficultyIntermediate": "Intermediate",
+            "difficultyAdvanced": "Advanced",
+            "description": "Description (optional)",
+            "descriptionPlaceholder": "Brief description of your recipe"
+        },
+        "step2": {
+            "title": "Step 2: Ingredients",
+            "description": "Add ingredients one per line. AI will help structure them with proper quantities.",
+            "ingredientPlaceholder": "e.g., 2 cups flour, 3 eggs, 1 tsp salt",
+            "addIngredient": "+ Add Ingredient"
+        },
+        "step3": {
+            "title": "Step 3: Cooking Steps",
+            "description": "Describe how to make this recipe. AI will structure it into clear steps.",
+            "stepsPlaceholder": "Describe the cooking process in your own words. For example: First, boil water and cook pasta. While pasta cooks, fry bacon until crispy..."
+        },
+        "step4": {
+            "title": "Step 4: Review & Edit Your Recipe",
+            "editHint": "✏️ Click any field to edit",
+            "reviewNotice": "🎨 Review your recipe - AI has structured everything for you. Edit any field before finalizing!",
+            "basicInfoTitle": "📋 Basic Information",
+            "edit": "Edit",
+            "done": "Done",
+            "name": "Name",
+            "cuisine": "Cuisine",
+            "notSpecified": "Not specified",
+            "difficulty": "Difficulty",
+            "servings": "Servings",
+            "description": "Description",
+            "ingredientsTitle": "🥕 Ingredients",
+            "ingredientsCount": "🥕 Ingredients ({count})",
+            "add": "Add",
+            "amountPlaceholder": "Amt",
+            "unitPlaceholder": "Unit",
+            "ingredientPlaceholder": "Ingredient",
+            "stepsTitle": "👨‍🍳 Cooking Steps",
+            "stepsCount": "👨‍🍳 Cooking Steps ({count})",
+            "addStep": "Add Step",
+            "stepInstructionPlaceholder": "Step instruction...",
+            "timePlaceholder": "Time (min)",
+            "tempPlaceholder": "Temp (optional)",
+            "estimatedTimesTitle": "⏱️ Estimated Times",
+            "prep": "Prep:",
+            "cook": "Cook:",
+            "total": "Total:",
+            "minutes": "min",
+            "dietLabelsTitle": "🌱 Auto-Detected Labels",
+            "dietLabels": "🌱 Diet Labels"
+        },
+        "step5": {
+            "title": "Step 5: Finalize Recipe",
+            "makePublic": "Make this recipe public (visible to all users on Discover page)",
+            "additionalDescription": "Additional Description (optional)",
+            "additionalDescriptionPlaceholder": "Add any extra notes, tips, or story about this recipe",
+            "readyToSave": "🎉 Ready to save!",
+            "saveNotice": "Click \"Create Recipe\" to save your recipe. It will be added to your collection and {visibility}.",
+            "published": "published to the Discover page",
+            "keptPrivate": "kept private"
+        },
+        "buttons": {
+            "cancel": "Cancel",
+            "back": "Back",
+            "next": "Next",
+            "processing": "Processing...",
+            "createRecipe": "Create Recipe",
+            "confirmContinue": "Confirm & Continue"
+        },
+        "errors": {
+            "failedToStart": "Failed to start builder session",
+            "stepFailed": "Step failed"
+        },
+        "duplicate": {
+            "title": "Recipe Already Exists",
+            "message": "A recipe named \"{{name}}\" already exists. What would you like to do?",
+            "existingRecipe": "Existing Recipe:",
+            "viewExisting": "View Existing Recipe",
+            "createFork": "Create Personal Fork (Private)",
+            "createNew": "Create New Public Version"
         }
     }
 }

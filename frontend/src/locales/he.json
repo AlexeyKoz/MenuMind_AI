@@ -378,7 +378,9 @@
             "vegetarian": "צמחוני",
             "vegan": "טבעוני",
             "glutenFree": "ללא גלוטן",
+            "gluten-free": "ללא גלוטן",
             "dairyFree": "ללא חלב",
+            "dairy-free": "ללא חלב",
             "keto": "קטו",
             "paleo": "פלאו"
         },
@@ -400,7 +402,7 @@
         "ingredients": "מרכיבים",
         "noIngredientsListed": "לא רשומים מרכיבים",
         "instructions": "הוראות",
-        "minutesLabel": "{time} דקות",
+        "minutesLabel": "{{time}} דקות",
         "noInstructionsListed": "לא רשומות הוראות",
         "noRecipesFound": "לא נמצאו מתכונים. נסה לשנות את המסננים.",
         "sessionExpired": "פג תוקף ההפעלה שלך. אנא התחבר שוב.",
@@ -435,7 +437,9 @@
                 "communityCurated": "מעוצב על ידי הקהילה",
                 "fromWeb": "מהאינטרנט"
             }
-        }
+        },
+        "translating": "מתרגם מתכון...",
+        "translatingDescription": "אנא המתן בזמן שאנחנו מתרגמים את המתכון לשפה שלך"
     },
     "dashboard": {
         "title": "לוח בקרה",
@@ -889,6 +893,122 @@
             "paleo": "פלאו",
             "glutenFree": "ללא גלוטן",
             "dairyFree": "ללא חלב"
+        }
+    },
+    "recipe": {
+        "progress": {
+            "generating": "יוצר מתכון",
+            "complete": "הושלם!",
+            "error": "שגיאה",
+            "stages": {
+                "searching": "מחפש באינטרנט...",
+                "scraping": "מחלץ תוכן מתכון...",
+                "converting": "ממיר לפורמט סטנדרטי...",
+                "enriching": "מוסיף מידע תזונתי...",
+                "validating": "בודק איכות מתכון...",
+                "translating": "מתרגם לשפה שלך...",
+                "finalizing": "כמעט סיימנו! מסיים...",
+                "complete": "המתכון מוכן! 🎉"
+            }
+        }
+    },
+    "recipeBuilder": {
+        "progressSteps": {
+            "basicInfo": "מידע בסיסי",
+            "ingredients": "מרכיבים",
+            "steps": "שלבים",
+            "review": "סקירה ועריכה",
+            "finalize": "סיום"
+        },
+        "aiSuggestionsTitle": "💡 הצעות AI:",
+        "step1": {
+            "title": "שלב 1: מידע בסיסי",
+            "recipeName": "שם המתכון",
+            "recipeNameRequired": "שם המתכון *",
+            "recipeNamePlaceholder": "לדוגמה, ספגטי קרבונרה",
+            "cuisine": "מטבח (אופציונלי)",
+            "cuisinePlaceholder": "לדוגמה, איטלקי, מקסיקני, יפני",
+            "servings": "מנות",
+            "difficulty": "רמת קושי",
+            "difficultyBeginner": "מתחיל",
+            "difficultyIntermediate": "בינוני",
+            "difficultyAdvanced": "מתקדם",
+            "description": "תיאור (אופציונלי)",
+            "descriptionPlaceholder": "תיאור קצר של המתכון שלך"
+        },
+        "step2": {
+            "title": "שלב 2: מרכיבים",
+            "description": "הוסף מרכיבים, אחד בשורה. ה-AI יעזור לבנות אותם עם כמויות מדויקות.",
+            "ingredientPlaceholder": "לדוגמה, 2 כוסות קמח, 3 ביצים, 1 כפית מלח",
+            "addIngredient": "+ הוסף מרכיב"
+        },
+        "step3": {
+            "title": "שלב 3: שלבי הכנה",
+            "description": "תאר איך להכין את המתכון. ה-AI יבנה אותו לשלבים ברורים.",
+            "stepsPlaceholder": "תאר את תהליך הבישול במילים שלך. לדוגמה: ראשית, הרתיח מים ובשל פסטה. בזמן שהפסטה מתבשלת, טגן בייקון עד שהוא פריך..."
+        },
+        "step4": {
+            "title": "שלב 4: סקירה ועריכת המתכון",
+            "editHint": "✏️ לחץ על כל שדה לעריכה",
+            "reviewNotice": "🎨 סקור את המתכון שלך - ה-AI בנה הכל בשבילך. ערוך כל שדה לפני הסיום!",
+            "basicInfoTitle": "📋 מידע בסיסי",
+            "edit": "ערוך",
+            "done": "סיום",
+            "name": "שם",
+            "cuisine": "מטבח",
+            "notSpecified": "לא צוין",
+            "difficulty": "רמת קושי",
+            "servings": "מנות",
+            "description": "תיאור",
+            "ingredientsTitle": "🥕 מרכיבים",
+            "ingredientsCount": "🥕 מרכיבים ({count})",
+            "add": "הוסף",
+            "amountPlaceholder": "כמות",
+            "unitPlaceholder": "יחידה",
+            "ingredientPlaceholder": "מרכיב",
+            "stepsTitle": "👨‍🍳 שלבי הכנה",
+            "stepsCount": "👨‍🍳 שלבי הכנה ({count})",
+            "addStep": "הוסף שלב",
+            "stepInstructionPlaceholder": "הוראת שלב...",
+            "timePlaceholder": "זמן (דק׳)",
+            "tempPlaceholder": "טמפ׳ (אופציונלי)",
+            "estimatedTimesTitle": "⏱️ זמנים משוערים",
+            "prep": "הכנה:",
+            "cook": "בישול:",
+            "total": "סה״כ:",
+            "minutes": "דק׳",
+            "dietLabelsTitle": "🌱 תוויות שזוהו אוטומטית",
+            "dietLabels": "🌱 תוויות דיאטה"
+        },
+        "step5": {
+            "title": "שלב 5: סיום המתכון",
+            "makePublic": "הפוך מתכון זה לציבורי (גלוי לכל המשתמשים בדף Discover)",
+            "additionalDescription": "תיאור נוסף (אופציונלי)",
+            "additionalDescriptionPlaceholder": "הוסף הערות נוספות, טיפים או סיפור על המתכון",
+            "readyToSave": "🎉 מוכן לשמירה!",
+            "saveNotice": "לחץ על \"צור מתכון\" כדי לשמור את המתכון. הוא יתווסף לאוסף שלך ו{visibility}.",
+            "published": "יפורסם בדף Discover",
+            "keptPrivate": "יישאר פרטי"
+        },
+        "buttons": {
+            "cancel": "ביטול",
+            "back": "חזור",
+            "next": "הבא",
+            "processing": "מעבד...",
+            "createRecipe": "צור מתכון",
+            "confirmContinue": "אשר והמשך"
+        },
+        "errors": {
+            "failedToStart": "נכשל בהפעלת מחולל המתכון",
+            "stepFailed": "השלב נכשל"
+        },
+        "duplicate": {
+            "title": "המתכון כבר קיים",
+            "message": "מתכון בשם \"{{name}}\" כבר קיים. מה תרצה לעשות?",
+            "existingRecipe": "מתכון קיים:",
+            "viewExisting": "צפה במתכון הקיים",
+            "createFork": "צור עותק אישי (פרטי)",
+            "createNew": "צור גרסה ציבורית חדשה"
         }
     }
 }

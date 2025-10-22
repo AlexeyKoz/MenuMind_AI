@@ -63,15 +63,20 @@ class RecipeBuilderThrottle(UserRateThrottle):
     Limits recipe creation to prevent spam:
     - 10 recipes per hour
     - 30 recipes per day
+
+    DEVELOPMENT: Increased to 1000/hour for testing
     """
     scope = 'recipe_builder'
-    rate = '10/hour'
+    rate = '1000/hour'  # Was: '10/hour' - increased for testing
 
 
 class RecipeBuilderDailyThrottle(UserRateThrottle):
-    """Daily limit for recipe creation"""
+    """Daily limit for recipe creation
+
+    DEVELOPMENT: Increased to 10000/day for testing
+    """
     scope = 'recipe_builder_daily'
-    rate = '30/day'
+    rate = '10000/day'  # Was: '30/day' - increased for testing
 
 
 class RecipeSearchThrottle(UserRateThrottle):

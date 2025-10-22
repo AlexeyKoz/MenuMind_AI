@@ -21,7 +21,7 @@ class GeminiIngredientTranslator:
             if api_key:
                 genai.configure(api_key=api_key)
                 self.gemini_client = genai.GenerativeModel(
-                    'gemini-2.0-flash-exp')
+                    'gemini-2.0-flash-lite')
                 logger.info("[GEMINI] Initialized Gemini Flash 2.5")
             else:
                 logger.warning("[GEMINI] No API key found")

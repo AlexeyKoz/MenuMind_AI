@@ -29,7 +29,7 @@ class SmartTranslationService:
             if api_key:
                 genai.configure(api_key=api_key)
                 self.gemini_client = genai.GenerativeModel(
-                    'gemini-2.0-flash-exp')
+                    'gemini-2.0-flash-lite')
                 logger.info(
                     "[SMART_TRANSLATE] Initialized with Gemini Flash 2.5 fallback")
             else:

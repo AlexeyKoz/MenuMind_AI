@@ -1,9 +1,0 @@
-[INFO] Loaded environment from: C:\Users\al7ko\Desktop\menumine-ai\backend\.env
-[INFO] Using Redis for caching
-[INFO] Using Redis for Django Channels (WebSocket layer)
-[INFO] Loaded environment from: C:\Users\al7ko\Desktop\menumine-ai\backend\.env
-[INFO] Using Redis for caching
-[INFO] Using Redis for Django Channels (WebSocket layer)
-Performing system checks...
-
-Watching for file changes with StatReloader
