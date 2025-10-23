@@ -434,8 +434,7 @@
             "sourceTypes": {
                 "aiGenerated": "AI Generated",
                 "userCreated": "User Created",
-                "communityCurated": "Community Curated",
-                "fromWeb": "From Web"
+                "communityCurated": "Community Curated"
             }
         },
         "translating": "Translating recipe...",
@@ -1031,5 +1030,21 @@
             "createFork": "Create Personal Fork (Private)",
             "createNew": "Create New Public Version"
         }
+    },
+    "allergens": {
+        "dairy": "Dairy",
+        "eggs": "Eggs",
+        "fish": "Fish",
+        "shellfish": "Shellfish",
+        "tree_nuts": "Tree Nuts",
+        "peanuts": "Peanuts",
+        "wheat": "Wheat",
+        "gluten": "Gluten",
+        "soy": "Soy",
+        "sesame": "Sesame",
+        "warningYourAllergies": "Contains allergens you're allergic to!",
+        "otherAllergens": "Other allergens in this recipe:",
+        "contains": "Contains allergens:",
+        "allMatch": "All allergens match your profile"
     }
 }

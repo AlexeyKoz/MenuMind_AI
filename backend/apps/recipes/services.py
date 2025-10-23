@@ -456,13 +456,19 @@ class RecipeAgentService:
         progress = RecipeGenerationProgress(str(user.id), user_language)
 
         try:
-            # STEP 1: Check if canonical recipe already exists
-            normalized_name = self._normalize_recipe_name(user_query)
-            existing_canonical = await self._find_existing_canonical(normalized_name)
+            # STEP 1: Check if canonical recipe already exists using AI deduplication
+            print(f"[DISCOVERY] Checking for duplicates using AI...")
+            from apps.core.deduplication_service import get_deduplication_service
+
+            dedup_service = get_deduplication_service()
+            existing_canonical = await dedup_service.find_duplicate(
+                recipe_name=user_query,
+                user_language=user_language
+            )
 
             if existing_canonical:
                 print(
-                    f"[REUSE] Found existing canonical: {existing_canonical.name}")
+                    f"[REUSE] ✅ AI found existing canonical: {existing_canonical.name}")
 
                 # Send complete immediately (recipe already exists!)
                 progress.update_complete()
@@ -550,6 +556,35 @@ class RecipeAgentService:
                 print(f"[ERROR] ❌ AI conversion returned None")
                 progress.update_error()
                 return False, None, "Failed to convert recipe to standard format. The recipe content may be too complex or incomplete. Please try a different recipe."
+
+            # VALIDATION: Check for placeholder/failed extractions
+            recipe_name = rcip_recipe.get('meta', {}).get('name', '').lower()
+            ingredients = rcip_recipe.get('ingredients', [])
+            steps = rcip_recipe.get('steps', [])
+
+            # Check for obvious extraction failures
+            is_placeholder = (
+                'placeholder' in recipe_name or
+                recipe_name == 'untitled recipe' or
+                recipe_name == 'untitled' or
+                not recipe_name or
+                len(ingredients) == 0 or
+                (len(ingredients) == 1 and 'no ingredients' in str(ingredients[0]).lower()) or
+                len(steps) == 0 or
+                (len(steps) == 1 and 'no steps' in str(steps[0]).lower())
+            )
+
+            if is_placeholder:
+                print(f"[ERROR] ❌ Failed extraction detected - placeholder content")
+                print(
+                    f"[ERROR] Name: {recipe_name}, Ingredients: {len(ingredients)}, Steps: {len(steps)}")
+                progress.update_error()
+                # Return with show_suggestions flag
+                return False, None, {
+                    'message': 'Could not find a valid recipe',
+                    'show_suggestions': True,
+                    'failed_query': user_query
+                }
 
             # STEP 4.5: Enriching with nutrition data
             # 55% - Adding nutritional information...
@@ -1192,10 +1227,10 @@ class RecipeAgentService:
                 f"[SEARCH+SCRAPE] Scraping {idx}/{len(urls[:max_results])}: {url}")
 
             scraped_data = await self._scrape_recipe(url)
-            if scraped_data and len(scraped_data.get('text', '')) > 500:
+            if scraped_data and len(scraped_data.get('content') or scraped_data.get('text', '')) > 500:
                 recipes.append({
                     'url': url,
-                    'content': scraped_data['text']
+                    'content': scraped_data.get('content') or scraped_data.get('text', '')
                 })
                 logger.info(
                     f"[SEARCH+SCRAPE] ✅ Successfully scraped {idx}/{len(urls[:max_results])}")
@@ -1661,7 +1696,7 @@ Before responding, verify:
 Search Query: {recipe_name}
 
 Webpage Content:
-{scraped_data['text'][:4000]}
+{scraped_data.get('content') or scraped_data.get('text', '')[:4000]}
 
 CRITICAL RULES:
 
@@ -1944,8 +1979,10 @@ REMEMBER: ALL OUTPUT MUST BE IN ENGLISH LANGUAGE ONLY!"""
     def _fallback_conversion(self, scraped_data: Dict, recipe_name: str) -> Optional[Dict]:
         """Fallback: Use local RCIP converter without AI"""
         try:
+            scraped_text = scraped_data.get(
+                'content') or scraped_data.get('text', '')
             ingredients_text, steps_text = self._extract_structured_text(
-                scraped_data['text'])
+                scraped_text)
 
             if ingredients_text and steps_text:
                 rcip_recipe = self.rcip_converter.convert(

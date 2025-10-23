@@ -135,7 +135,7 @@ class RecipeBuilderService:
 
         # DUPLICATE CHECK - Check early to prevent wasted time
         if not skip_duplicate_check:
-            existing_recipe = await self._check_for_duplicates_enhanced(name)
+            existing_recipe = await self._check_for_duplicates(name)
             if existing_recipe:
                 print(
                     f"[BUILDER] ⚠️ Duplicate found in Step 1: {existing_recipe.name} (ID: {existing_recipe.id})")
@@ -1340,108 +1340,28 @@ Translated text ({lang_names[target_lang]}):"""
                 f"[BUILDER]   ❌ Groq translation failed: {e}, keeping original")
             return text
 
-    async def _check_for_duplicates(self, recipe_name: str):
+    async def _check_for_duplicates(self, recipe_name: str, ingredients: Optional[List[str]] = None):
         """
-        Check if recipe with same name exists (simple version for builder)
-        Thread-safe duplicate detection without translation overhead
+        Check if recipe with same name exists using AI-powered semantic matching
+        Uses RecipeDeduplicationService (Groq + Gemini)
         """
-        from .models import CanonicalRecipe, RecipeTranslation
+        from apps.core.deduplication_service import get_deduplication_service
 
-        print(f"[BUILDER] Checking for duplicate recipe: '{recipe_name}'")
+        print(f"[BUILDER] Checking for duplicates using AI: '{recipe_name}'")
 
-        @sync_to_async
-        def find_duplicate():
-            # STEP 1: Check canonical names (exact match)
-            canonical = CanonicalRecipe.objects.filter(
-                name__iexact=recipe_name,
-                is_published=True
-            ).first()
-
-            if canonical:
-                print(
-                    f"[BUILDER] ✅ Found in canonical: {canonical.name}")
-                return canonical
-
-            # STEP 2: Check translations (all languages)
-            translation = RecipeTranslation.objects.filter(
-                name__iexact=recipe_name,
-                status='completed',
-                canonical_recipe__is_published=True
-            ).select_related('canonical_recipe').first()
-
-            if translation:
-                print(
-                    f"[BUILDER] ✅ Found in translations: {translation.name} ({translation.language})")
-                return translation.canonical_recipe
-
-            print(f"[BUILDER] ✅ No duplicates found")
-            return None
-
-        return await find_duplicate()
-
-    async def _check_for_duplicates_enhanced(self, recipe_name: str):
-        """
-        Enhanced duplicate detection with AI-powered similarity matching
-
-        Strategy:
-        1. Exact multilingual match (using existing Discovery logic)
-        2. AI-powered semantic similarity (Gemini fallback)
-        3. Fuzzy matching on normalized names
-
-        This ensures we ALWAYS catch duplicates even with variations
-        """
-        from .models import CanonicalRecipe
-        from apps.core.smart_translator import SmartTranslationService
-        import os
-
-        print(f"[BUILDER] 🔍 Enhanced duplicate check for: '{recipe_name}'")
-
-        # STEP 1: Try existing multilingual duplicate detection
-        existing = await self._check_for_duplicates(recipe_name)
-        if existing:
-            return existing
-
-        # STEP 2: AI-powered semantic similarity (SKIPPED - causes rate limiting)
-        # NOTE: AI semantic check disabled to prevent API throttling
-        # Fuzzy matching (Step 3) is sufficient for duplicate detection
-        print(f"[BUILDER] ⏭️ Skipping AI semantic check (using fuzzy match instead)")
-
-        # Future: Add rate-limited caching if needed:
-        # cache_key = f"duplicate_check:{recipe_name}"
-        # cached_result = await cache.aget(cache_key)
-        # if cached_result: return cached_result
-
-        # STEP 3: Fuzzy matching fallback (always works)
-        print(f"[BUILDER] 📝 Trying fuzzy match...")
-        from difflib import SequenceMatcher
-
-        # Normalize the search name
-        normalized_search = recipe_name.lower().strip()
-
-        # Check against all canonical recipes
-        all_recipes = await sync_to_async(list)(
-            CanonicalRecipe.objects.filter(is_published=True)
+        dedup_service = get_deduplication_service()
+        existing = await dedup_service.find_duplicate(
+            recipe_name=recipe_name,
+            ingredients=ingredients,
+            user_language='en'  # Builder is always in English first
         )
 
-        best_match = None
-        best_score = 0.85  # High threshold for fuzzy matching
+        if existing:
+            print(f"[BUILDER] ✅ AI found duplicate: {existing.name}")
+        else:
+            print(f"[BUILDER] ✅ No duplicates found")
 
-        for recipe in all_recipes:
-            normalized_name = recipe.name.lower().strip()
-            score = SequenceMatcher(
-                None, normalized_search, normalized_name).ratio()
-
-            if score > best_score:
-                best_score = score
-                best_match = recipe
-
-        if best_match:
-            print(
-                f"[BUILDER] 📝 Fuzzy match found: {best_match.name} (score: {best_score})")
-            return best_match
-
-        print(f"[BUILDER] ✅ No duplicates detected for '{recipe_name}'")
-        return None
+        return existing
 
     def _calculate_recipe_hash(self, name: str, ingredients: List[Dict]) -> str:
         """Calculate hash for deduplication"""

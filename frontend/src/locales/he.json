@@ -434,8 +434,7 @@
             "sourceTypes": {
                 "aiGenerated": "נוצר על ידי בינה מלאכותית",
                 "userCreated": "נוצר על ידי משתמש",
-                "communityCurated": "מעוצב על ידי הקהילה",
-                "fromWeb": "מהאינטרנט"
+                "communityCurated": "מעוצב על ידי הקהילה"
             }
         },
         "translating": "מתרגם מתכון...",
@@ -1031,5 +1030,21 @@
             "createFork": "צור עותק אישי (פרטי)",
             "createNew": "צור גרסה ציבורית חדשה"
         }
+    },
+    "allergens": {
+        "dairy": "חלב",
+        "eggs": "ביצים",
+        "fish": "דגים",
+        "shellfish": "פירות ים",
+        "tree_nuts": "אגוזים",
+        "peanuts": "בוטנים",
+        "wheat": "חיטה",
+        "gluten": "גלוטן",
+        "soy": "סויה",
+        "sesame": "שומשום",
+        "warningYourAllergies": "מכיל אלרגנים שאתה רגיש אליהם!",
+        "otherAllergens": "אלרגנים נוספים במתכון:",
+        "contains": "מכיל אלרגנים:",
+        "allMatch": "כל האלרגנים תואמים לפרופיל שלך"
     }
 }

@@ -129,7 +129,7 @@ def complete_shopping_list_recipe(
 
         canonical = async_to_sync(agent._create_canonical_recipe)(
             rcip_recipe,
-            source_type='web_scraped',
+            source_type='ai_generated',  # Same as discovery agent - AI extracted from web
             original_creator=user
         )
 

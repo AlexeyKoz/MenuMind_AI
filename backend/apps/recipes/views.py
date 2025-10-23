@@ -113,6 +113,25 @@ class RecipeViewSet(viewsets.ModelViewSet):
         )
 
         if not success:
+            # Check if message contains suggestions data
+            if isinstance(message, dict) and message.get('show_suggestions'):
+                # Generate suggestions based on user language
+                from apps.shopping.views import ShoppingListViewSet
+                temp_viewset = ShoppingListViewSet()
+                suggestions = temp_viewset._generate_recipe_suggestions(
+                    message.get('failed_query', user_query),
+                    user_preferences.get('language', 'en')
+                )
+
+                return Response({
+                    'success': False,
+                    'message': message.get('message', 'Could not find recipe'),
+                    'show_suggestions': True,
+                    'failed_query': message.get('failed_query', user_query),
+                    'suggestions': suggestions
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Regular error message
             return Response(
                 {'error': message},
                 status=status.HTTP_404_NOT_FOUND

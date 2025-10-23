@@ -19,12 +19,22 @@ class CanonicalRecipeSerializer(serializers.ModelSerializer):
     original_creator_username = serializers.CharField(
         source='original_creator.username', read_only=True, allow_null=True
     )
+    original_creator_first_name = serializers.CharField(
+        source='original_creator.first_name', read_only=True, allow_null=True
+    )
+    original_creator_last_name = serializers.CharField(
+        source='original_creator.last_name', read_only=True, allow_null=True
+    )
+    original_creator_color = serializers.CharField(
+        source='original_creator.personal_color', read_only=True, allow_null=True
+    )
 
     class Meta:
         model = CanonicalRecipe
         fields = [
             'id', 'name', 'description', 'source_type', 'ai_source_url',
             'original_creator', 'original_creator_username',
+            'original_creator_first_name', 'original_creator_last_name', 'original_creator_color',
             'base_ingredients', 'base_steps', 'cuisine', 'difficulty',
             'diet_labels', 'allergens', 'prep_time_minutes', 'cook_time_minutes',
             'total_time_minutes', 'servings', 'recipe_hash',
@@ -78,6 +88,15 @@ class CanonicalRecipeListSerializer(serializers.ModelSerializer):
     original_creator_username = serializers.CharField(
         source='original_creator.username', read_only=True, allow_null=True
     )
+    original_creator_first_name = serializers.CharField(
+        source='original_creator.first_name', read_only=True, allow_null=True
+    )
+    original_creator_last_name = serializers.CharField(
+        source='original_creator.last_name', read_only=True, allow_null=True
+    )
+    original_creator_color = serializers.CharField(
+        source='original_creator.personal_color', read_only=True, allow_null=True
+    )
     user_liked = serializers.SerializerMethodField()
     user_rating = serializers.SerializerMethodField()
     user_has_fork = serializers.SerializerMethodField()
@@ -86,7 +105,9 @@ class CanonicalRecipeListSerializer(serializers.ModelSerializer):
         model = CanonicalRecipe
         fields = [
             'id', 'name', 'description', 'source_type',
-            'original_creator_username', 'cuisine', 'difficulty',
+            'original_creator_username', 'original_creator_first_name',
+            'original_creator_last_name', 'original_creator_color',
+            'cuisine', 'difficulty',
             'diet_labels', 'allergens', 'total_time_minutes', 'servings',
             'total_saves', 'total_cooked', 'average_rating', 'total_ratings',
             'is_featured', 'created_at', 'user_liked', 'user_rating', 'user_has_fork'

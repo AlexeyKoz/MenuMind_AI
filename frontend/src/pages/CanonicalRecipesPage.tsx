@@ -46,6 +46,10 @@ const CanonicalRecipesPage: React.FC = () => {
     const [failedQuery, setFailedQuery] = useState('');
     const [showProgress, setShowProgress] = useState(false); // Progress modal
 
+    // Duplicate detection modal
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [duplicateRecipe, setDuplicateRecipe] = useState<any>(null);
+
     // Filters
     const [search, setSearch] = useState('');
     const [cuisine, setCuisine] = useState('');
@@ -97,7 +101,8 @@ const CanonicalRecipesPage: React.FC = () => {
 
         console.log(`📖 CanonicalRecipesPage - Checking for recipe param: ${recipeId}`);
 
-        if (recipeId) {
+        // Validate recipe ID (must exist and not be 'null' string)
+        if (recipeId && recipeId !== 'null' && recipeId !== 'undefined') {
             console.log(`✅ Recipe ID found in URL: ${recipeId}, loading recipe...`);
             // Auto-open the recipe if provided in URL
             const loadRecipeFromUrl = async () => {
@@ -116,7 +121,11 @@ const CanonicalRecipesPage: React.FC = () => {
 
             loadRecipeFromUrl();
         } else {
-            console.log(`⚠️ No recipe ID in URL`);
+            console.log(`⚠️ No valid recipe ID in URL (got: ${recipeId})`);
+            // Clean up invalid recipe ID from URL
+            if (recipeId === 'null' || recipeId === 'undefined') {
+                window.history.replaceState({}, '', window.location.pathname);
+            }
         }
     }, [api]);
 
@@ -271,9 +280,78 @@ const CanonicalRecipesPage: React.FC = () => {
         setShowProgress(true); // Show progress modal
 
         console.log('[AI SEARCH] Starting API call...');
+        console.log('[AI SEARCH] 🔍 CODE VERSION: v2.0 - Duplicate Modal Enabled');
 
         try {
             const result = await api.findRecipe(aiQuery);
+            console.log('[AI SEARCH] Find recipe result:', result);
+            console.log('[AI SEARCH] is_new_canonical flag:', result.is_new_canonical);
+            console.log('[AI SEARCH] created flag:', result.created);
+
+            if (result.canonical_recipe) {
+                // Check if this is an existing recipe (duplicate)
+                // Backend returns is_new_canonical (not is_new)
+                if (result.is_new_canonical === false || result.created === false) {
+                    console.log('[AI SEARCH] 🎯 Duplicate detected:', result.canonical_recipe.name);
+                    console.log('[AI SEARCH] 🎯 Setting showDuplicateModal = true');
+                    setDuplicateRecipe(result.canonical_recipe);
+                    setShowDuplicateModal(true);
+                    setShowProgress(false);
+                    console.log('[AI SEARCH] 🎯 Modal should now be visible!');
+                } else {
+                    // New recipe created
+                    toast.success(t('discover.aiFoundRecipe', { name: result.canonical_recipe.name }));
+
+                    // Reload recipes to show the newly added one
+                    await loadRecipes();
+
+                    // Auto-like to save to collection
+                    const canonicalId = result.canonical_recipe.id;
+                    if (canonicalId) {
+                        try {
+                            console.log(`[AI SEARCH] Auto-liking canonical recipe ID: ${canonicalId}`);
+                            await api.likeCanonicalRecipe(canonicalId);
+                            toast.success(t('discover.aiRecipeAdded'));
+                        } catch (likeError: any) {
+                            console.error('[AI SEARCH] Failed to auto-like recipe:', likeError);
+                        }
+                    }
+
+                    // Close progress modal (fallback if WebSocket didn't close it)
+                    setTimeout(() => {
+                        console.log('[AI SEARCH] Closing progress modal (fallback)');
+                        setShowProgress(false);
+                    }, 2000); // Wait 2s to let WebSocket complete message show
+                }
+            }
+
+            setAiQuery('');
+
+        } catch (error: any) {
+            console.error('AI search error:', error);
+
+            // Close progress modal on error
+            setShowProgress(false);
+
+            // Show suggestions modal instead of just an error
+            setFailedQuery(aiQuery);
+            setShowSuggestions(true);
+            setAiQuery('');
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const handleSuggestionClick = async (suggestion: string) => {
+        setShowSuggestions(false);
+        setAiQuery(suggestion);
+
+        // Perform search with the suggestion
+        setAiLoading(true);
+        setShowProgress(true); // ← Show progress modal
+
+        try {
+            const result = await api.findRecipe(suggestion);
             console.log('[AI SEARCH] Find recipe result:', result);
 
             if (result.canonical_recipe) {
@@ -309,47 +387,6 @@ const CanonicalRecipesPage: React.FC = () => {
             // Close progress modal on error
             setShowProgress(false);
 
-            // Show suggestions modal instead of just an error
-            setFailedQuery(aiQuery);
-            setShowSuggestions(true);
-            setAiQuery('');
-        } finally {
-            setAiLoading(false);
-        }
-    };
-
-    const handleSuggestionClick = async (suggestion: string) => {
-        setShowSuggestions(false);
-        setAiQuery(suggestion);
-
-        // Perform search with the suggestion
-        setAiLoading(true);
-        try {
-            const result = await api.findRecipe(suggestion);
-            console.log('[AI SEARCH] Find recipe result:', result);
-
-            if (result.canonical_recipe) {
-                toast.success(t('discover.aiFoundRecipe', { name: result.canonical_recipe.name }));
-
-                // Reload recipes to show the newly added one
-                await loadRecipes();
-
-                // Auto-like to save to collection
-                const canonicalId = result.canonical_recipe.id;
-                if (canonicalId) {
-                    try {
-                        console.log(`[AI SEARCH] Auto-liking canonical recipe ID: ${canonicalId}`);
-                        await api.likeCanonicalRecipe(canonicalId);
-                        toast.success(t('discover.aiRecipeAdded'));
-                    } catch (likeError: any) {
-                        console.error('[AI SEARCH] Failed to auto-like recipe:', likeError);
-                    }
-                }
-            }
-
-            setAiQuery('');
-        } catch (error: any) {
-            console.error('AI search error:', error);
             toast.error(error.message || t('discover.aiFailedToFind'));
         } finally {
             setAiLoading(false);
@@ -630,6 +667,8 @@ const CanonicalRecipesPage: React.FC = () => {
                     <div>
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">
                             {t('discover.title')}
+                            {/* Debug marker - remove after confirming */}
+                            <span className="ml-2 text-xs bg-green-500 text-white px-2 py-1 rounded">v2.0</span>
                         </h1>
                         <p className="text-gray-600">
                             {t('discover.subtitle')}
@@ -841,6 +880,153 @@ const CanonicalRecipesPage: React.FC = () => {
                                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
                             >
                                 {t('discover.suggestions.close')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Duplicate Recipe Modal - Advanced Version with 3 Options */}
+            {showDuplicateModal && duplicateRecipe && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg max-w-2xl w-full p-6 shadow-xl">
+                        <div className="flex items-start mb-4">
+                            <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div className="ml-4 flex-1">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                    {t('recipeBuilder.duplicate.title')}
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    {t('recipeBuilder.duplicate.message', { name: duplicateRecipe.name })}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setShowDuplicateModal(false);
+                                    setDuplicateRecipe(null);
+                                }}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Existing Recipe Preview */}
+                        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">{t('recipeBuilder.duplicate.existingRecipe')}</h4>
+                            <div className="flex items-start gap-4">
+                                <div className="flex-1">
+                                    <h5 className="font-semibold text-gray-900 mb-2">{duplicateRecipe.name}</h5>
+                                    {duplicateRecipe.description && (
+                                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{duplicateRecipe.description}</p>
+                                    )}
+                                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                                        {duplicateRecipe.cuisine && (
+                                            <span className="flex items-center gap-1">
+                                                <span>🍽️</span> {duplicateRecipe.cuisine}
+                                            </span>
+                                        )}
+                                        {duplicateRecipe.difficulty && (
+                                            <span className="flex items-center gap-1">
+                                                <span>📊</span> {t(`discover.difficulty.${duplicateRecipe.difficulty}`)}
+                                            </span>
+                                        )}
+                                        {duplicateRecipe.servings && (
+                                            <span className="flex items-center gap-1">
+                                                <span>👥</span> {duplicateRecipe.servings} {t('discover.servings')}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons - 3 Options */}
+                        <div className="space-y-3">
+                            {/* Option 1: View Existing Recipe */}
+                            <button
+                                onClick={async () => {
+                                    setShowDuplicateModal(false);
+                                    setSelectedRecipe(duplicateRecipe);
+                                    setDuplicateRecipe(null);
+
+                                    // Auto-like to save to collection
+                                    try {
+                                        await api.likeCanonicalRecipe(duplicateRecipe.id);
+                                        toast.success(t('discover.aiRecipeAdded'));
+                                        await loadRecipes();
+                                    } catch (error) {
+                                        console.error('Failed to like recipe:', error);
+                                    }
+                                }}
+                                className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                {t('recipeBuilder.duplicate.viewExisting')}
+                            </button>
+
+                            {/* Option 2: Create Personal Fork (Private) */}
+                            <button
+                                onClick={async () => {
+                                    setShowDuplicateModal(false);
+                                    try {
+                                        // Create a personal fork by liking the recipe
+                                        await api.likeCanonicalRecipe(duplicateRecipe.id);
+                                        toast.success(t('discover.aiRecipeAdded'));
+                                        await loadRecipes();
+                                        setDuplicateRecipe(null);
+                                    } catch (error) {
+                                        console.error('Failed to create fork:', error);
+                                        toast.error('Failed to create personal fork');
+                                    }
+                                }}
+                                className="w-full px-4 py-3 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                {t('recipeBuilder.duplicate.createFork')}
+                            </button>
+
+                            {/* Option 3: Create New Public Version */}
+                            <button
+                                onClick={async () => {
+                                    setShowDuplicateModal(false);
+                                    setDuplicateRecipe(null);
+
+                                    // Trigger a new search with skip_duplicate_check flag
+                                    // For now, just inform the user they can search again
+                                    toast('Search again with a different name to create a new version', {
+                                        duration: 4000,
+                                        icon: '💡'
+                                    });
+                                }}
+                                className="w-full px-4 py-3 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                {t('recipeBuilder.duplicate.createNew')}
+                            </button>
+
+                            {/* Cancel Button */}
+                            <button
+                                onClick={() => {
+                                    setShowDuplicateModal(false);
+                                    setDuplicateRecipe(null);
+                                }}
+                                className="w-full px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                            >
+                                {t('common.cancel')}
                             </button>
                         </div>
                     </div>

@@ -94,6 +94,9 @@ const ShoppingList: React.FC = () => {
     // Inventory transfer states
     const [showInventoryModal, setShowInventoryModal] = useState(false);
     const [inventorySuggestions, setInventorySuggestions] = useState<any[]>([]);
+    const [showRecipeSuggestions, setShowRecipeSuggestions] = useState(false);
+    const [recipeSuggestions, setRecipeSuggestions] = useState<string[]>([]);
+    const [failedRecipeQuery, setFailedRecipeQuery] = useState('');
     const [loadingInventory, setLoadingInventory] = useState(false);
 
     // Create API service with useMemo to prevent recreation on every render
@@ -139,7 +142,7 @@ const ShoppingList: React.FC = () => {
     }, [api, loadUserPreferences]);
 
     // Save generated recipes to localStorage whenever they change
-    // Load recipes specific to the active list
+    // Load recipes specific to the active list (SHARED by all collaborators)
     useEffect(() => {
         if (activeList?.id) {
             try {
@@ -151,8 +154,10 @@ const ShoppingList: React.FC = () => {
                         ...recipe,
                         timestamp: new Date(recipe.timestamp)
                     }));
+                    console.log(`📚 Loading ${recipes.length} recipes for list: ${activeList.id}`);
                     setGeneratedRecipes(recipes);
                 } else {
+                    console.log(`📚 No saved recipes for list: ${activeList.id}`);
                     // Clear recipes if switching to a list with no saved recipes
                     setGeneratedRecipes([]);
                 }
@@ -162,11 +167,12 @@ const ShoppingList: React.FC = () => {
             }
         } else {
             // Clear recipes when no active list
+            console.log('📚 No active list, clearing recipes');
             setGeneratedRecipes([]);
         }
     }, [activeList?.id]);
 
-    // Save recipes specific to the active list
+    // Save recipes specific to the active list (SHARED by all collaborators)
     useEffect(() => {
         if (activeList?.id && generatedRecipes.length > 0) {
             try {
@@ -677,13 +683,23 @@ const ShoppingList: React.FC = () => {
             const { recipe_name, canonical_recipe_id } = event.detail;
             console.log('🎉 Recipe completed:', recipe_name, canonical_recipe_id);
 
-            // Update the generatedRecipes state to mark as complete
+            // Update the generatedRecipes state:
+            // - If recipe has canonicalId, mark as complete
+            // - If recipe doesn't have canonicalId (temp ID), update with real ID and mark complete
             setGeneratedRecipes(prev =>
-                prev.map(recipe =>
-                    recipe.canonicalId === canonical_recipe_id
-                        ? { ...recipe, isGenerating: false }
-                        : recipe
-                )
+                prev.map(recipe => {
+                    // Match by existing canonical ID OR by name if it's a generating recipe
+                    if (recipe.canonicalId === canonical_recipe_id ||
+                        (recipe.isGenerating && recipe.name === recipe_name)) {
+                        return {
+                            ...recipe,
+                            isGenerating: false,
+                            canonicalId: canonical_recipe_id,  // Update with real ID
+                            id: canonical_recipe_id  // Update main ID too
+                        };
+                    }
+                    return recipe;
+                })
             );
 
             // Show success notification
@@ -792,6 +808,12 @@ const ShoppingList: React.FC = () => {
 
                 // Auto-enable counters ONLY for items with weight or liquid
                 newItems.forEach((item: any) => {
+                    console.log(`🔍 Checking auto-enable for: ${item.name}`, {
+                        auto_enable_counter: item.auto_enable_counter,
+                        weight_quantity: item.weight_quantity,
+                        liquid_quantity: item.liquid_quantity
+                    });
+
                     // Only enable counter if item has weight or liquid data
                     if (item.auto_enable_counter === 'weight' || (item.weight_quantity && item.weight_quantity > 0)) {
                         console.log(`🔓 Auto-enabling weight counter for ${item.name}`);
@@ -816,27 +838,59 @@ const ShoppingList: React.FC = () => {
                 }
 
                 // Store recipe link for display (with generation status)
-                if (response.canonical_recipe_id) {
-                    const newRecipeLink = {
-                        id: response.canonical_recipe_id,
-                        canonicalId: response.canonical_recipe_id,
-                        name: recipeName,
-                        query: currentQuery,
-                        timestamp: new Date(),
-                        isGenerating: isGenerating,
-                        isNew: isNew
-                    };
-                    setGeneratedRecipes(prev => [newRecipeLink, ...prev]); // Add to beginning
-                }
+                // Always add to generatedRecipes, even if canonical_recipe_id is null (for new recipes)
+                // SIMPLE DEDUPLICATION: Check if recipe already exists by name or canonical ID
+                const newRecipeLink = {
+                    id: response.canonical_recipe_id || `temp_${Date.now()}`,  // Temporary ID for new recipes
+                    canonicalId: response.canonical_recipe_id || null,
+                    name: recipeName,
+                    query: currentQuery,
+                    timestamp: new Date(),
+                    isGenerating: isGenerating,
+                    isNew: isNew
+                };
+
+                // Simple duplicate check: skip if recipe with same canonicalId or name already exists
+                setGeneratedRecipes(prev => {
+                    const isDuplicate = prev.some(existing =>
+                        (newRecipeLink.canonicalId && existing.canonicalId === newRecipeLink.canonicalId) ||
+                        (existing.name.toLowerCase() === newRecipeLink.name.toLowerCase())
+                    );
+
+                    if (isDuplicate) {
+                        console.log(`🔁 Recipe "${recipeName}" already in list, skipping duplicate`);
+                        return prev;
+                    }
+
+                    return [newRecipeLink, ...prev]; // Add to beginning
+                });
 
                 setAiInput('');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('AI add error:', error);
-            toast.error('Failed to add recipe ingredients');
+
+            // Check if error includes suggestions (404 with suggestions)
+            if (error?.response?.status === 404 && error?.response?.data?.show_suggestions) {
+                const errorData = error.response.data;
+                setFailedRecipeQuery(errorData.failed_query || currentQuery);
+                setRecipeSuggestions(errorData.suggestions || []);
+                setShowRecipeSuggestions(true);
+            } else {
+                toast.error('Failed to add recipe ingredients');
+            }
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSuggestionClick = async (suggestion: string) => {
+        setShowRecipeSuggestions(false);
+        setAiInput(suggestion);
+        // Auto-trigger search with the suggestion
+        setTimeout(() => {
+            handleAiAddItems();
+        }, 100);
     };
 
     const [isToggling, setIsToggling] = useState<Set<string>>(new Set());
@@ -2098,7 +2152,7 @@ const ShoppingList: React.FC = () => {
                                                                     value={item.quantity}
                                                                     onChange={(e) => handleQuantityInput(item.id, e.target.value, item.name)}
                                                                     disabled={isUpdatingQuantity.has(item.id) || isDeleting.has(item.id) || isUpdatingWeight.has(item.id) || isUpdatingLiquid.has(item.id)}
-                                                                    className="w-10 h-4 text-center text-xs border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                                                                    className="w-16 h-6 text-center text-sm font-semibold border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
                                                                     min="1"
                                                                     step="0.1"
                                                                 />
@@ -2162,7 +2216,7 @@ const ShoppingList: React.FC = () => {
                                                                         })()}
                                                                         onChange={(e) => handleWeightQuantityInput(item.id, e.target.value, item.name)}
                                                                         disabled={isUpdatingWeight.has(item.id) || isDeleting.has(item.id)}
-                                                                        className="w-12 h-4 text-center text-xs border rounded focus:ring-1 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-50"
+                                                                        className="w-20 h-6 text-center text-sm font-semibold border rounded focus:ring-1 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-50"
                                                                         placeholder={`0 ${userPreferences.weight_unit === 'kg' ? 'kg' : 'lbs'}`}
                                                                         title={t('shopping.weightQuantity')}
                                                                     />
@@ -2202,7 +2256,7 @@ const ShoppingList: React.FC = () => {
                                                                         })()}
                                                                         onChange={(e) => handleLiquidQuantityInput(item.id, e.target.value, item.name)}
                                                                         disabled={isUpdatingLiquid.has(item.id) || isDeleting.has(item.id)}
-                                                                        className="w-12 h-4 text-center text-xs border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
+                                                                        className="w-20 h-6 text-center text-sm font-semibold border rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50"
                                                                         placeholder={`0 ${userPreferences.volume_unit === 'liters' ? 'L' : 'gal'}`}
                                                                         title={t('shopping.liquidQuantity')}
                                                                     />
@@ -2379,6 +2433,73 @@ const ShoppingList: React.FC = () => {
                                     {t('shopping.addAllToInventory')}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Recipe Suggestions Modal */}
+            {showRecipeSuggestions && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg max-w-2xl w-full p-6 shadow-xl">
+                        <div className="flex items-start mb-4">
+                            <div className="flex-shrink-0 w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <div className="ml-4 flex-1">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                    {t('discover.suggestions.title')}
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    {t('discover.suggestions.description', { query: failedRecipeQuery })}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowRecipeSuggestions(false)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="mb-4">
+                            <h4 className="text-sm font-medium text-gray-700 mb-3">
+                                {t('discover.suggestions.tryThese')}:
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                {recipeSuggestions.map((suggestion, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => handleSuggestionClick(suggestion)}
+                                        className="px-4 py-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg text-left hover:from-purple-100 hover:to-pink-100 hover:border-purple-300 transition-all duration-200 group"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-gray-800 capitalize">
+                                                {suggestion}
+                                            </span>
+                                            <svg className="w-4 h-4 text-purple-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t">
+                            <p className="text-xs text-gray-500">
+                                {t('discover.suggestions.hint')}
+                            </p>
+                            <button
+                                onClick={() => setShowRecipeSuggestions(false)}
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                            >
+                                {t('discover.suggestions.close')}
+                            </button>
                         </div>
                     </div>
                 </div>

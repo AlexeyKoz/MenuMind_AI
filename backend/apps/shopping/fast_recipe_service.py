@@ -159,6 +159,12 @@ class FastRecipeIngredientService:
             logger.warning("[FAST RECIPE] Groq not available, using fallback")
             return self._fallback_ingredient_extraction(scraped_text)
 
+        # VALIDATION: Check if this is actually a recipe page
+        if not self._is_recipe_content(scraped_text, recipe_name):
+            logger.warning(
+                f"[FAST RECIPE] ❌ Content does not appear to be a recipe for '{recipe_name}'")
+            return []
+
         # Truncate text to avoid token limits (focus on beginning where ingredients usually are)
         max_chars = 8000
         if len(scraped_text) > max_chars:
@@ -170,13 +176,16 @@ class FastRecipeIngredientService:
 Recipe content:
 {scraped_text}
 
-IMPORTANT:
-- Extract ONLY ingredients (DO NOT extract cooking steps)
-- Return in this EXACT format (one per line):
-- [quantity] [unit] [ingredient name]
-- Examples: "2 cups flour", "500 g chicken breast", "1 tsp salt"
-- If no quantity, just write ingredient name
-- Output ONLY ingredients list (no explanations, no steps)
+IMPORTANT RULES:
+1. Extract ONLY food ingredients (DO NOT extract tools, equipment, steps, or non-food items)
+2. Return in this EXACT format (one per line):
+   - [quantity] [unit] [ingredient name]
+   - Examples: "2 cups flour", "500 g chicken breast", "1 tsp salt"
+3. If no quantity, just write ingredient name
+4. Output ONLY ingredients list (no explanations, no steps)
+5. Maximum 30 ingredients (this is a safety limit)
+6. DO NOT include: pens, papers, computers, blogs, schools, restaurants, etc.
+7. ONLY include: actual food items, spices, liquids used in cooking
 
 INGREDIENTS:"""
 
@@ -187,7 +196,7 @@ INGREDIENTS:"""
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a fast recipe ingredient extractor. Extract ONLY ingredients, ignore cooking steps."
+                        "content": "You are a recipe ingredient extractor. Extract ONLY food ingredients. Ignore tools, equipment, and non-food items. Maximum 30 ingredients."
                     },
                     {
                         "role": "user",
@@ -195,15 +204,15 @@ INGREDIENTS:"""
                     }
                 ],
                 temperature=0.1,
-                max_tokens=1500  # Short output for speed
+                max_tokens=1000  # Reduced for safety
             )
 
             ingredients_text = response.choices[0].message.content.strip()
-            logger.info(
-                f"[FAST RECIPE] AI extracted {len(ingredients_text.split(chr(10)))} ingredient lines")
 
             # Parse ingredient lines
             ingredients = []
+            import re
+
             for line in ingredients_text.split('\n'):
                 line = line.strip()
                 if not line or line.startswith('#') or line.startswith('INGREDIENTS'):
@@ -212,18 +221,85 @@ INGREDIENTS:"""
                 # Remove leading dashes/bullets
                 line = line.lstrip('- •*')
 
+                # Remove leading numbers like "1.", "2.", etc.
+                line = re.sub(r'^\d+\.\s*', '', line)
+
                 if len(line) > 3:  # Reasonable ingredient text
+                    # VALIDATION: Skip obviously non-food items
+                    non_food_keywords = ['pen', 'paper', 'computer', 'blog', 'school', 'restaurant',
+                                         'channel', 'social media', 'pinterest', 'google', 'subway',
+                                         'nyc', 'doc', 'youtube', 'high school', 'culinary school']
+
+                    line_lower = line.lower()
+                    if any(keyword in line_lower for keyword in non_food_keywords):
+                        logger.warning(
+                            f"[FAST RECIPE] Skipping non-food item: {line}")
+                        continue
+
                     ingredients.append({
                         'original': line,
                         'name': line  # Will be parsed by IML mapper
                     })
 
+                    # SAFETY LIMIT: Stop at 30 ingredients
+                    if len(ingredients) >= 30:
+                        logger.warning(
+                            f"[FAST RECIPE] ⚠️ Reached safety limit of 30 ingredients, stopping extraction")
+                        break
+
             logger.info(f"[FAST RECIPE] Parsed {len(ingredients)} ingredients")
+
+            # VALIDATION: Check if we got a reasonable number of ingredients
+            if len(ingredients) == 0:
+                logger.error("[FAST RECIPE] ❌ No valid ingredients found")
+                return []
+
+            if len(ingredients) > 25:
+                logger.warning(
+                    f"[FAST RECIPE] ⚠️ Unusually high ingredient count ({len(ingredients)}), may indicate extraction error")
+
             return ingredients
 
         except Exception as e:
             logger.error(f"[FAST RECIPE] AI extraction failed: {e}")
             return self._fallback_ingredient_extraction(scraped_text)
+
+    def _is_recipe_content(self, scraped_text: str, recipe_name: str) -> bool:
+        """
+        Validate that the scraped content is actually a recipe, not a generic article
+        """
+        text_lower = scraped_text.lower()
+
+        # Check for recipe indicators
+        recipe_keywords = ['ingredients', 'instructions', 'directions', 'servings', 'cook time',
+                           'prep time', 'recipe', 'cooking', 'bake', 'minutes', 'oven', 'heat']
+
+        # Check for non-recipe indicators (articles about writing recipes, blogging, etc.)
+        non_recipe_keywords = ['how to write', 'how to develop', 'blog post', 'social media',
+                               'start a blog', 'recipe development', 'writing tips', 'create content',
+                               'become a', 'learn how to']
+
+        recipe_score = sum(
+            1 for keyword in recipe_keywords if keyword in text_lower)
+        non_recipe_score = sum(
+            1 for keyword in non_recipe_keywords if keyword in text_lower)
+
+        logger.info(
+            f"[FAST RECIPE] Content validation - Recipe score: {recipe_score}, Non-recipe score: {non_recipe_score}")
+
+        # If it looks like a "how to write recipes" article, reject it
+        if non_recipe_score >= 2:
+            logger.warning(
+                "[FAST RECIPE] ❌ Content appears to be about recipe writing, not an actual recipe")
+            return False
+
+        # Must have at least 3 recipe-related keywords
+        if recipe_score < 3:
+            logger.warning(
+                "[FAST RECIPE] ❌ Content does not have enough recipe indicators")
+            return False
+
+        return True
 
     def _fallback_ingredient_extraction(self, scraped_text: str) -> List[Dict]:
         """
@@ -287,8 +363,9 @@ INGREDIENTS:"""
             )
 
             mapped_ing = {
-                'name': ingredient_text,
-                'name_translated': ingredient_text,  # Will be translated in next step
+                'name': match_result.display_name or ingredient_text,  # Use clean display name
+                # Will be translated in next step
+                'name_translated': match_result.display_name or ingredient_text,
                 'quantity': match_result.quantity,
                 'unit': match_result.unit,
                 'ingredient_key': match_result.ingredient_key,

@@ -25,6 +25,9 @@ interface RecipeCardProps {
         user_rating?: number;
         user_has_fork?: boolean;  // Keep property but don't display it
         original_creator_username?: string;
+        original_creator_first_name?: string;
+        original_creator_last_name?: string;
+        original_creator_color?: string;
     };
     onLike: (recipeId: string) => Promise<{ user_liked: boolean; total_likes: number }>;
     onRate?: (recipeId: string, rating: number) => Promise<void>;
@@ -66,22 +69,35 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     const sourceTypeIcons = {
         ai_generated: '🤖',
         user_created: '👨‍🍳',
-        community_curated: '🌟',
-        web_scraped: '🌐'
+        community_curated: '🌟'
     };
 
     const sourceTypeLabels = {
         ai_generated: t('discover.recipeCard.sourceTypes.aiGenerated'),
         user_created: t('discover.recipeCard.sourceTypes.userCreated'),
-        community_curated: t('discover.recipeCard.sourceTypes.communityCurated'),
-        web_scraped: t('discover.recipeCard.sourceTypes.fromWeb')
+        community_curated: t('discover.recipeCard.sourceTypes.communityCurated')
     };
 
     return (
         <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
             {/* Header with source badge */}
             <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-6 text-white">
-                {recipe.source_type && (
+                {/* Source badge - show user info for user_created, else show source type */}
+                {recipe.source_type === 'user_created' && recipe.original_creator_username ? (
+                    <div className="absolute top-4 right-4 flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium">
+                        {/* User avatar circle */}
+                        <div
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-xs"
+                            style={{ backgroundColor: recipe.original_creator_color || '#4F46E5' }}
+                        >
+                            {(recipe.original_creator_first_name?.[0] || recipe.original_creator_username?.[0] || '?').toUpperCase()}
+                        </div>
+                        {/* User name */}
+                        <span>
+                            {recipe.original_creator_first_name || recipe.original_creator_username}
+                        </span>
+                    </div>
+                ) : recipe.source_type && (
                     <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium">
                         {sourceTypeIcons[recipe.source_type as keyof typeof sourceTypeIcons]} {sourceTypeLabels[recipe.source_type as keyof typeof sourceTypeLabels]}
                     </div>

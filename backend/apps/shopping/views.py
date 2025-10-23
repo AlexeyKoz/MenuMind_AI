@@ -506,26 +506,45 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         - Create canonical recipe
         - Notify user via WebSocket
         """
+        print("[FAST AI RECIPE] ========== START ai_add_items ==========")
         shopping_list = self.get_object()
         query = request.data.get('text', '')
+        print(f"[FAST AI RECIPE] Original query: '{query}'")
+        print(f"[FAST AI RECIPE] Shopping list: {shopping_list.id}")
 
         if not query:
+            print("[FAST AI RECIPE] ERROR: No query provided")
             return Response({
                 'success': False,
                 'message': 'Please describe what you want to cook'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        print(f"[FAST AI RECIPE] User query: '{query}'")
+        # VALIDATION: Detect and translate keyboard layout issues (e.g., Russian layout typing English words)
+        # Example: "ьфкпрфкшеу" (Russian layout) → "margharita" (English)
+        if self._is_wrong_keyboard_layout(query):
+            print(
+                f"[FAST AI RECIPE] ⚠️ Detected wrong keyboard layout: '{query}'")
+            translated_query = self._translate_keyboard_layout(query)
+            if translated_query and translated_query != query:
+                print(
+                    f"[FAST AI RECIPE] ✅ Translated to: '{translated_query}'")
+                query = translated_query
+
+        print(f"[FAST AI RECIPE] Final query for processing: '{query}'")
 
         # Import services
         try:
+            print("[FAST AI RECIPE] Importing services...")
             from apps.recipes.services import RecipeAgentService
             from apps.recipes.models import CanonicalRecipe, Recipe
             from apps.shopping.fast_recipe_service import FastRecipeIngredientService
             from apps.shopping.tasks import complete_shopping_list_recipe
             from apps.recipes.brave_firecrawl_scraper import BraveFirecrawlScraper
+            print("[FAST AI RECIPE] ✅ Services imported successfully")
         except ImportError as e:
             print(f"[ERROR] Required service not available: {e}")
+            import traceback
+            traceback.print_exc()
             return Response({
                 'success': False,
                 'message': 'Recipe service is not available'
@@ -547,20 +566,20 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             f"[FAST AI RECIPE] User language: {user_language}, Unit system: {user_unit_system}")
 
         try:
-            # STEP 1: Check deduplication - does recipe already exist?
-            agent = RecipeAgentService()
-            normalized_name = agent._normalize_recipe_name(query)
-
+            # STEP 1: Check deduplication using AI semantic matching
             print(
-                f"[FAST AI RECIPE] Checking deduplication for: {normalized_name}")
+                f"[FAST AI RECIPE] Checking for existing recipe using AI: {query}")
+            from apps.core.deduplication_service import get_deduplication_service
 
-            existing_canonical = CanonicalRecipe.objects.filter(
-                normalized_name=normalized_name
-            ).first()
+            dedup_service = get_deduplication_service()
+            existing_canonical = async_to_sync(dedup_service.find_duplicate)(
+                recipe_name=query,
+                user_language=user_language
+            )
 
             if existing_canonical:
                 print(
-                    f"[FAST AI RECIPE] ✅ Found existing recipe: {existing_canonical.name}")
+                    f"[FAST AI RECIPE] ✅ AI found existing recipe: {existing_canonical.name}")
 
                 # Use existing recipe - get ingredients in user's language
                 recipe_name = existing_canonical.name
@@ -599,10 +618,17 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 )
 
                 if not fast_result:
+                    # Generate helpful suggestions based on the query
+                    suggestions = self._generate_recipe_suggestions(
+                        query, user_language)
+
                     return Response({
                         'success': False,
-                        'message': 'Could not extract ingredients from recipe'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                        'message': 'Could not find a recipe for your search',
+                        'show_suggestions': True,
+                        'failed_query': query,
+                        'suggestions': suggestions
+                    }, status=status.HTTP_404_NOT_FOUND)
 
                 print(
                     f"[FAST AI RECIPE] ✅ Fast extraction complete: {len(fast_result['ingredients'])} ingredients")
@@ -665,19 +691,19 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     weight_in_grams = self._convert_to_grams(quantity, unit)
                     weight_quantity = weight_in_grams
                     liquid_quantity = 0
-                    standard_quantity = 0
+                    item_quantity = 1  # Default to 1 for weight items
                 elif unit_type == 'volume':
                     counter_type = 'liquid'
                     # Convert to ml (base unit for liquid)
                     liquid_in_ml = self._convert_to_ml(quantity, unit)
                     weight_quantity = 0
                     liquid_quantity = liquid_in_ml
-                    standard_quantity = 0
+                    item_quantity = 1  # Default to 1 for liquid items
                 else:
                     counter_type = 'none'
                     weight_quantity = 0
                     liquid_quantity = 0
-                    standard_quantity = quantity
+                    item_quantity = quantity if quantity else 1
 
                 print(
                     f"[FAST AI RECIPE] {ingredient_name}: {quantity} {unit} ({counter_type})")
@@ -700,8 +726,8 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         existing_item.liquid_quantity += Decimal(
                             str(liquid_quantity))
                     else:
-                        existing_item.standard_quantity += Decimal(
-                            str(standard_quantity))
+                        existing_item.quantity += Decimal(
+                            str(item_quantity))
 
                     existing_item.save()
                     items_updated.append(existing_item)
@@ -711,13 +737,22 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     new_item = ShoppingItem.objects.create(
                         shopping_list=shopping_list,
                         name=ingredient_name,
-                        standard_quantity=Decimal(str(standard_quantity)),
+                        quantity=Decimal(str(item_quantity)),
+                        unit=unit or 'unit',
                         weight_quantity=Decimal(str(weight_quantity)),
                         liquid_quantity=Decimal(str(liquid_quantity)),
                         added_by=request.user,
-                        added_by_color=user_color,
+                        user_color=user_color,
                         ingredient_key=ingredient_key
                     )
+
+                    # Add auto-enable flag for frontend to open counter
+                    # This is NOT a model field, just a response attribute
+                    if counter_type == 'weight' and weight_quantity > 0:
+                        new_item._auto_enable_counter = 'weight'
+                    elif counter_type == 'liquid' and liquid_quantity > 0:
+                        new_item._auto_enable_counter = 'liquid'
+
                     items_created.append(new_item)
                     print(f"[FAST AI RECIPE] ✅ Created: {ingredient_name}")
 
@@ -751,6 +786,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         except Exception as e:
             print(f"[ERROR] Exception in ai_add_items: {e}")
             import traceback
+            print(f"[ERROR] Full traceback:")
             traceback.print_exc()
             return Response({
                 'success': False,
@@ -1589,13 +1625,13 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         else:
                             print(f"❌ Transfer failed: {transfer_message}")
 
-                    # No participants or transfer failed - permanently delete the list
+                    # No participants or transfer failed - mark as permanently deleted
                     print(
-                        f"🗑️ No participants available, permanently deleting list: {list_name}")
-                    shopping_list.delete()
+                        f"🗑️ No participants available, marking list as permanently deleted: {list_name}")
+                    shopping_list.permanent_delete_by_creator(request.user)
 
                     return Response({
-                        'message': f'List "{list_name}" permanently deleted (no participants)',
+                        'message': f'List "{list_name}" permanently deleted',
                         'action': 'permanent_delete'
                     })
 
@@ -1629,6 +1665,113 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 {'error': 'Archived list not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    def _is_wrong_keyboard_layout(self, query: str) -> bool:
+        """
+        Detect if user typed with wrong keyboard layout
+        (e.g., typing English words but keyboard was on Russian/Hebrew layout)
+        """
+        # Check if query contains mostly non-Latin characters
+        non_latin_count = sum(
+            1 for c in query if not c.isascii() and c.isalpha())
+        total_alpha = sum(1 for c in query if c.isalpha())
+
+        if total_alpha == 0:
+            return False
+
+        non_latin_ratio = non_latin_count / total_alpha
+
+        # If more than 80% non-Latin, might be wrong keyboard layout
+        return non_latin_ratio > 0.8
+
+    def _translate_keyboard_layout(self, query: str) -> str:
+        """
+        Attempt to translate keyboard layout errors
+        Uses Russian/English keyboard mapping as example
+        """
+        # Russian to English keyboard map (most common issue)
+        rus_to_eng = {
+            'й': 'q', 'ц': 'w', 'у': 'e', 'к': 'r', 'е': 't', 'н': 'y', 'г': 'u', 'ш': 'i', 'щ': 'o', 'з': 'p',
+            'ф': 'a', 'ы': 's', 'в': 'd', 'а': 'f', 'п': 'g', 'р': 'h', 'о': 'j', 'л': 'k', 'д': 'l',
+            'я': 'z', 'ч': 'x', 'с': 'c', 'м': 'v', 'и': 'b', 'т': 'n', 'ь': 'm',
+            'х': '[', 'ъ': ']', 'ж': ';', 'э': "'", 'б': ',', 'ю': '.'
+        }
+
+        # Try to transliterate
+        transliterated = ''.join(rus_to_eng.get(c.lower(), c) for c in query)
+
+        if transliterated != query:
+            print(f"[KEYBOARD] Transliterated '{query}' → '{transliterated}'")
+            return transliterated
+
+        return query
+
+    def _generate_recipe_suggestions(self, query: str, user_language: str = 'en') -> list:
+        """
+        Generate helpful recipe suggestions based on failed query
+        Returns language-appropriate suggestions
+        """
+        # Multilingual popular recipes by category
+        suggestions_db = {
+            'en': {
+                'desserts': ['chocolate cake', 'apple pie', 'brownies', 'cheesecake', 'tiramisu', 'panna cotta'],
+                'pasta': ['spaghetti carbonara', 'lasagna', 'fettuccine alfredo', 'penne arrabbiata', 'pasta bolognese'],
+                'chicken': ['chicken curry', 'roasted chicken', 'chicken stir fry', 'chicken tikka masala', 'fried chicken'],
+                'soup': ['tomato soup', 'chicken soup', 'minestrone', 'french onion soup', 'cream of mushroom'],
+                'salad': ['caesar salad', 'greek salad', 'caprese salad', 'nicoise salad', 'cobb salad'],
+                'breakfast': ['pancakes', 'french toast', 'omelette', 'shakshuka', 'eggs benedict'],
+                'popular': ['pizza margherita', 'burger', 'tacos', 'sushi rolls', 'pad thai', 'ramen']
+            },
+            'ru': {
+                'desserts': ['шарлотка', 'наполеон', 'медовик', 'тирамису', 'чизкейк', 'брауни'],
+                'pasta': ['паста карбонара', 'лазанья', 'спагетти болоньезе', 'паста альфредо', 'пенне аррабиата'],
+                'chicken': ['куриное карри', 'жареная курица', 'курица в духовке', 'куриный суп', 'котлеты'],
+                'soup': ['борщ', 'солянка', 'куриный суп', 'грибной суп', 'томатный суп'],
+                'salad': ['оливье', 'цезарь', 'греческий салат', 'винегрет', 'салат с тунцом'],
+                'breakfast': ['блины', 'сырники', 'омлет', 'яичница', 'каша'],
+                'popular': ['пельмени', 'борщ', 'блины', 'оливье', 'плов', 'шашлык']
+            },
+            'he': {
+                'desserts': ['עוגת שוקולד', 'טירמיסו', 'פאי תפוחים', 'צ\'יזקייק', 'בראוניז', 'עוגיות'],
+                'pasta': ['פסטה קרבונרה', 'לזניה', 'ספגטי בולונז', 'פסטה אלפרדו', 'פנה ארביאטה'],
+                'chicken': ['קארי עוף', 'עוף בתנור', 'שניצל', 'עוף מוקפץ', 'עוף טיקה מסאלה'],
+                'soup': ['מרק עוף', 'מרק עגבניות', 'מרק ירקות', 'מרק פטריות', 'מרק בצל'],
+                'salad': ['סלט ירקות', 'סלט יווני', 'סלט קיסר', 'סלט ניסואז', 'סלט כרוב'],
+                'breakfast': ['שקשוקה', 'חביתה', 'פנקייק', 'טוסט צרפתי', 'ביצים בנדיקט'],
+                'popular': ['שקשוקה', 'חומוס', 'פלאפל', 'שניצל', 'סלט ישראלי', 'סבי']
+            }
+        }
+
+        # Get suggestions for the user's language
+        lang_suggestions = suggestions_db.get(
+            user_language, suggestions_db['en'])
+
+        # Try to find relevant category based on query keywords
+        query_lower = query.lower()
+        matched_suggestions = []
+
+        # Category keyword matching
+        category_keywords = {
+            'desserts': ['cake', 'pie', 'sweet', 'dessert', 'chocolate', 'торт', 'пирог', 'сладкое', 'עוגה', 'מתוק'],
+            'pasta': ['pasta', 'spaghetti', 'noodle', 'паста', 'спагетти', 'лапша', 'פסטה', 'ספגטי'],
+            'chicken': ['chicken', 'курица', 'עוף'],
+            'soup': ['soup', 'суп', 'מרק'],
+            'salad': ['salad', 'салат', 'סלט'],
+            'breakfast': ['breakfast', 'egg', 'pancake', 'завтрак', 'яйцо', 'блин', 'ארוחת בוקר', 'ביצה']
+        }
+
+        # Find matching category
+        for category, keywords in category_keywords.items():
+            if any(keyword in query_lower for keyword in keywords):
+                matched_suggestions.extend(lang_suggestions.get(category, []))
+                break
+
+        # If no category match, use popular recipes
+        if not matched_suggestions:
+            matched_suggestions = lang_suggestions.get('popular', [])
+
+        # Return max 6 suggestions
+        return matched_suggestions[:6]
 
 
 class ShoppingItemViewSet(viewsets.ModelViewSet):

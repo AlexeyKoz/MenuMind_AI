@@ -23,6 +23,7 @@ class ShoppingItemSerializer(serializers.ModelSerializer):
         source='completed_by.username', read_only=True)
     display_color = serializers.CharField(read_only=True)
     is_recent = serializers.BooleanField(read_only=True)
+    auto_enable_counter = serializers.SerializerMethodField()
 
     class Meta:
         model = ShoppingItem
@@ -32,10 +33,14 @@ class ShoppingItemSerializer(serializers.ModelSerializer):
             'completed_at', 'added_by', 'added_by_name', 'added_by_first_name',
             'ai_suggested', 'nutrition_data', 'estimated_price',
             'user_color', 'priority', 'display_color', 'is_recent',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'auto_enable_counter'
         ]
         read_only_fields = ['id', 'added_by', 'user_color',
                             'priority', 'created_at', 'updated_at']
+
+    def get_auto_enable_counter(self, obj):
+        """Get auto-enable counter flag if it exists"""
+        return getattr(obj, '_auto_enable_counter', None)
 
 
 class ShoppingListSerializer(serializers.ModelSerializer):
