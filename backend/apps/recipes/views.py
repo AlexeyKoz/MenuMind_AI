@@ -568,16 +568,34 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def my_recipes(self, request):
-        """Get user's saved recipes (excluding archived)"""
+        """Get user's saved recipes (excluding archived) with translations"""
+        print("\n" + "="*80)
+        print("[MY_RECIPES] 🚀 API CALLED")
+        print("="*80)
+
         user_recipes = UserRecipe.objects.filter(
             user=request.user,
             is_archived=False
         ).select_related('recipe').order_by('-saved_at')
 
+        # Get user's language preference
+        user_language = request.query_params.get('lang', 'en')
+        print(
+            f"[MY_RECIPES] 🌍 Loading recipes for user: {request.user.username}")
+        print(f"[MY_RECIPES] 🌍 Requested language: {user_language}")
+        print(
+            f"[MY_RECIPES] 📚 Total recipes to process: {user_recipes.count()}")
+
         # Flatten the structure: merge UserRecipe and Recipe data
         recipes_data = []
-        for user_recipe in user_recipes:
+        for idx, user_recipe in enumerate(user_recipes):
             recipe = user_recipe.recipe
+            print(
+                f"\n[MY_RECIPES] --- Processing recipe {idx+1}/{user_recipes.count()} ---")
+            print(f"[MY_RECIPES] Recipe: {recipe.name}")
+            print(
+                f"[MY_RECIPES] Has canonical_recipe: {recipe.canonical_recipe is not None}")
+
             recipe_data = RecipeSerializer(
                 recipe, context={'request': request}).data
             recipe_data['is_saved'] = True  # All my_recipes are saved
@@ -586,8 +604,92 @@ class RecipeViewSet(viewsets.ModelViewSet):
             recipe_data['last_cooked'] = user_recipe.last_cooked
             recipe_data['user_notes'] = user_recipe.notes
             recipe_data['user_rating'] = user_recipe.rating
+
+            # Translate recipe name and description if available
+            if user_language != 'en' and recipe.canonical_recipe:
+                try:
+                    from .models import RecipeTranslation
+                    from .tasks import translate_recipe_to_language
+
+                    translation = RecipeTranslation.objects.filter(
+                        canonical_recipe=recipe.canonical_recipe,
+                        language=user_language,
+                        status='completed'
+                    ).first()
+
+                    if translation:
+                        print(
+                            f"[MY_RECIPES] ✅ Found translation for {recipe.name}")
+                        print(
+                            f"[MY_RECIPES]    Translated name: {translation.name}")
+                        recipe_data['name'] = translation.name
+                        recipe_data['description'] = translation.description or recipe_data['description']
+
+                        # Also translate ingredients if available
+                        if translation.base_ingredients:
+                            print(
+                                f"[MY_RECIPES]    ✅ Replacing {len(recipe_data['ingredients'])} ingredients with {len(translation.base_ingredients)} translated")
+                            print(
+                                f"[MY_RECIPES]    First translated ingredient: {translation.base_ingredients[0] if translation.base_ingredients else 'N/A'}")
+                            recipe_data['ingredients'] = translation.base_ingredients
+
+                        # Also translate steps if available
+                        if translation.base_steps:
+                            print(
+                                f"[MY_RECIPES]    ✅ Replacing {len(recipe_data['steps'])} steps with {len(translation.base_steps)} translated")
+                            print(
+                                f"[MY_RECIPES]    First translated step: {translation.base_steps[0] if translation.base_steps else 'N/A'}")
+                            recipe_data['steps'] = translation.base_steps
+                    else:
+                        print(
+                            f"[MY_RECIPES] ⚠️ No translation found for {recipe.name} in {user_language}")
+                        print(f"[MY_RECIPES] 🔄 Triggering lazy translation...")
+
+                        # Check if translation is pending or in progress
+                        existing = RecipeTranslation.objects.filter(
+                            canonical_recipe=recipe.canonical_recipe,
+                            language=user_language
+                        ).first()
+
+                        if not existing:
+                            # Create pending translation
+                            RecipeTranslation.objects.create(
+                                canonical_recipe=recipe.canonical_recipe,
+                                language=user_language,
+                                status='pending',
+                                name='',
+                                description='',
+                                base_ingredients=[],
+                                base_steps=[]
+                            )
+                            print(
+                                f"[MY_RECIPES] 📝 Created pending translation record")
+
+                        # Queue background translation task
+                        try:
+                            translate_recipe_to_language.apply_async(
+                                args=[str(recipe.canonical_recipe.id),
+                                      user_language],
+                                countdown=1
+                            )
+                            print(
+                                f"[MY_RECIPES] ✅ Queued background translation task")
+                        except Exception as task_error:
+                            print(
+                                f"[MY_RECIPES] ❌ Failed to queue translation: {task_error}")
+
+                        # For now, return original recipe data
+                        # User will need to reload to see translation
+
+                except Exception as e:
+                    print(f"[MY_RECIPES] ❌ Translation error: {e}")
+                    import traceback
+                    traceback.print_exc()
+
             recipes_data.append(recipe_data)
 
+        print(f"\n[MY_RECIPES] 🎉 Returning {len(recipes_data)} recipes")
+        print("="*80 + "\n")
         return Response({
             'recipes': recipes_data,
             'total': user_recipes.count()

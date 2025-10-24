@@ -34,7 +34,8 @@ class RecipeDeduplicationService:
         gemini_api_key = getattr(settings, 'GEMINI_API_KEY', None)
         if gemini_api_key:
             genai.configure(api_key=gemini_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+            # Use gemini-2.0-flash-lite for better compatibility
+            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
         else:
             self.gemini_model = None
 
@@ -256,13 +257,23 @@ class RecipeDeduplicationService:
         # Build candidate list for AI
         candidate_texts = []
         for idx, recipe in enumerate(candidates):
-            ingredients_preview = ', '.join([
+            # Show ALL ingredients (not just first 5) for accurate matching
+            all_ingredients = ', '.join([
                 ing.get('name', '')
-                for ing in recipe.base_ingredients[:5]
+                for ing in (recipe.base_ingredients or [])
             ])
 
+            # If too long, show first 15 ingredients (much better than 5!)
+            if len(all_ingredients) > 500:
+                ingredients_preview = ', '.join([
+                    ing.get('name', '')
+                    for ing in (recipe.base_ingredients or [])[:15]
+                ]) + '...'
+            else:
+                ingredients_preview = all_ingredients
+
             candidate_texts.append(
-                f"{idx+1}. {recipe.name} (Ingredients: {ingredients_preview}...)"
+                f"{idx+1}. {recipe.name} (Ingredients: {ingredients_preview})"
             )
 
         candidates_str = '\n'.join(candidate_texts)
@@ -313,7 +324,8 @@ EXISTING RECIPES IN DATABASE:
 
 RULES FOR MATCHING:
 ✅ MATCH these examples:
-- "carbonara" → "Spaghetti Carbonara" (partial name)
+- "carbonara" → "Pasta Carbonara" (partial name - CLEAR MATCH!)
+- "carbonara" → "Spaghetti Carbonara" (partial name - CLEAR MATCH!)
 - "margherita pizza" → "Classic Margherita" (with common word)
 - "chocolate cake" → "Easy Chocolate Cake Recipe" (with filler words)
 - "shakshuka" → "Israeli Shakshuka" (with origin)
@@ -322,6 +334,11 @@ RULES FOR MATCHING:
 - "spagetti" → "Spaghetti Carbonara" (missing letter)
 - "choclate" → "Chocolate Cake" (transposed letters)
 - "fettucini" → "Fettuccine Alfredo" (spelling variation)
+
+⭐ IMPORTANT: If the search query is a CORE WORD from a recipe name, it's a MATCH!
+- "carbonara" is the core word in "Pasta Carbonara" → MATCH
+- "pizza" is the core word in "Margherita Pizza" → but check the type!
+- "hummus" is the core word in "Classic Hummus" → MATCH
 
 ❌ DO NOT MATCH:
 - "pizza" → "Pasta Carbonara" (completely different dishes)
@@ -359,7 +376,7 @@ Example responses:
                 }
             ],
             temperature=0.1,  # Very low for consistency
-            max_tokens=50
+            max_tokens=200  # Increased from 50 to handle longer responses
         )
 
         result = response.choices[0].message.content.strip()
@@ -438,14 +455,27 @@ Example responses:
     ) -> Optional['CanonicalRecipe']:
         """Parse AI response and return matched recipe"""
 
-        if result.startswith("MATCH:"):
+        # Search for ALL "MATCH: <number>" anywhere in the response
+        # AI might respond with full prompt + answer, so we need to find it
+        import re
+        matches = re.findall(r'MATCH:\s*(\d+)', result, re.IGNORECASE)
+        
+        logger.info(f"[DEDUP] 🔍 Found {len(matches)} match(es) in response: {matches}")
+        
+        if matches:
             try:
-                match_num = int(result.split(":")[1].strip())
+                # Use the FIRST match (most confident)
+                match_num = int(matches[0])
+                logger.info(f"[DEDUP] 📌 Using first match: {match_num}")
+                
                 if 1 <= match_num <= len(candidates):
                     matched_recipe = candidates[match_num - 1]
                     logger.info(
-                        f"[DEDUP] ✅ Found duplicate: {matched_recipe.name}")
+                        f"[DEDUP] ✅ Found duplicate: {matched_recipe.name} (match #{match_num})")
                     return matched_recipe
+                else:
+                    logger.warning(
+                        f"[DEDUP] ⚠️ Match number {match_num} out of range (1-{len(candidates)})")
             except (ValueError, IndexError) as e:
                 logger.warning(
                     f"[DEDUP] ⚠️ Failed to parse match number: {result} - {e}")

@@ -12,7 +12,7 @@ import { getUserFriendlyError } from '../utils/errorHandler';
 import { Package, X, Check } from 'lucide-react';
 
 const ShoppingList: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { token, user, logout } = useAuth();
     const {
         connectToList,
@@ -60,6 +60,44 @@ const ShoppingList: React.FC = () => {
         timestamp: Date;
         type: 'info' | 'success' | 'warning';
     }>>([]);
+
+    // Helper function to translate units
+    const translateUnit = useCallback((unit: string): string => {
+        const unitLower = unit.toLowerCase().trim();
+
+        // Map common unit variations to translation keys
+        const unitMapping: { [key: string]: string } = {
+            'piece': 'pieces',
+            'pieces': 'pieces',
+            'unit': 'pieces',
+            'units': 'pieces',
+            'g': 'g',
+            'gram': 'g',
+            'grams': 'g',
+            'kg': 'kg',
+            'kilogram': 'kg',
+            'kilograms': 'kg',
+            'ml': 'ml',
+            'milliliter': 'ml',
+            'milliliters': 'ml',
+            'l': 'L',
+            'liter': 'L',
+            'liters': 'L',
+            'cup': 'cups',
+            'cups': 'cups',
+            'tbsp': 'tbsp',
+            'tablespoon': 'tbsp',
+            'tablespoons': 'tbsp',
+            'tsp': 'tsp',
+            'teaspoon': 'tsp',
+            'teaspoons': 'tsp'
+        };
+
+        const mappedKey = unitMapping[unitLower] || unitLower;
+        const translatedUnit = t(`inventory.units.${mappedKey}`, { defaultValue: unit });
+
+        return translatedUnit;
+    }, [t]);
     const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [newListName, setNewListName] = useState('');
@@ -292,12 +330,32 @@ const ShoppingList: React.FC = () => {
 
         const handleItemAdded = (data: any) => {
             console.log('📦 Item added via WebSocket:', data);
+            console.log('📦 [AUTO-COUNTER] Checking item for auto-enable:');
+            console.log('📦 [AUTO-COUNTER] - auto_enable_counter:', data.item?.auto_enable_counter);
+            console.log('📦 [AUTO-COUNTER] - weight_quantity:', data.item?.weight_quantity);
+            console.log('📦 [AUTO-COUNTER] - liquid_quantity:', data.item?.liquid_quantity);
+
             setItems(prev => {
                 // Avoid duplicates
                 const exists = prev.some(item => item.id === data.item.id);
                 if (exists) return prev;
                 return [...prev, data.item];
             });
+
+            // Auto-enable counter if flag is set
+            if (data.item?.auto_enable_counter) {
+                console.log(`📦 [AUTO-COUNTER] ✅ Auto-enabling ${data.item.auto_enable_counter} counter for item: ${data.item.name}`);
+                setQuantityType(data.item.id, data.item.auto_enable_counter);
+            } else if (data.item?.weight_quantity > 0) {
+                console.log(`📦 [AUTO-COUNTER] ✅ Auto-enabling weight counter (inferred from weight_quantity=${data.item.weight_quantity})`);
+                setQuantityType(data.item.id, 'weight');
+            } else if (data.item?.liquid_quantity > 0) {
+                console.log(`📦 [AUTO-COUNTER] ✅ Auto-enabling liquid counter (inferred from liquid_quantity=${data.item.liquid_quantity})`);
+                setQuantityType(data.item.id, 'liquid');
+            } else {
+                console.log(`📦 [AUTO-COUNTER] ℹ️ No auto-counter needed for: ${data.item.name}`);
+            }
+
             toast.success(`"${data.item.name}" added to list`);
         };
 
@@ -787,16 +845,28 @@ const ShoppingList: React.FC = () => {
         setLoading(true);
         const currentQuery = aiInput; // Store before clearing
         try {
+            console.log('[MULTILANG AI] Starting AI add items request...');
             const response = await api.aiAddItems(activeList.id, aiInput);
+            console.log('[MULTILANG AI] Received response:', response);
+            console.log('[MULTILANG AI] 🔑 canonical_recipe_id:', response.canonical_recipe_id);
+
             if (response.success) {
                 // NEW: Handle fast recipe response
                 const recipeName = response.recipe_name || currentQuery;
+                const recipeNameTranslations = response.recipe_name_translations || {};
                 const isGenerating = response.is_generating || false;
                 const isNew = response.is_new || false;
+
+                console.log('[MULTILANG AI] Recipe name translations:', recipeNameTranslations);
+                console.log('[MULTILANG AI] Is generating:', isGenerating);
+                console.log('[MULTILANG AI] Is new:', isNew);
 
                 // Add new items to state (from items_created)
                 const newItems = response.items_created || response.new_items || response.items || [];
                 const updatedItems = response.items_updated || [];
+
+                console.log('[MULTILANG AI] New items received:', newItems.length);
+                console.log('[MULTILANG AI] First item sample:', newItems[0]);
 
                 // Merge updated items with existing items
                 const updatedItemsMap = new Map(updatedItems.map((item: any) => [item.id, item]));
@@ -849,6 +919,8 @@ const ShoppingList: React.FC = () => {
                     isGenerating: isGenerating,
                     isNew: isNew
                 };
+
+                console.log('[MULTILANG AI] 📚 Creating recipe link:', newRecipeLink);
 
                 // Simple duplicate check: skip if recipe with same canonicalId or name already exists
                 setGeneratedRecipes(prev => {
@@ -1640,8 +1712,13 @@ const ShoppingList: React.FC = () => {
         try {
             // Convert suggestions to inventory items
             const items = inventorySuggestions.map(sugg => {
+                // Extract the correct name from translations
+                const itemName = typeof sugg.name === 'object'
+                    ? (sugg.name[i18n.language] || sugg.name['en'] || Object.values(sugg.name)[0])
+                    : sugg.name;
+
                 const itemData: any = {
-                    name: sugg.name,
+                    name: itemName,
                     quantity: sugg.suggested_quantity,
                     unit: sugg.suggested_unit,
                     location: sugg.suggested_location,
@@ -1972,13 +2049,28 @@ const ShoppingList: React.FC = () => {
                                                         onClick={(e) => {
                                                             e.preventDefault();
                                                             e.stopPropagation();
-                                                            // Construct absolute URL
-                                                            const url = `${window.location.origin}/discover?recipe=${recipe.canonicalId}`;
-                                                            console.log(`🔗 Opening recipe: ${recipe.name} at ${url}`);
-                                                            window.open(url, '_blank', 'noopener,noreferrer');
+
+                                                            // Validate canonicalId before opening
+                                                            if (!recipe.canonicalId) {
+                                                                console.error('❌ Cannot open recipe: canonicalId is null/undefined', recipe);
+                                                                toast.error(recipe.isGenerating
+                                                                    ? '⏳ Recipe is still generating, please wait...'
+                                                                    : '❌ Recipe ID not found. Try generating it again.'
+                                                                );
+                                                                return;
+                                                            }
+
+                                                            // Navigate to recipe detail page in discovery
+                                                            const url = `/discover?id=${recipe.canonicalId}`;
+                                                            console.log(`🔗 Navigating to recipe: ${recipe.name} at ${url}`);
+                                                            console.log(`🔗 Recipe object:`, recipe);
+                                                            window.location.href = url;
                                                         }}
-                                                        className="text-purple-600 hover:text-purple-800 hover:underline flex-1 truncate text-left cursor-pointer"
-                                                        title={`${t('shopping.viewRecipe')}: ${recipe.name}`}
+                                                        className={`text-purple-600 hover:text-purple-800 hover:underline flex-1 truncate text-left cursor-pointer ${!recipe.canonicalId ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        title={!recipe.canonicalId
+                                                            ? (recipe.isGenerating ? 'Recipe is generating...' : 'Recipe ID not available')
+                                                            : `${t('shopping.viewRecipe')}: ${recipe.name}`}
+                                                        disabled={!recipe.canonicalId}
                                                     >
                                                         <span className="font-medium">{recipe.name}</span>
                                                         <span className="text-gray-500 ml-1 text-xs">
@@ -2071,8 +2163,24 @@ const ShoppingList: React.FC = () => {
 
                                                                 <div className="flex-1">
                                                                     <div className="flex items-center gap-2 flex-wrap">
+                                                                        {/* MULTILANG DEBUG */}
+                                                                        {(() => {
+                                                                            console.log('[MULTILANG FRONTEND] Item data:', {
+                                                                                id: item.id,
+                                                                                name: item.name,
+                                                                                display_name: item.display_name,
+                                                                                name_translations: item.name_translations,
+                                                                                original_language: item.original_language
+                                                                            });
+                                                                            console.log('[MULTILANG FRONTEND] Current i18n language:', i18n.language);
+                                                                            // Use name_translations first, then fallback to display_name/name
+                                                                            const displayName = item.name_translations?.[i18n.language] || item.display_name || item.name;
+                                                                            console.log('[MULTILANG FRONTEND] Will display:', displayName);
+                                                                            return null;
+                                                                        })()}
+
                                                                         <span className={`font-medium ${item.is_completed ? 'line-through text-gray-500' : ''}`}>
-                                                                            {item.name}
+                                                                            {item.name_translations?.[i18n.language] || item.display_name || item.name}
                                                                         </span>
 
                                                                         {/* User indicator */}
@@ -2113,7 +2221,7 @@ const ShoppingList: React.FC = () => {
 
                                                             {/* Delete button */}
                                                             <button
-                                                                onClick={() => handleDeleteItem(item.id, item.name)}
+                                                                onClick={() => handleDeleteItem(item.id, item.display_name || item.name)}
                                                                 disabled={isDeleting.has(item.id) || isToggling.has(item.id) || isUpdatingQuantity.has(item.id) || isUpdatingWeight.has(item.id) || isUpdatingLiquid.has(item.id)}
                                                                 className={`ml-2 p-2 rounded-lg transition-colors ${isDeleting.has(item.id)
                                                                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -2167,7 +2275,7 @@ const ShoppingList: React.FC = () => {
                                                                 </button>
 
                                                                 <span className="text-xs text-gray-500">
-                                                                    {item.unit}
+                                                                    {translateUnit(item.unit)}
                                                                 </span>
                                                             </div>
 
@@ -2388,34 +2496,41 @@ const ShoppingList: React.FC = () => {
                             </p>
 
                             <div className="space-y-4 mb-6">
-                                {inventorySuggestions.map((sugg, index) => (
-                                    <div
-                                        key={index}
-                                        className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition"
-                                    >
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                            <div>
-                                                <label className="text-xs text-gray-600">{t('shopping.itemName')}</label>
-                                                <p className="font-semibold">{sugg.name}</p>
+                                {inventorySuggestions.map((sugg, index) => {
+                                    // Extract the correct name from translations
+                                    const displayName = typeof sugg.name === 'object'
+                                        ? (sugg.name[i18n.language] || sugg.name['en'] || Object.values(sugg.name)[0])
+                                        : sugg.name;
+
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition"
+                                        >
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                                <div>
+                                                    <label className="text-xs text-gray-600">{t('shopping.itemName')}</label>
+                                                    <p className="font-semibold">{displayName}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600">{t('shopping.location')}</label>
+                                                    <p className="font-medium capitalize">{sugg.suggested_location}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600">{t('shopping.category')}</label>
+                                                    <p className="font-medium capitalize">{sugg.suggested_category}</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-600">{t('shopping.expiresIn')}</label>
+                                                    <p className="font-medium">{sugg.suggested_expiration_days} {t('shopping.days')}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <label className="text-xs text-gray-600">{t('shopping.location')}</label>
-                                                <p className="font-medium capitalize">{sugg.suggested_location}</p>
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-gray-600">{t('shopping.category')}</label>
-                                                <p className="font-medium capitalize">{sugg.suggested_category}</p>
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-gray-600">{t('shopping.expiresIn')}</label>
-                                                <p className="font-medium">{sugg.suggested_expiration_days} {t('shopping.days')}</p>
+                                            <div className="mt-2 text-xs text-gray-500">
+                                                {t('shopping.aiConfidence')}: {(sugg.confidence * 100).toFixed(0)}%
                                             </div>
                                         </div>
-                                        <div className="mt-2 text-xs text-gray-500">
-                                            {t('shopping.aiConfidence')}: {(sugg.confidence * 100).toFixed(0)}%
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
 
                             <div className="flex gap-3">

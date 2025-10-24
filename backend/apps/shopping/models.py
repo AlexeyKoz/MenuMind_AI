@@ -299,6 +299,19 @@ class ShoppingItem(models.Model):
     )
 
     name = models.CharField(max_length=200)
+
+    # Multilingual support (Sprint 7+)
+    name_translations = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Translated names: {"en": "tomato", "ru": "помидор", "he": "עגבנייה"}'
+    )
+    original_language = models.CharField(
+        max_length=5,
+        default='en',
+        help_text='Language code of the original name field (en, ru, he)'
+    )
+
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
     unit = models.CharField(max_length=20, default='unit')
 

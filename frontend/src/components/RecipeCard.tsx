@@ -79,55 +79,64 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden flex flex-col h-full">
             {/* Header with source badge */}
-            <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 p-6 text-white">
-                {/* Source badge - show user info for user_created, else show source type */}
-                {recipe.source_type === 'user_created' && recipe.original_creator_username ? (
-                    <div className="absolute top-4 right-4 flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium">
-                        {/* User avatar circle */}
-                        <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-xs"
-                            style={{ backgroundColor: recipe.original_creator_color || '#4F46E5' }}
-                        >
-                            {(recipe.original_creator_first_name?.[0] || recipe.original_creator_username?.[0] || '?').toUpperCase()}
+            <div className="relative bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                {/* Top section - invisible space for badge */}
+                <div className="h-10 flex items-center justify-end px-6 pt-3">
+                    {/* Source badge - show user info for user_created, else show source type */}
+                    {recipe.source_type === 'user_created' && recipe.original_creator_username ? (
+                        <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-medium max-w-[220px]">
+                            {/* User avatar circle */}
+                            <div
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0"
+                                style={{ backgroundColor: recipe.original_creator_color || '#4F46E5' }}
+                            >
+                                {(recipe.original_creator_first_name?.[0] || recipe.original_creator_username?.[0] || '?').toUpperCase()}
+                            </div>
+                            {/* User name */}
+                            <span className="truncate">
+                                {recipe.original_creator_first_name || recipe.original_creator_username}
+                            </span>
                         </div>
-                        {/* User name */}
-                        <span>
-                            {recipe.original_creator_first_name || recipe.original_creator_username}
+                    ) : recipe.source_type && (
+                        <div className="bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-medium max-w-[220px] whitespace-nowrap overflow-hidden">
+                            <div className="flex items-center gap-1.5">
+                                <span className="flex-shrink-0">{sourceTypeIcons[recipe.source_type as keyof typeof sourceTypeIcons]}</span>
+                                <span className="truncate">{sourceTypeLabels[recipe.source_type as keyof typeof sourceTypeLabels]}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Bottom section - recipe name and cuisine */}
+                <div className="px-6 pb-6 pt-2">
+                    <h3
+                        className="text-xl font-bold mb-2 cursor-pointer hover:underline leading-snug"
+                        onClick={() => onClick?.(recipe.id)}
+                    >
+                        {recipe.name}
+                    </h3>
+
+                    {recipe.cuisine && (
+                        <span className="inline-block bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-sm">
+                            {recipe.cuisine}
                         </span>
-                    </div>
-                ) : recipe.source_type && (
-                    <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium">
-                        {sourceTypeIcons[recipe.source_type as keyof typeof sourceTypeIcons]} {sourceTypeLabels[recipe.source_type as keyof typeof sourceTypeLabels]}
-                    </div>
-                )}
-
-                <h3
-                    className="text-2xl font-bold mb-2 cursor-pointer hover:underline"
-                    onClick={() => onClick?.(recipe.id)}
-                >
-                    {recipe.name}
-                </h3>
-
-                {recipe.cuisine && (
-                    <span className="inline-block bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-sm">
-                        {recipe.cuisine}
-                    </span>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 flex-1 flex flex-col">
                 {/* Description */}
                 {recipe.description && (
-                    <p className="text-gray-600 line-clamp-2">
+                    <p className="text-gray-600 line-clamp-2 h-10">
                         {recipe.description}
                     </p>
                 )}
 
                 {/* Metadata */}
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 min-h-[32px]">
                     {recipe.difficulty && (
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${difficultyColors[recipe.difficulty as keyof typeof difficultyColors] || 'bg-gray-100 text-gray-800'}`}>
                             {t(`discover.difficulties.${recipe.difficulty}`, { defaultValue: recipe.difficulty })}
@@ -149,7 +158,7 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
 
                 {/* Diet Labels */}
                 {recipe.diet_labels && recipe.diet_labels.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 min-h-[28px]">
                         {recipe.diet_labels.slice(0, 4).map((label) => {
                             // Convert snake_case to camelCase (e.g., dairy_free -> dairyFree)
                             const translationKey = toCamelCase(label);
@@ -178,6 +187,9 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
                         className="mt-3"
                     />
                 )}
+
+                {/* Spacer to push content to bottom */}
+                <div className="flex-1"></div>
 
                 {/* Social Actions */}
                 <div className="flex items-center justify-between pt-4 border-t border-gray-200">

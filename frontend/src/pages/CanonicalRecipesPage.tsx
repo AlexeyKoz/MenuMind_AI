@@ -97,7 +97,8 @@ const CanonicalRecipesPage: React.FC = () => {
     // Handle direct recipe link from query parameter
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const recipeId = params.get('recipe');
+        // Support both 'recipe' and 'id' query parameters
+        const recipeId = params.get('recipe') || params.get('id');
 
         console.log(`📖 CanonicalRecipesPage - Checking for recipe param: ${recipeId}`);
 

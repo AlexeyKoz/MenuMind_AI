@@ -203,7 +203,13 @@ class ApiService {
     // Recipe endpoints
     getRecipes = () => this.request('/recipes/recipes/');
     getRecipe = (recipeId: string) => this.request(`/recipes/recipes/${recipeId}/`);
-    getMyRecipes = () => this.request('/recipes/recipes/my_recipes/');
+    getMyRecipes = (lang?: string) => {
+        const timestamp = Date.now(); // Force cache bust
+        const langParam = lang ? `lang=${lang}` : '';
+        const cacheParam = `_t=${timestamp}`;
+        const queryString = [langParam, cacheParam].filter(Boolean).join('&');
+        return this.request(`/recipes/recipes/my_recipes/${queryString ? `?${queryString}` : ''}`);
+    };
     getPopularRecipes = () => this.request('/recipes/recipes/popular/');
     getRecipeVersions = (recipeId: string) => this.request(`/recipes/recipes/${recipeId}/versions/`);
     saveRecipe = (recipeId: string, data?: any) => this.request(`/recipes/recipes/${recipeId}/save_recipe/`, {
@@ -501,6 +507,21 @@ class ApiService {
         this.request('/shopping/inventory/generate_recipes/', {
             method: 'POST',
             body: JSON.stringify(options || {})
+        });
+
+    // NEW INVENTORY AGENT API
+    getRecipeBriefsFromInventory = (options?: {
+        offset?: number;
+        count?: number;
+    }) =>
+        this.request(`/shopping/inventory/recipe-briefs/?offset=${options?.offset || 0}&count=${options?.count || 5}`, {
+            method: 'POST'
+        });
+
+    generateFullRecipeFromBrief = (brief: any) =>
+        this.request('/shopping/inventory/generate-full-recipe/', {
+            method: 'POST',
+            body: JSON.stringify({ brief })
         });
 
     // Shopping List → Inventory Integration

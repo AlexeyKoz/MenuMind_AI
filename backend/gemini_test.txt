@@ -1,2 +1,0 @@
-Input (Russian): шоколадный пирог
-Output (English): шоколадный пирог

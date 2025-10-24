@@ -14,6 +14,7 @@ import os
 
 from apps.core.ingredient_mapper import IngredientMapper
 from apps.core.google_translate_service import get_google_translate_service
+from apps.shopping.multilang_translator import get_multilang_translator
 from rcip_converter import RecipeAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -26,12 +27,11 @@ class FastRecipeIngredientService:
     PHASE 1 (FAST - 5-10 seconds):
     - Extract ingredients only (skip steps)
     - Map to IML database
-    - Translate to user's language only
+    - Translate to ALL languages (smart multilang system)
     - Return immediately for shopping list
 
     PHASE 2 (Background via Celery):
     - Full recipe extraction (steps, times, etc)
-    - Translate to remaining languages
     - Create canonical recipe
     """
 
@@ -47,6 +47,7 @@ class FastRecipeIngredientService:
 
         self.ingredient_mapper = IngredientMapper()
         self.google_translate = get_google_translate_service()
+        self.multilang_translator = get_multilang_translator()  # NEW!
         self.recipe_analyzer = RecipeAnalyzer()
         self.model = "llama-3.1-8b-instant"  # Fast, lightweight model
 
@@ -104,41 +105,71 @@ class FastRecipeIngredientService:
             logger.info(
                 f"[FAST RECIPE] ✅ Mapped {len(mapped_ingredients)} ingredients to IML")
 
-            # STEP 3: Translate to USER LANGUAGE (if not English)
-            if user_language != 'en':
-                mapped_ingredients = await self._translate_ingredients_to_user_language(
-                    mapped_ingredients,
-                    user_language
-                )
-                logger.info(
-                    f"[FAST RECIPE] ✅ Translated ingredients to {user_language}")
+            # STEP 3: Translate to ALL LANGUAGES (Smart Multilang System)
+            # This replaces the old single-language translation
+            import time
+            start_time = time.time()
 
-            # STEP 4: Translate recipe name to user language
-            recipe_name_translated = recipe_name
-            if user_language != 'en':
-                recipe_name_translated = self.google_translate.translate_text(
-                    recipe_name,
-                    target_language=user_language,
-                    source_language='en'
-                ) or recipe_name
-                logger.info(
-                    f"[FAST RECIPE] ✅ Translated name: {recipe_name} → {recipe_name_translated}")
+            logger.info(
+                "[FAST RECIPE] 🚀 Starting smart multilang translation...")
+            translated_ingredients = await sync_to_async(
+                self.multilang_translator.translate_ingredients_batch
+            )(mapped_ingredients, source_language='en')
+
+            translation_time = time.time() - start_time
+            logger.info(
+                f"[FAST RECIPE] ✅ Smart translation complete in {translation_time:.2f}s")
+
+            # Calculate translation stats
+            iml_hits = sum(
+                1 for ing in translated_ingredients
+                if ing.get('_translation_source') == 'iml'
+            )
+            google_hits = sum(
+                1 for ing in translated_ingredients
+                if ing.get('_translation_source') == 'google'
+            )
+            ai_hits = len(translated_ingredients) - iml_hits - google_hits
+
+            logger.info(
+                f"[FAST RECIPE] 📊 Translation sources: "
+                f"IML={iml_hits} (instant), Google={google_hits} (fast), AI={ai_hits} (fallback)"
+            )
+
+            # STEP 4: Translate recipe name to ALL languages
+            recipe_name_translations = {'en': recipe_name}
+
+            for lang in ['ru', 'he']:
+                try:
+                    translated = self.google_translate.translate_text(
+                        recipe_name,
+                        target_language=lang,
+                        source_language='en'
+                    ) or recipe_name
+                    recipe_name_translations[lang] = translated
+                    logger.info(
+                        f"[FAST RECIPE] Recipe name → [{lang}] {translated}")
+                except Exception as e:
+                    logger.warning(
+                        f"[FAST RECIPE] Recipe name translation to {lang} failed: {e}")
+                    recipe_name_translations[lang] = recipe_name
 
             # STEP 5: Calculate hash for deduplication
             recipe_hash = self._calculate_recipe_hash(
                 recipe_name, ingredients_en)
 
             result = {
-                'recipe_name': recipe_name,  # English
-                'recipe_name_translated': recipe_name_translated,  # User language
-                'ingredients': mapped_ingredients,  # With IML + user language
+                'recipe_name': recipe_name,  # English (base)
+                'recipe_name_translations': recipe_name_translations,  # All languages
+                # With name_translations for all languages
+                'ingredients': translated_ingredients,
                 'source_url': scraped_data['url'],
                 'recipe_hash': recipe_hash,
                 'scraped_data': scraped_data  # For Phase 2 background processing
             }
 
             logger.info(
-                f"[FAST RECIPE] ✅ Fast extraction complete in user language: {user_language}")
+                f"[FAST RECIPE] ✅ Fast extraction complete with ALL language support")
             return result
 
         except Exception as e:

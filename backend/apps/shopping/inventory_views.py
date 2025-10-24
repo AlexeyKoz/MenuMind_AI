@@ -1,6 +1,7 @@
 """
 Inventory Management Views - Complete API endpoints for inventory
 """
+import logging
 from rest_framework import views
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -9,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import timedelta, datetime
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 from .models import Inventory, InventoryHistory, ShoppingList, ShoppingItem
 from .serializers import (
@@ -512,10 +515,197 @@ class InventoryViewSet(viewsets.ModelViewSet):
             'errors': errors
         })
 
+    @action(detail=False, methods=['post'], url_path='recipe-briefs')
+    def recipe_briefs(self, request):
+        """
+        Generate recipe briefs from inventory (NEW AGENT)
+        
+        This is the entry point for the new inventory recipe agent.
+        It generates short recipe briefs (5 at a time) and caches them for 24h.
+        
+        POST /api/inventory/recipe-briefs/
+        Query params:
+            - offset: Number of recipes to skip (default: 0)
+            - count: Number of recipes to return (default: 5)
+        
+        Response:
+        {
+            "success": true,
+            "briefs": [...],
+            "total_generated": 10,
+            "can_generate_more": true,
+            "cached": false,
+            "cache_expires_at": "2025-10-24T12:00:00"
+        }
+        """
+        from apps.inventory.inventory_recipe_agent import get_inventory_recipe_agent
+        
+        # Get inventory items
+        inventory_items = self.get_queryset()
+        items_data = []
+        for item in inventory_items:
+            items_data.append({
+                'name': item.name,
+                'quantity': float(item.quantity),
+                'unit': item.unit,
+                'category': item.category,
+                'location': item.location,
+                'expiration_date': item.expiration_date.isoformat() if item.expiration_date else None
+            })
+        
+        # Get parameters
+        offset = int(request.query_params.get('offset', 0))
+        count = int(request.query_params.get('count', 5))
+        
+        # Generate briefs
+        agent = get_inventory_recipe_agent()
+        result = agent.generate_recipe_briefs(
+            user_id=str(request.user.id),
+            inventory_items=items_data,
+            count=count,
+            offset=offset
+        )
+        
+        return Response({
+            'success': True,
+            **result
+        })
+    
+    @action(detail=False, methods=['post'], url_path='generate-full-recipe')
+    def generate_full_recipe(self, request):
+        """
+        Generate full recipe from a brief (NEW AGENT)
+        
+        This endpoint:
+        1. Takes a recipe brief
+        2. Generates full recipe with detailed steps
+        3. Checks for duplicates using deduplication service
+        4. Returns full recipe (or duplicate if found)
+        
+        POST /api/inventory/generate-full-recipe/
+        Body:
+        {
+            "brief": {
+                "name": "Recipe Name",
+                "description": "...",
+                "main_ingredients": [...],
+                "cook_time_minutes": 30,
+                "difficulty": "intermediate",
+                "cuisine": "Italian"
+            }
+        }
+        
+        Response:
+        {
+            "success": true,
+            "is_duplicate": false,
+            "recipe": {...},
+            "duplicate_id": null  # or UUID if duplicate
+        }
+        """
+        from apps.inventory.inventory_recipe_agent import get_inventory_recipe_agent
+        from apps.core.deduplication_service import get_deduplication_service
+        from apps.recipes.models import CanonicalRecipe
+        
+        # Get brief from request
+        brief = request.data.get('brief')
+        if not brief:
+            return Response({
+                'success': False,
+                'error': 'Recipe brief is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get user's language
+        target_language = self._get_user_language(request)
+        
+        # Get inventory items
+        inventory_items = self.get_queryset()
+        items_data = []
+        for item in inventory_items:
+            items_data.append({
+                'name': item.name,
+                'quantity': float(item.quantity),
+                'unit': item.unit,
+                'category': item.category
+            })
+        
+        # Generate full recipe
+        agent = get_inventory_recipe_agent()
+        full_recipe = agent.generate_full_recipe(
+            brief=brief,
+            inventory_items=items_data,
+            target_language=target_language
+        )
+        
+        if not full_recipe:
+            return Response({
+                'success': False,
+                'error': 'Failed to generate recipe'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Check for duplicates
+        dedup_service = get_deduplication_service()
+        duplicate = dedup_service.check_duplicate(
+            recipe_name=full_recipe['name'],
+            ingredients=[ing['name'] for ing in full_recipe.get('ingredients', [])]
+        )
+        
+        if duplicate:
+            return Response({
+                'success': True,
+                'is_duplicate': True,
+                'duplicate_id': str(duplicate.id),
+                'duplicate_name': duplicate.name,
+                'message': f'Similar recipe already exists: {duplicate.name}'
+            })
+        
+        # Save as canonical recipe
+        try:
+            # Convert to RCIP format
+            rcip_data = {
+                'rcip_version': '2.0',
+                'metadata': {
+                    'title': full_recipe['name'],
+                    'description': full_recipe.get('description', ''),
+                    'cuisine': full_recipe.get('cuisine', ''),
+                    'difficulty': full_recipe.get('difficulty', 'intermediate'),
+                    'prep_time_minutes': full_recipe.get('prep_time_minutes', 15),
+                    'cook_time_minutes': full_recipe.get('cook_time_minutes', 30),
+                    'servings': full_recipe.get('servings', 4),
+                    'tags': full_recipe.get('tags', [])
+                },
+                'structure': {
+                    'ingredients': full_recipe.get('ingredients', []),
+                    'steps': [{'instruction': step} for step in full_recipe.get('instructions', [])]
+                }
+            }
+            
+            canonical_recipe = CanonicalRecipe.objects.create(
+                canonical_data=rcip_data,
+                author=request.user,
+                source='inventory_agent',
+                recipe_status='validated'
+            )
+            
+            return Response({
+                'success': True,
+                'is_duplicate': False,
+                'recipe_id': str(canonical_recipe.id),
+                'recipe': full_recipe,
+                'message': 'Recipe created successfully'
+            })
+        
+        except Exception as e:
+            logger.error(f"[INV AGENT] Failed to save recipe: {e}")
+            return Response({
+                'success': False,
+                'error': f'Failed to save recipe: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['post'])
     def generate_recipes(self, request):
         """
-        Generate recipe suggestions from current inventory
+        Generate recipe suggestions from current inventory (OLD AGENT - DEPRECATED)
 
         SPRINT 7 INTEGRATION:
         - Phase 1: Validates recipes before returning

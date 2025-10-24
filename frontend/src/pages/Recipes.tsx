@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import {
     Search, Upload, Download, BookOpen, Clock, Users,
     ChefHat, Heart, ExternalLink, FileJson,
-    Filter, X, Check, AlertTriangle, Sparkles, Zap, Archive, ShoppingCart
+    Filter, X, Check, AlertTriangle, Zap, Archive, ShoppingCart
 } from 'lucide-react';
 
 interface Recipe {
@@ -40,7 +40,7 @@ interface Recipe {
 }
 
 const Recipes: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { token, logout } = useAuth();
     const api = new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
@@ -49,9 +49,6 @@ const Recipes: React.FC = () => {
     });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Tab state
-    const [activeTab, setActiveTab] = useState<'library' | 'generator'>('library');
-
     // Library state
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
@@ -59,12 +56,8 @@ const Recipes: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
     const [showFilters, setShowFilters] = useState(false);
-    const [aiQuery, setAiQuery] = useState('');
-    const [aiLoading, setAiLoading] = useState(false);
 
-    // Generator state
-    const [generatedRecipes, setGeneratedRecipes] = useState<Recipe[]>([]);
-    const [generatorLoading, setGeneratorLoading] = useState(false);
+    // Generator state - REMOVED (not needed)
 
     // Filters
     const [difficultyFilter, setDifficultyFilter] = useState('');
@@ -86,10 +79,50 @@ const Recipes: React.FC = () => {
     }>({ show: false, recipe: null, countdown: 5 });
 
     useEffect(() => {
-        if (activeTab === 'library') {
-            loadRecipes();
+        loadRecipes();
+
+        // Close recipe modal when language changes to force reload with new translations
+        if (selectedRecipe) {
+            setSelectedRecipe(null);
         }
-    }, [activeTab]);
+
+        // Check if there's a recipe ID in the URL (from inventory navigation)
+        const params = new URLSearchParams(window.location.search);
+        const recipeId = params.get('id');
+
+        if (recipeId) {
+            console.log('[RECIPES] 🔗 Recipe ID found in URL:', recipeId);
+            // Wait for recipes to load, then open the detail
+            setTimeout(() => {
+                const recipe = recipes.find(r => r.id === recipeId);
+                if (recipe) {
+                    console.log('[RECIPES] ✅ Opening recipe from URL:', recipe.name);
+                    setSelectedRecipe(recipe);
+                    // Clean URL after opening
+                    window.history.replaceState({}, '', '/recipes');
+                } else {
+                    console.log('[RECIPES] ⚠️ Recipe not found, will retry after load');
+                }
+            }, 500);
+        }
+    }, [i18n.language]);  // Reload when language changes
+
+    // Second effect to handle recipe opening after recipes are loaded
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const recipeId = params.get('id');
+
+        if (recipeId && recipes.length > 0 && !selectedRecipe) {
+            console.log('[RECIPES] 🔄 Recipes loaded, checking for recipe ID:', recipeId);
+            const recipe = recipes.find(r => r.id === recipeId);
+            if (recipe) {
+                console.log('[RECIPES] ✅ Opening recipe:', recipe.name);
+                setSelectedRecipe(recipe);
+                // Clean URL after opening
+                window.history.replaceState({}, '', '/recipes');
+            }
+        }
+    }, [recipes, selectedRecipe]);
 
     useEffect(() => {
         filterRecipes();
@@ -98,8 +131,40 @@ const Recipes: React.FC = () => {
     const loadRecipes = async () => {
         setLoading(true);
         try {
-            const data = await api.getMyRecipes();
-            console.log('📚 Raw API response:', data);
+            console.log(`\n${'='.repeat(80)}`);
+            console.log(`📚 [LOAD] ⚡ CALLING API - Language: ${i18n.language}`);
+            console.log(`📚 [LOAD] ⚡ Timestamp: ${new Date().toISOString()}`);
+            console.log(`${'='.repeat(80)}\n`);
+
+            const data = await api.getMyRecipes(i18n.language);
+
+            console.log(`\n${'='.repeat(80)}`);
+            console.log('📚 [LOAD] ✅ API RESPONSE RECEIVED');
+            console.log('📚 [LOAD] Raw API response:', data);
+            console.log(`📚 [LOAD] Loaded with language: ${i18n.language}`);
+
+            // Log first recipe structure for debugging
+            if (data.recipes && data.recipes.length > 0) {
+                console.log(`📚 [LOAD] Total recipes: ${data.recipes.length}`);
+                console.log('📚 [LOAD] First recipe sample:', data.recipes[0]);
+                console.log('📚 [LOAD] First recipe NAME:', data.recipes[0].name);
+                console.log('📚 [LOAD] First recipe ingredients[0]:', data.recipes[0].ingredients?.[0]);
+                console.log('📚 [LOAD] First recipe steps[0]:', data.recipes[0].steps?.[0]);
+
+                // Check if any recipe has empty ingredients/steps (indicating pending translation)
+                const hasEmptyContent = data.recipes.some((r: any) =>
+                    !r.ingredients || r.ingredients.length === 0 || !r.steps || r.steps.length === 0
+                );
+
+                if (hasEmptyContent && i18n.language !== 'en') {
+                    console.log('⚠️ [LOAD] Some recipes have empty content - translation may be pending');
+                    toast('🔄 Translating recipes... Reload in a few seconds to see translations', {
+                        duration: 5000,
+                        icon: '🌍'
+                    });
+                }
+            }
+            console.log(`${'='.repeat(80)}\n`);
 
             // Handle different response formats
             let recipeList: Recipe[] = [];
@@ -268,116 +333,6 @@ const Recipes: React.FC = () => {
         }
     };
 
-    const handleAISearch = async () => {
-        if (!aiQuery.trim()) {
-            toast.error(t('recipes.pleaseEnterRecipe'));
-            return;
-        }
-
-        setAiLoading(true);
-        try {
-            const result = await api.findRecipe(aiQuery);
-            console.log('[AI SEARCH] Find recipe result:', result);
-
-            // The recipe is already created and saved by the backend
-            // The response includes: canonical_recipe, user_recipe, created
-            if (result.canonical_recipe) {
-                toast.success(t('recipes.recipeFound', { name: result.canonical_recipe.name }));
-
-                // The backend already creates a user_recipe (fork), but we also need to like the canonical
-                const canonicalId = result.canonical_recipe.id;
-                if (canonicalId) {
-                    try {
-                        console.log(`[AI SEARCH] Auto-liking canonical recipe ID: ${canonicalId}`);
-                        const likeResult = await api.likeCanonicalRecipe(canonicalId);
-                        console.log('[AI SEARCH] Like result:', likeResult);
-
-                        if (likeResult.saved_to_my_recipes) {
-                            toast.success(t('recipes.recipeAddedToMyRecipes'));
-                            console.log('[AI SEARCH] ✅ Recipe saved to My Recipes');
-                        }
-                    } catch (likeError: any) {
-                        console.error('[AI SEARCH] ❌ Failed to auto-like recipe:', likeError);
-                        // Don't show error to user since recipe is already created
-                    }
-                } else {
-                    console.warn('[AI SEARCH] ⚠️ No canonical recipe ID found');
-                }
-            } else {
-                console.warn('[AI SEARCH] ⚠️ No canonical_recipe in result:', result);
-                toast.success(t('recipes.recipeFoundAndSaved'));
-            }
-
-            setAiQuery('');
-            await loadRecipes();
-        } catch (error: any) {
-            console.error('AI search error:', error);
-            toast.error(error.message || t('recipes.failedToFind'));
-        } finally {
-            setAiLoading(false);
-        }
-    };
-
-    const handleGenerateRecipes = async () => {
-        setGeneratorLoading(true);
-        try {
-            const data = await api.generateRecipes();
-            const recipes = data.recipes || [];
-            setGeneratedRecipes(recipes);
-
-            if (recipes.length > 0) {
-                toast.success(t('recipes.generatedRecipes', { count: recipes.length }));
-
-                // Auto-like each generated recipe to add them to My Recipes
-                console.log('[AI GENERATOR] Auto-liking generated recipes...');
-                let savedCount = 0;
-
-                // Wait for all likes to complete
-                const likePromises = recipes.map(async (recipe: Recipe) => {
-                    if (recipe.id) {
-                        try {
-                            console.log(`[AI GENERATOR] Liking recipe ID: ${recipe.id}, Name: ${recipe.name}`);
-                            const result = await api.likeCanonicalRecipe(recipe.id);
-                            console.log(`[AI GENERATOR] Like result:`, result);
-
-                            if (result.saved_to_my_recipes) {
-                                savedCount++;
-                                console.log(`[AI GENERATOR] ✅ Saved to My Recipes: ${recipe.name}`);
-                            } else {
-                                console.warn(`[AI GENERATOR] ⚠️ Liked but not saved to My Recipes: ${recipe.name}`);
-                            }
-                        } catch (likeError: any) {
-                            console.error(`[AI GENERATOR] ❌ Failed to like ${recipe.name}:`, likeError);
-                            console.error(`[AI GENERATOR] Error details:`, likeError.message);
-                        }
-                    } else {
-                        console.warn(`[AI GENERATOR] Recipe has no ID:`, recipe);
-                    }
-                });
-
-                // Wait for all likes to complete
-                await Promise.all(likePromises);
-                console.log(`[AI GENERATOR] Finished liking. Total saved: ${savedCount}/${recipes.length}`);
-
-                if (savedCount > 0) {
-                    toast.success(t('recipes.recipesAddedToMyRecipes', {
-                        count: savedCount,
-                        plural: savedCount > 1 ? 's' : ''
-                    }));
-                }
-
-                // Refresh recipes list to show the newly saved recipes
-                console.log('[AI GENERATOR] Refreshing recipes list...');
-                await loadRecipes();
-            }
-        } catch (error: any) {
-            console.error('Generate recipes error:', error);
-            toast.error(error.message || t('recipes.failedToGenerate'));
-        } finally {
-            setGeneratorLoading(false);
-        }
-    };
-
     const getAllergens = (recipe: Recipe): string[] => {
         const allergens = new Set<string>();
         recipe.ingredients?.forEach((ing: any) => {
@@ -397,7 +352,7 @@ const Recipes: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-6">
-            {/* Header with Tabs */}
+            {/* Header */}
             <div className="max-w-7xl mx-auto mb-8">
                 <div className="bg-white rounded-2xl shadow-xl p-8">
                     <div className="flex justify-between items-start mb-6">
@@ -406,292 +361,154 @@ const Recipes: React.FC = () => {
                                 {t('recipes.title')}
                             </h1>
                             <p className="text-gray-600">
-                                {activeTab === 'library'
-                                    ? t('recipes.libraryDescription')
-                                    : t('recipes.generatorDescription')}
+                                {t('recipes.libraryDescription')}
                             </p>
                         </div>
                     </div>
 
-                    {/* Tab Navigation */}
+                    {/* Upload Button */}
                     <div className="flex gap-2 mb-6">
                         <button
-                            onClick={() => setActiveTab('library')}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition ${activeTab === 'library'
-                                ? 'bg-indigo-600 text-white shadow-lg'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
                         >
-                            <BookOpen className="w-5 h-5" />
-                            {t('recipes.recipeLibrary')}
+                            <Upload className="w-5 h-5" />
+                            {t('recipes.uploadRcip')}
                         </button>
 
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".rcip"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                        />
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
+                            <div className="text-sm text-blue-800">{t('recipes.totalRecipes')}</div>
+                        </div>
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-green-600">{stats.ingredients}</div>
+                            <div className="text-sm text-green-800">{t('recipes.ingredients')}</div>
+                        </div>
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg">
+                            <div className="text-3xl font-bold text-purple-600">{stats.steps}</div>
+                            <div className="text-sm text-purple-800">{t('recipes.cookingSteps')}</div>
+                        </div>
+                    </div>
+
+                    {/* Search and Filters */}
+                    <div className="flex gap-3">
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder={t('recipes.searchRecipes')}
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+
                         <button
-                            onClick={() => setActiveTab('generator')}
-                            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition ${activeTab === 'generator'
-                                ? 'bg-purple-600 text-white shadow-lg'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
+                            onClick={() => setShowFilters(!showFilters)}
+                            className="flex items-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                         >
-                            <Zap className="w-5 h-5" />
-                            {t('recipes.aiGenerator')}
+                            <Filter className="w-5 h-5" />
+                            {t('recipes.filters')}
                         </button>
                     </div>
 
-                    {/* Library Tab Content */}
-                    {activeTab === 'library' && (
-                        <>
-                            {/* AI Search Panel - Always Visible */}
-                            <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-                                <div className="flex items-center gap-3">
-                                    <Sparkles className="w-6 h-6 text-purple-600" />
-                                    <input
-                                        type="text"
-                                        value={aiQuery}
-                                        onChange={(e) => setAiQuery(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleAISearch()}
-                                        placeholder={t('recipes.aiSearchPlaceholder')}
-                                        className="flex-1 px-4 py-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                        disabled={aiLoading}
-                                    />
-                                    <button
-                                        onClick={handleAISearch}
-                                        disabled={aiLoading}
-                                        className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 font-medium"
-                                    >
-                                        {aiLoading ? t('recipes.searching') : t('recipes.findRecipe')}
-                                    </button>
-                                </div>
-                                <p className="text-sm text-purple-700 mt-2">
-                                    {t('recipes.aiSearchDescription')}
-                                </p>
+                    {/* Filter Panel */}
+                    {showFilters && (
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg grid grid-cols-4 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('recipes.difficulty')}</label>
+                                <select
+                                    value={difficultyFilter}
+                                    onChange={(e) => setDifficultyFilter(e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                >
+                                    <option value="">{t('recipes.all')}</option>
+                                    <option value="beginner">{t('recipes.beginner')}</option>
+                                    <option value="intermediate">{t('recipes.intermediate')}</option>
+                                    <option value="advanced">{t('recipes.advanced')}</option>
+                                </select>
                             </div>
 
-                            <div className="flex gap-2 mb-6">
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={loading}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
-                                >
-                                    <Upload className="w-5 h-5" />
-                                    {t('recipes.uploadRcip')}
-                                </button>
-
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">{t('recipes.cuisine')}</label>
                                 <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept=".rcip"
-                                    onChange={handleFileUpload}
-                                    className="hidden"
+                                    type="text"
+                                    value={cuisineFilter}
+                                    onChange={(e) => setCuisineFilter(e.target.value)}
+                                    placeholder={t('recipes.cuisinePlaceholder')}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                                 />
                             </div>
 
-                            {/* Stats */}
-                            <div className="grid grid-cols-3 gap-4 mb-6">
-                                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
-                                    <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
-                                    <div className="text-sm text-blue-800">{t('recipes.totalRecipes')}</div>
-                                </div>
-                                <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg">
-                                    <div className="text-3xl font-bold text-green-600">{stats.ingredients}</div>
-                                    <div className="text-sm text-green-800">{t('recipes.ingredients')}</div>
-                                </div>
-                                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg">
-                                    <div className="text-3xl font-bold text-purple-600">{stats.steps}</div>
-                                    <div className="text-sm text-purple-800">{t('recipes.cookingSteps')}</div>
-                                </div>
+                            <div className="flex items-end">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={savedOnlyFilter}
+                                        onChange={(e) => setSavedOnlyFilter(e.target.checked)}
+                                        className="w-4 h-4 text-indigo-600 rounded"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">{t('recipes.savedOnly')}</span>
+                                </label>
                             </div>
 
-                            {/* Search and Filters */}
-                            <div className="flex gap-3">
-                                <div className="flex-1 relative">
-                                    <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder={t('recipes.searchRecipes')}
-                                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                </div>
-
+                            <div className="flex items-end">
                                 <button
-                                    onClick={() => setShowFilters(!showFilters)}
-                                    className="flex items-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                                    onClick={() => {
+                                        setDifficultyFilter('');
+                                        setCuisineFilter('');
+                                        setSavedOnlyFilter(false);
+                                    }}
+                                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
                                 >
-                                    <Filter className="w-5 h-5" />
-                                    {t('recipes.filters')}
+                                    {t('recipes.clearFilters')}
                                 </button>
                             </div>
-
-                            {/* Filter Panel */}
-                            {showFilters && (
-                                <div className="mt-4 p-4 bg-gray-50 rounded-lg grid grid-cols-4 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('recipes.difficulty')}</label>
-                                        <select
-                                            value={difficultyFilter}
-                                            onChange={(e) => setDifficultyFilter(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                        >
-                                            <option value="">{t('recipes.all')}</option>
-                                            <option value="beginner">{t('recipes.beginner')}</option>
-                                            <option value="intermediate">{t('recipes.intermediate')}</option>
-                                            <option value="advanced">{t('recipes.advanced')}</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">{t('recipes.cuisine')}</label>
-                                        <input
-                                            type="text"
-                                            value={cuisineFilter}
-                                            onChange={(e) => setCuisineFilter(e.target.value)}
-                                            placeholder={t('recipes.cuisinePlaceholder')}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                        />
-                                    </div>
-
-                                    <div className="flex items-end">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={savedOnlyFilter}
-                                                onChange={(e) => setSavedOnlyFilter(e.target.checked)}
-                                                className="w-4 h-4 text-indigo-600 rounded"
-                                            />
-                                            <span className="text-sm font-medium text-gray-700">{t('recipes.savedOnly')}</span>
-                                        </label>
-                                    </div>
-
-                                    <div className="flex items-end">
-                                        <button
-                                            onClick={() => {
-                                                setDifficultyFilter('');
-                                                setCuisineFilter('');
-                                                setSavedOnlyFilter(false);
-                                            }}
-                                            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-                                        >
-                                            {t('recipes.clearFilters')}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </>
+                        </div>
                     )}
                 </div>
             </div>
 
             {/* Content Area */}
             <div className="max-w-7xl mx-auto">
-                {activeTab === 'library' ? (
-                    // Library View
-                    loading ? (
-                        <div className="text-center py-12">
-                            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                            <p className="mt-4 text-gray-600">{t('recipes.loadingRecipes')}</p>
-                        </div>
-                    ) : filteredRecipes.length === 0 ? (
-                        <div className="text-center py-12 bg-white rounded-2xl shadow-xl">
-                            <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                            <p className="text-gray-500 mb-2">{t('recipes.noRecipesFound')}</p>
-                            <p className="text-sm text-gray-400">{t('recipes.noRecipesDescription')}</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {filteredRecipes.map((recipe) => (
-                                <RecipeCard
-                                    key={recipe.id}
-                                    recipe={recipe}
-                                    onView={() => setSelectedRecipe(recipe)}
-                                    onDownload={() => handleDownload(recipe)}
-                                    onSave={() => handleSaveRecipe(recipe)}
-                                    onUnsave={() => handleUnsaveRecipe(recipe)}
-                                    onMarkCooked={() => handleMarkCooked(recipe)}
-                                    getAllergens={getAllergens}
-                                    getDifficultyColor={getDifficultyColor}
-                                />
-                            ))}
-                        </div>
-                    )
+                {loading ? (
+                    <div className="text-center py-12">
+                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                        <p className="mt-4 text-gray-600">{t('recipes.loadingRecipes')}</p>
+                    </div>
+                ) : filteredRecipes.length === 0 ? (
+                    <div className="text-center py-12 bg-white rounded-2xl shadow-xl">
+                        <BookOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500 mb-2">{t('recipes.noRecipesFound')}</p>
+                        <p className="text-sm text-gray-400">{t('recipes.noRecipesDescription')}</p>
+                    </div>
                 ) : (
-                    // Generator View
-                    <div>
-                        <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{t('recipes.generateRecipesFromInventory')}</h2>
-                                    <p className="text-gray-600">{t('recipes.generateRecipesDescription')}</p>
-                                </div>
-                                <button
-                                    onClick={handleGenerateRecipes}
-                                    disabled={generatorLoading}
-                                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 transition shadow-lg flex items-center gap-2"
-                                >
-                                    <Zap className="w-5 h-5" />
-                                    {generatorLoading ? t('recipes.generating') : t('recipes.generateRecipes')}
-                                </button>
-                            </div>
-                        </div>
-
-                        {generatorLoading ? (
-                            <div className="text-center py-12">
-                                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-                                <p className="mt-4 text-gray-600">{t('recipes.generatingRecipes')}</p>
-                            </div>
-                        ) : generatedRecipes.length === 0 ? (
-                            <div className="text-center py-12 bg-white rounded-2xl shadow-xl">
-                                <Zap className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                                <p className="text-gray-500 mb-2">{t('recipes.noRecipesGenerated')}</p>
-                                <p className="text-sm text-gray-400">{t('recipes.noRecipesGeneratedDescription')}</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {generatedRecipes.map((recipe, index) => (
-                                    <div key={index} className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all">
-                                        <div className="bg-gradient-to-r from-orange-400 to-red-500 h-32 flex items-center justify-center">
-                                            <ChefHat className="w-16 h-16 text-white opacity-50" />
-                                        </div>
-                                        <div className="p-6">
-                                            <h3 className="text-xl font-bold mb-2">{recipe.name}</h3>
-                                            <div className="flex justify-between text-sm text-gray-600 mb-4">
-                                                <span>⏱ {recipe.prep_time_minutes} min</span>
-                                                <span className="capitalize">📊 {recipe.difficulty}</span>
-                                            </div>
-
-                                            {recipe.nutrition_per_serving && (
-                                                <div className="mb-4">
-                                                    <h4 className="font-medium mb-2">{t('recipes.nutritionPerServing')}</h4>
-                                                    <div className="text-sm grid grid-cols-2 gap-2">
-                                                        <span>{t('recipes.calories')}: {recipe.nutrition_per_serving.calories}</span>
-                                                        <span>{t('recipes.protein')}: {recipe.nutrition_per_serving.protein}g</span>
-                                                        <span>{t('recipes.carbs')}: {recipe.nutrition_per_serving.carbs}g</span>
-                                                        <span>{t('recipes.fat')}: {recipe.nutrition_per_serving.fat}g</span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {recipe.missing_ingredients && recipe.missing_ingredients.length > 0 && (
-                                                <div className="mb-4 p-2 bg-amber-50 border border-amber-200 rounded">
-                                                    <h4 className="font-medium text-amber-800 text-sm mb-1">{t('recipes.missingIngredients')}</h4>
-                                                    <div className="text-xs text-amber-700">
-                                                        {recipe.missing_ingredients.join(', ')}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <button
-                                                onClick={() => setSelectedRecipe(recipe)}
-                                                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
-                                            >
-                                                {t('recipes.viewRecipe')}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredRecipes.map((recipe) => (
+                            <RecipeCard
+                                key={recipe.id}
+                                recipe={recipe}
+                                onView={() => setSelectedRecipe(recipe)}
+                                onDownload={() => handleDownload(recipe)}
+                                onSave={() => handleSaveRecipe(recipe)}
+                                onUnsave={() => handleUnsaveRecipe(recipe)}
+                                onMarkCooked={() => handleMarkCooked(recipe)}
+                                getAllergens={getAllergens}
+                                getDifficultyColor={getDifficultyColor}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
@@ -916,8 +733,15 @@ interface RecipeDetailModalProps {
 const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
     recipe, onClose, onDownload, onSave, onUnsave, onMarkCooked, getAllergens, getDifficultyColor
 }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { token, logout } = useAuth();
+
+    // Debug: Log what recipe data we received
+    console.log('🍳 [MODAL] Opened with recipe:', recipe.name);
+    console.log('🍳 [MODAL] Current language:', i18n.language);
+    console.log('🍳 [MODAL] Recipe ingredients[0]:', recipe.ingredients?.[0]);
+    console.log('🍳 [MODAL] Recipe steps[0]:', recipe.steps?.[0]);
+
     const allergens = getAllergens(recipe);
     const [showJSON, setShowJSON] = useState(false);
     const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
@@ -975,19 +799,131 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
             // Get checked ingredients
             const ingredientsToAdd = Array.from(checkedIngredients).map(idx => recipe.ingredients[idx]);
 
+            // Helper function to parse quantity and determine counter type
+            const parseIngredientQuantity = (ingredient: any) => {
+                console.log(`\n[RECIPE ADD] ========================================`);
+                console.log(`[RECIPE ADD] Processing ingredient:`, ingredient);
+                console.log(`[RECIPE ADD] - name: "${ingredient.name}"`);
+                console.log(`[RECIPE ADD] - amount: ${ingredient.amount}`);
+                console.log(`[RECIPE ADD] - quantity: ${ingredient.quantity}`);
+                console.log(`[RECIPE ADD] - unit: "${ingredient.unit}"`);
+
+                const amount = ingredient.amount || ingredient.quantity || 1;
+                const unit = (ingredient.unit || '').toLowerCase();
+                const name = (ingredient.name || '').toLowerCase();
+
+                console.log(`[RECIPE ADD] Parsed values:`);
+                console.log(`[RECIPE ADD] - amount: ${amount}`);
+                console.log(`[RECIPE ADD] - unit: "${unit}"`);
+                console.log(`[RECIPE ADD] - name: "${name}"`);
+
+                let weight_quantity = 0;
+                let liquid_quantity = 0;
+                let item_quantity = 1;
+                let auto_enable_counter = null;
+
+                // Weight units (grams, kg, oz, lb)
+                if (unit.includes('g') || unit.includes('gram') || unit.includes('kg') ||
+                    unit.includes('oz') || unit.includes('lb')) {
+                    // Convert to grams
+                    let grams = amount;
+                    if (unit.includes('kg')) grams = amount * 1000;
+                    else if (unit.includes('oz')) grams = amount * 28.35;
+                    else if (unit.includes('lb')) grams = amount * 453.59;
+
+                    weight_quantity = grams;
+                    item_quantity = 1;
+                    auto_enable_counter = 'weight';
+
+                    console.log(`[RECIPE ADD] ${ingredient.name}: ${grams}g (weight counter)`);
+                    console.log(`[RECIPE ADD] ✅ WEIGHT MODE ACTIVATED`);
+                }
+                // Volume/Liquid units (ml, l, cup, fl oz)
+                else if (unit.includes('ml') || unit.includes('l') || unit.includes('liter') ||
+                    unit.includes('cup') || unit.includes('fl') || unit.includes('fluid')) {
+                    // Convert to ml
+                    let ml = amount;
+                    if (unit.includes('l') && !unit.includes('ml')) ml = amount * 1000;
+                    else if (unit.includes('cup')) ml = amount * 240;
+                    else if (unit.includes('fl oz')) ml = amount * 30;
+
+                    liquid_quantity = ml;
+                    item_quantity = 1;
+                    auto_enable_counter = 'liquid';
+
+                    console.log(`[RECIPE ADD] ${ingredient.name}: ${ml}ml (liquid counter)`);
+                }
+                // Infer from ingredient name if no clear unit
+                else if (!unit || unit === 'unit' || unit === 'piece' || unit === 'pieces') {
+                    // Check if it's likely a liquid
+                    if (name.includes('water') || name.includes('milk') || name.includes('oil') ||
+                        name.includes('broth') || name.includes('stock') || name.includes('juice') ||
+                        name.includes('cream') || name.includes('sauce') || name.includes('liquid')) {
+                        // Assume ml if small number, liters if large
+                        liquid_quantity = amount < 10 ? amount * 1000 : amount;
+                        item_quantity = 1;
+                        auto_enable_counter = 'liquid';
+                        console.log(`[RECIPE ADD] ${ingredient.name}: ${liquid_quantity}ml (inferred liquid)`);
+                    }
+                    // Check if it's a spice or herb (use weight)
+                    else if (name.includes('salt') || name.includes('pepper') || name.includes('spice') ||
+                        name.includes('herb') || name.includes('cumin') || name.includes('paprika')) {
+                        weight_quantity = amount < 10 ? amount * 5 : amount; // Small amounts are teaspoons
+                        item_quantity = 1;
+                        auto_enable_counter = 'weight';
+                        console.log(`[RECIPE ADD] ${ingredient.name}: ${weight_quantity}g (inferred spice)`);
+                    }
+                    // Default to quantity counter
+                    else {
+                        item_quantity = amount;
+                        console.log(`[RECIPE ADD] ${ingredient.name}: ${amount} pieces (quantity counter)`);
+                    }
+                } else {
+                    // Unknown unit, use quantity counter
+                    item_quantity = amount;
+                    console.log(`[RECIPE ADD] ${ingredient.name}: ${amount} ${unit} (quantity counter)`);
+                }
+
+                return { weight_quantity, liquid_quantity, quantity: item_quantity, auto_enable_counter };
+            };
+
             // Add each ingredient to the shopping list
             let successCount = 0;
+            console.log(`\n[RECIPE ADD] ========================================`);
+            console.log(`[RECIPE ADD] Starting to add ${ingredientsToAdd.length} ingredients`);
+            console.log(`[RECIPE ADD] ========================================\n`);
+
             for (const ingredient of ingredientsToAdd) {
                 try {
-                    await api.addItemToList(selectedListId, {
+                    const parsed = parseIngredientQuantity(ingredient);
+
+                    console.log(`[RECIPE ADD] Parsed result:`, parsed);
+
+                    const itemData: any = {
                         name: ingredient.name,
-                        quantity: ingredient.amount || 1,
-                        unit: ingredient.unit || '',
+                        quantity: parsed.quantity,
+                        unit: ingredient.unit || 'unit',
+                        weight_quantity: parsed.weight_quantity,
+                        liquid_quantity: parsed.liquid_quantity,
                         notes: ingredient.notes || ''
-                    });
+                    };
+
+                    // Add auto-enable counter flag if needed
+                    if (parsed.auto_enable_counter) {
+                        itemData._auto_enable_counter = parsed.auto_enable_counter;
+                    }
+
+                    console.log(`\n[RECIPE ADD] 📤 Sending to API:`, itemData);
+                    console.log(`[RECIPE ADD] - weight_quantity: ${itemData.weight_quantity}`);
+                    console.log(`[RECIPE ADD] - liquid_quantity: ${itemData.liquid_quantity}`);
+                    console.log(`[RECIPE ADD] - _auto_enable_counter: ${itemData._auto_enable_counter}`);
+
+                    await api.addItemToList(selectedListId, itemData);
                     successCount++;
+
+                    console.log(`[RECIPE ADD] ✅ Successfully added: ${ingredient.name}`);
                 } catch (error) {
-                    console.error(`Failed to add ${ingredient.name}:`, error);
+                    console.error(`[RECIPE ADD] ❌ Failed to add ${ingredient.name}:`, error);
                 }
             }
 
@@ -1087,9 +1023,13 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                                         />
                                         <div className="flex-1">
                                             <div className={checkedIngredients.has(idx) ? 'line-through text-gray-400' : ''}>
-                                                <span className="font-semibold text-indigo-600">{ing.human_amount || `${ing.amount || ''} ${ing.unit || ''}`.trim()}</span>
+                                                <span className="font-semibold text-indigo-600">
+                                                    {ing.human_amount || ((ing.amount || ing.quantity) && ing.unit ? `${ing.amount || ing.quantity} ${ing.unit}` : '')}
+                                                </span>
                                                 {' '}
-                                                <span>{ing.name}</span>
+                                                <span>
+                                                    {ing.display_name?.[i18n.language] || ing.display_name?.en || ing.name}
+                                                </span>
                                             </div>
                                             {ing.notes && (
                                                 <p className="text-xs text-gray-500 mt-1">{ing.notes}</p>
@@ -1172,7 +1112,9 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                                             {idx + 1}
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-gray-700">{step.human_text || step.instruction}</p>
+                                            <p className="text-gray-700">
+                                                {step.text_translations?.[i18n.language] || step.text || step.human_text || step.instruction}
+                                            </p>
                                             {step.params && (
                                                 <div className="flex gap-2 mt-2">
                                                     {step.params.time_minutes && (

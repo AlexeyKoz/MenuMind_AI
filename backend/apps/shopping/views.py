@@ -101,6 +101,9 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def add_item(self, request, pk=None):
         """Add item to shopping list"""
+        print("="*80)
+        print("🚀 ADD_ITEM METHOD CALLED - NEW CODE VERSION 2.0")
+        print("="*80)
         try:
             shopping_list = self.get_object()
             print(
@@ -139,18 +142,63 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             # Create item with safe defaults
             item_data = request.data.copy()
             print(f"📝 Item data received: {item_data}")
+            print(f"📝 Full request data keys: {list(request.data.keys())}")
+            
+            # NEW: Debug weight/liquid quantities from recipe
+            weight_qty = item_data.get('weight_quantity', 0)
+            liquid_qty = item_data.get('liquid_quantity', 0)
+            auto_counter = item_data.get('_auto_enable_counter', None)
+            
+            print(f"⚖️ [RECIPE ADD DEBUG] weight_quantity: {weight_qty}")
+            print(f"🥤 [RECIPE ADD DEBUG] liquid_quantity: {liquid_qty}")
+            print(f"🎯 [RECIPE ADD DEBUG] _auto_enable_counter: {auto_counter}")
 
             # Use safe defaults for missing attributes
             user_color = getattr(request.user, 'personal_color', '#4F46E5')
             priority = 1 if is_creator else 0
 
-            # Create the item directly (bypass serializer for now)
+            # NEW: Translate manually-added item to all languages
+            item_name = item_data.get('name', '')
+            print(f"[MANUAL ITEM MULTILANG] Translating item: {item_name}")
+
+            # Get multilang translator
+            from apps.shopping.multilang_translator import get_multilang_translator
+            translator = get_multilang_translator()
+
+            # Create ingredient-like structure for translator
+            temp_ingredient = [{
+                'name': item_name,
+                'ingredient_key': None  # Manual items don't have IML keys
+            }]
+
+            # Translate to all languages
+            try:
+                translated = translator.translate_ingredients_batch(
+                    temp_ingredient,
+                    source_language='en'
+                )
+                name_translations = translated[0].get('name_translations', {})
+                print(
+                    f"[MANUAL ITEM MULTILANG] ✅ Translations: {name_translations}")
+            except Exception as e:
+                print(f"[MANUAL ITEM MULTILANG] ⚠️ Translation failed: {e}")
+                # Fallback: just use English
+                name_translations = {'en': item_name}
+
+            # Import Decimal for proper number handling
+            from decimal import Decimal
+            
+            # Create the item with translations AND weight/liquid quantities
             item = ShoppingItem.objects.create(
                 shopping_list=shopping_list,
                 added_by=request.user,
                 name=item_data.get('name', ''),
-                quantity=item_data.get('quantity', 1),
+                name_translations=name_translations,  # NEW!
+                original_language='en',  # NEW!
+                quantity=Decimal(str(item_data.get('quantity', 1))),
                 unit=item_data.get('unit', 'unit'),
+                weight_quantity=Decimal(str(weight_qty)),  # NEW: From recipe
+                liquid_quantity=Decimal(str(liquid_qty)),  # NEW: From recipe
                 category=item_data.get('category', 'other'),
                 notes=item_data.get('notes', ''),
                 user_color=user_color,
@@ -158,6 +206,22 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             )
 
             print(f"✅ Item created successfully: {item.name}")
+            print(f"✅ Stored translations: {item.name_translations}")
+            print(f"✅ Stored weight_quantity: {item.weight_quantity}g")
+            print(f"✅ Stored liquid_quantity: {item.liquid_quantity}ml")
+            
+            # Set auto-enable counter flag if provided (for frontend)
+            # This must be set BEFORE serialization so the serializer can access it
+            if auto_counter:
+                item._auto_enable_counter = auto_counter
+                print(f"✅ Set auto_enable_counter: {auto_counter}")
+            # If no explicit flag but we have weight/liquid quantities, infer the counter
+            elif weight_qty > 0:
+                item._auto_enable_counter = 'weight'
+                print(f"✅ Auto-inferred counter: weight (from weight_quantity={weight_qty})")
+            elif liquid_qty > 0:
+                item._auto_enable_counter = 'liquid'
+                print(f"✅ Auto-inferred counter: liquid (from liquid_quantity={liquid_qty})")
 
             # Increment items_added_count for the user (if they are a collaborator)
             if not is_creator:
@@ -175,11 +239,40 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             try:
                 channel_layer = get_channel_layer()
                 if channel_layer:
+                    # Serialize with request context for language-aware display_name
+                    serializer = ShoppingItemSerializer(
+                        item, context={'request': request})
+
+                    # Import UUID converter from consumers
+                    from uuid import UUID
+                    from decimal import Decimal
+                    import json
+
+                    # Convert UUIDs and Decimals in serialized data
+                    def convert_for_channels(data):
+                        if isinstance(data, dict):
+                            return {k: convert_for_channels(v) for k, v in data.items()}
+                        elif isinstance(data, list):
+                            return [convert_for_channels(item) for item in data]
+                        elif isinstance(data, UUID):
+                            return str(data)
+                        elif isinstance(data, Decimal):
+                            return float(data)
+                        return data
+
+                    item_data = convert_for_channels(serializer.data)
+                    
+                    # Debug: Log what's being sent
+                    print(f"📡 [WEBSOCKET] Sending item_added notification:")
+                    print(f"📡 [WEBSOCKET] - auto_enable_counter: {item_data.get('auto_enable_counter')}")
+                    print(f"📡 [WEBSOCKET] - weight_quantity: {item_data.get('weight_quantity')}")
+                    print(f"📡 [WEBSOCKET] - liquid_quantity: {item_data.get('liquid_quantity')}")
+
                     async_to_sync(channel_layer.group_send)(
                         f'shopping_list_{shopping_list.id}',
                         {
                             'type': 'item_added',
-                            'item': ShoppingItemSerializer(item).data,
+                            'item': item_data,
                             'user': {
                                 'id': str(request.user.id),
                                 'username': request.user.username,
@@ -190,12 +283,17 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     )
                     print(
                         f"📡 WebSocket notification sent for item: {item.name}")
+                    print(f"📡 With translations: {name_translations}")
             except Exception as ws_error:
                 print(f"⚠️ WebSocket notification failed: {ws_error}")
                 # Don't fail the request if WebSocket fails
 
-            # Return success response
-            return Response(ShoppingItemSerializer(item).data, status=status.HTTP_201_CREATED)
+            # Return success response with request context
+            return Response(
+                ShoppingItemSerializer(
+                    item, context={'request': request}).data,
+                status=status.HTTP_201_CREATED
+            )
 
         except Exception as e:
             print(f"❌ Error adding item: {e}")
@@ -583,9 +681,50 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
                 # Use existing recipe - get ingredients in user's language
                 recipe_name = existing_canonical.name
-                ingredients_data = existing_canonical.base_ingredients
                 canonical_recipe_id = str(existing_canonical.id)
                 is_new = False
+
+                # Get ingredients from base_ingredients (RCIP format)
+                ingredients_data = existing_canonical.base_ingredients
+
+                # Validate ingredients_data format
+                if not ingredients_data or not isinstance(ingredients_data, list):
+                    print(
+                        f"[FAST AI RECIPE] ⚠️ Invalid base_ingredients format, fetching from Recipe model...")
+
+                    # Fallback: Try to get from the first Recipe translation
+                    recipe_translation = Recipe.objects.filter(
+                        canonical_recipe=existing_canonical).first()
+                    if recipe_translation and hasattr(recipe_translation, 'ingredients'):
+                        ingredients_data = recipe_translation.ingredients
+                    else:
+                        print(
+                            f"[FAST AI RECIPE] ❌ No ingredients found for existing recipe!")
+                        return Response({
+                            'success': False,
+                            'message': f'Recipe "{existing_canonical.name}" exists but has no ingredients. Please regenerate it.'
+                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                print(
+                    f"[FAST AI RECIPE] Using {len(ingredients_data)} ingredients from existing recipe")
+
+                # Ensure ingredients have name_translations (for multilang support)
+                # If they don't, we need to translate them now
+                from apps.shopping.multilang_translator import get_multilang_translator
+                translator = get_multilang_translator()
+
+                for ing in ingredients_data:
+                    if 'name_translations' not in ing or not ing['name_translations']:
+                        print(
+                            f"[FAST AI RECIPE] ⚠️ Ingredient '{ing.get('name')}' missing translations, translating now...")
+                        temp_ing = [
+                            {'name': ing.get('name', ''), 'ingredient_key': ing.get('ingredient_key')}]
+                        translated = translator.translate_ingredients_batch(
+                            temp_ing, source_language='en')
+                        ing['name_translations'] = translated[0].get(
+                            'name_translations', {'en': ing.get('name', '')})
+                        print(
+                            f"[FAST AI RECIPE] ✅ Added translations: {ing['name_translations']}")
 
             else:
                 # STEP 2: Recipe doesn't exist - FAST EXTRACTION
@@ -617,14 +756,19 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     user_unit_system=user_unit_system
                 )
 
-                if not fast_result:
+                print(
+                    f"[FAST AI RECIPE] 📊 fast_result type: {type(fast_result)}")
+                print(
+                    f"[FAST AI RECIPE] 📊 fast_result keys: {fast_result.keys() if fast_result else 'None'}")
+
+                if not fast_result or not fast_result.get('ingredients'):
                     # Generate helpful suggestions based on the query
                     suggestions = self._generate_recipe_suggestions(
                         query, user_language)
 
                     return Response({
                         'success': False,
-                        'message': 'Could not find a recipe for your search',
+                        'message': 'Could not extract ingredients from recipe',
                         'show_suggestions': True,
                         'failed_query': query,
                         'suggestions': suggestions
@@ -633,12 +777,18 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 print(
                     f"[FAST AI RECIPE] ✅ Fast extraction complete: {len(fast_result['ingredients'])} ingredients")
 
-                # Use translated name
-                recipe_name = fast_result['recipe_name_translated']
+                # Get recipe name (base English name)
+                recipe_name = fast_result['recipe_name']
+                recipe_name_translations = fast_result.get(
+                    'recipe_name_translations', {'en': recipe_name})
                 ingredients_data = fast_result['ingredients']
                 recipe_hash = fast_result['recipe_hash']
                 canonical_recipe_id = None  # Will be created in background
                 is_new = True
+
+                print(f"[FAST AI RECIPE] Recipe name: {recipe_name}")
+                print(
+                    f"[FAST AI RECIPE] Recipe translations: {recipe_name_translations}")
 
                 # STEP 3: Trigger BACKGROUND TASK for full recipe processing
                 print(
@@ -665,9 +815,32 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
             # Process each ingredient
             for ing_data in ingredients_data:
-                # Get ingredient name (translated to user's language)
-                ingredient_name = ing_data.get(
-                    'name_translated') or ing_data.get('name', '')
+                # Get ingredient name (now we have translations for ALL languages!)
+                raw_name = ing_data.get('name', '')
+                name_translations = ing_data.get('name_translations', {})
+                
+                # CRITICAL FIX: If name is already a dict (translation object), extract the English name
+                if isinstance(raw_name, dict):
+                    ingredient_name = raw_name.get('en') or raw_name.get(list(raw_name.keys())[0]) if raw_name else ''
+                    # Also use it for translations if no separate translations provided
+                    if not name_translations:
+                        name_translations = raw_name
+                else:
+                    ingredient_name = raw_name
+
+                # DEBUG: Log translation data
+                print(
+                    f"[MULTILANG DEBUG] Processing ingredient: {ingredient_name}")
+                print(
+                    f"[MULTILANG DEBUG] Translations received: {name_translations}")
+                print(
+                    f"[MULTILANG DEBUG] Translation source: {ing_data.get('_translation_source', 'unknown')}")
+
+                # Fallback: if no translations, create basic dict
+                if not name_translations:
+                    name_translations = {'en': ingredient_name}
+                    print(
+                        f"[MULTILANG DEBUG] ⚠️ No translations found, using fallback")
 
                 if not ingredient_name:
                     continue
@@ -707,6 +880,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
                 print(
                     f"[FAST AI RECIPE] {ingredient_name}: {quantity} {unit} ({counter_type})")
+                print(f"[FAST AI RECIPE] 🌍 Translations: {name_translations}")
 
                 # Check for existing item
                 existing_item = ShoppingItem.objects.filter(
@@ -718,7 +892,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 from decimal import Decimal
 
                 if existing_item:
-                    # Update existing item
+                    # Update existing item (and merge translations)
                     if counter_type == 'weight':
                         existing_item.weight_quantity += Decimal(
                             str(weight_quantity))
@@ -729,14 +903,26 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         existing_item.quantity += Decimal(
                             str(item_quantity))
 
+                    # Update translations if we have them
+                    if name_translations:
+                        existing_item.name_translations = name_translations
+
                     existing_item.save()
                     items_updated.append(existing_item)
                     print(f"[FAST AI RECIPE] ✅ Updated: {ingredient_name}")
                 else:
-                    # Create new item
+                    # Create new item with translations
+                    print(f"[MULTILANG DEBUG] Creating new item with translations:")
+                    print(f"[MULTILANG DEBUG]   name: {ingredient_name}")
+                    print(
+                        f"[MULTILANG DEBUG]   name_translations: {name_translations}")
+                    print(f"[MULTILANG DEBUG]   original_language: en")
+
                     new_item = ShoppingItem.objects.create(
                         shopping_list=shopping_list,
                         name=ingredient_name,
+                        name_translations=name_translations,  # NEW!
+                        original_language='en',  # NEW!
                         quantity=Decimal(str(item_quantity)),
                         unit=unit or 'unit',
                         weight_quantity=Decimal(str(weight_quantity)),
@@ -745,6 +931,10 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         user_color=user_color,
                         ingredient_key=ingredient_key
                     )
+
+                    # Verify it was saved
+                    print(
+                        f"[MULTILANG DEBUG] ✅ Item created. Stored translations: {new_item.name_translations}")
 
                     # Add auto-enable flag for frontend to open counter
                     # This is NOT a model field, just a response attribute
@@ -763,19 +953,65 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             # Serialize items for response
             from .serializers import ShoppingItemSerializer
             created_serializer = ShoppingItemSerializer(
-                items_created, many=True)
+                items_created, many=True, context={'request': request})
             updated_serializer = ShoppingItemSerializer(
-                items_updated, many=True)
+                items_updated, many=True, context={'request': request})
 
             # Prepare message
             message_content = f"Added {len(items_created)} ingredients from {recipe_name}"
             if is_new:
                 message_content += " (full recipe generating in background...)"
 
+            # STEP 6: Send WebSocket notification with multilang support
+            try:
+                channel_layer = get_channel_layer()
+                if channel_layer:
+                    # Get recipe name translations
+                    if is_new and 'fast_result' in locals():
+                        recipe_name_translations = fast_result.get(
+                            'recipe_name_translations', {'en': recipe_name})
+                    else:
+                        # For existing recipes, use the canonical recipe's title_translations
+                        if existing_canonical and hasattr(existing_canonical, 'title_translations'):
+                            recipe_name_translations = existing_canonical.title_translations or {
+                                'en': recipe_name}
+                        else:
+                            recipe_name_translations = {'en': recipe_name}
+
+                    async_to_sync(channel_layer.group_send)(
+                        f'shopping_list_{shopping_list.id}',
+                        {
+                            'type': 'items_added',
+                            'items': created_serializer.data,
+                            'recipe_name': recipe_name,
+                            'recipe_name_translations': recipe_name_translations,  # NEW!
+                            'user': {
+                                'id': str(request.user.id),
+                                'username': request.user.username,
+                                'first_name': request.user.first_name,
+                                'color': user_color
+                            }
+                        }
+                    )
+                    print(
+                        f"[FAST AI RECIPE] 📡 WebSocket notification sent with multilang data")
+            except Exception as ws_error:
+                print(
+                    f"[FAST AI RECIPE] ⚠️ WebSocket notification failed: {ws_error}")
+
+            # DEBUG: Print what we're about to return
+            print(f"[FAST AI RECIPE] 📤 Returning response:")
+            print(f"  - recipe_name: {recipe_name}")
+            print(f"  - canonical_recipe_id: {canonical_recipe_id}")
+            print(f"  - is_new: {is_new}")
+            print(f"  - is_generating: {is_new}")
+
             return Response({
                 'success': True,
                 'message': message_content,
                 'recipe_name': recipe_name,
+                # NEW!
+                'recipe_name_translations': recipe_name_translations if 'recipe_name_translations' in locals() else {'en': recipe_name},
                 'canonical_recipe_id': canonical_recipe_id,
                 'is_new': is_new,
                 'is_generating': is_new,
@@ -1227,10 +1463,19 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
         # Prepare items for categorization
         items_for_categorization = []
+        # Get user's language preference
+        user_language = request.query_params.get('lang', 'en')
+        
         for item in items:
+            # Extract the correct name from translations
+            if isinstance(item.name, dict):
+                item_name = item.name.get(user_language) or item.name.get('en') or list(item.name.values())[0]
+            else:
+                item_name = item.name
+                
             items_for_categorization.append({
                 'id': str(item.id),
-                'name': item.name
+                'name': item_name
             })
 
         # Get AI categorization suggestions
@@ -1241,9 +1486,15 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         else:
             # Return items without AI suggestions
             for item in items:
+                # Extract the correct name from translations
+                if isinstance(item.name, dict):
+                    item_name = item.name.get(user_language) or item.name.get('en') or list(item.name.values())[0]
+                else:
+                    item_name = item.name
+                    
                 suggestions.append({
                     'item_id': str(item.id),
-                    'name': item.name,
+                    'name': item_name,
                     'suggested_location': 'pantry',
                     'suggested_category': 'other',
                     'suggested_expiration_days': 30,

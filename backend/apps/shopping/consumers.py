@@ -620,21 +620,57 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
             # Set priority based on user role (creator items get higher priority)
             priority = 1 if shopping_list.creator == self.user else 0
 
+            # NEW: Translate manually-added item to all languages
+            item_name = item_data.get('name', '')
+            print(f"[WEBSOCKET MULTILANG] Translating item: {item_name}")
+
+            # Get multilang translator
+            from apps.shopping.multilang_translator import get_multilang_translator
+            translator = get_multilang_translator()
+
+            # Create ingredient-like structure for translator
+            temp_ingredient = [{
+                'name': item_name,
+                'ingredient_key': None  # Manual items don't have IML keys
+            }]
+
+            # Translate to all languages
+            try:
+                translated = translator.translate_ingredients_batch(
+                    temp_ingredient,
+                    source_language='en'
+                )
+                name_translations = translated[0].get('name_translations', {})
+                print(
+                    f"[WEBSOCKET MULTILANG] ✅ Translations: {name_translations}")
+            except Exception as e:
+                print(f"[WEBSOCKET MULTILANG] ⚠️ Translation failed: {e}")
+                import traceback
+                traceback.print_exc()
+                # Fallback: just use English
+                name_translations = {'en': item_name}
+
             item = ShoppingItem.objects.create(
                 shopping_list=shopping_list,
                 added_by=self.user,
                 user_color=getattr(self.user, 'personal_color', '#4F46E5'),
                 priority=priority,
                 name=item_data.get('name', ''),
+                name_translations=name_translations,  # NEW!
+                original_language='en',  # NEW!
                 quantity=item_data.get('quantity', 1),
                 unit=item_data.get('unit', 'unit'),
                 category=item_data.get('category', 'other'),
                 notes=item_data.get('notes', '')
             )
 
+            print(f"✅ Stored translations in DB: {item.name_translations}")
+
             return ShoppingItemSerializer(item).data
         except Exception as e:
             print(f"Error creating item: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     @database_sync_to_async
@@ -850,6 +886,17 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
             'type': 'items_batch_added',
             'items': event['items'],
             'user': event.get('user', 'System')
+        }, cls=UUIDEncoder))
+
+    async def items_added(self, event):
+        """Send items_added event to WebSocket (for AI recipe ingredients with recipe info)"""
+        await self.send(text_data=json.dumps({
+            'type': 'items_added',
+            'items': event['items'],
+            'recipe_name': event.get('recipe_name', ''),
+            'recipe_name_translations': event.get('recipe_name_translations', {}),
+            'canonical_recipe_id': event.get('canonical_recipe_id'),
+            'user': event.get('user', {})
         }, cls=UUIDEncoder))
 
     async def item_deleted(self, event):

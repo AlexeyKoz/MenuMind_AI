@@ -42,13 +42,21 @@ interface LocationGroup {
 
 interface RecipeSuggestion {
     name: string;
-    priority: 'urgent' | 'high' | 'normal';
-    ingredients_from_inventory: Array<{ name: string; quantity: number; unit: string }>;
-    missing_ingredients: string[];
-    nutrition: { calories: number; protein: number; carbs: number; fat: number };
+    description: string;
+    main_ingredients: string[];  // NEW AGENT: Simple array of ingredient names
+    cook_time_minutes?: number;
     difficulty: string;
-    cooking_time: string;
-    reasoning: string;
+    cuisine?: string;
+    brief_id?: string;
+    generated_at?: string;
+
+    // OLD AGENT fields (for backwards compatibility)
+    priority?: 'urgent' | 'high' | 'normal';
+    ingredients_from_inventory?: Array<{ name: string; quantity: number; unit: string }>;
+    missing_ingredients?: string[];
+    nutrition?: { calories: number; protein: number; carbs: number; fat: number };
+    cooking_time?: string;
+    reasoning?: string;
 }
 
 // LocalStorage helper functions for recipe history persistence
@@ -301,106 +309,94 @@ const Inventory: React.FC = () => {
 
     const handleGenerateRecipes = async (forceRegenerate: boolean = false) => {
         /**
-         * Recipe Generation Flow:
-         * 1. If cached recipes exist for current inventory -> Show instantly ⚡
-         * 2. If no cache -> Call AI to generate recipes
-         * 3. Cache successful results (non-empty) for future use
-         * 4. On inventory change -> Cache is automatically cleared
-         * 5. On recipe creation -> Cache is cleared (items "used")
+         * NEW AGENT Recipe Generation Flow:
+         * 1. Generate 5 recipe briefs at a time
+         * 2. Cache briefs for 24 hours or until inventory changes
+         * 3. Allow "generate more" up to 5 times (25 total variants)
+         * 4. When user clicks a brief, generate full recipe and check for duplicates
          */
 
         // Calculate current inventory hash
         const currentHash = generateInventoryHash(locationData);
-        console.log('[RECIPES] Current inventory hash:', currentHash, '| Cached hash:', cachedRecipesHash);
+        console.log('[NEW AGENT] Current inventory hash:', currentHash);
 
-        // Check if we have cached recipes for THIS EXACT inventory state (unless force regenerate)
+        // Check if we have cached recipes for THIS EXACT inventory state
         const isCacheValid = cachedRecipes.length > 0 && cachedRecipesHash === currentHash;
 
         if (isCacheValid && !forceRegenerate) {
-            console.log('[RECIPES] Using cached recipes for UNCHANGED inventory');
+            console.log('[NEW AGENT] Using cached recipes for UNCHANGED inventory');
             setRecipes(cachedRecipes);
             setShowRecipesModal(true);
-            toast.success(`Showing ${cachedRecipes.length} recipe suggestions from earlier! ⚡`);
+            toast.success(`Showing ${cachedRecipes.length} recipe ideas from cache! ⚡`);
             return;
         }
 
         // If cache exists but inventory changed, notify user
         if (cachedRecipes.length > 0 && cachedRecipesHash !== currentHash && !forceRegenerate) {
-            console.log('[RECIPES] Inventory CHANGED - generating NEW recipes (cache invalidated)');
+            console.log('[NEW AGENT] Inventory CHANGED - generating NEW recipes (cache invalidated)');
             toast.success('Inventory changed! Generating fresh recipes... 🔄');
         }
 
-        // If force regenerating, just log it (we'll add to history, not clear)
-        if (forceRegenerate) {
-            console.log('[RECIPES] Force regenerating - will add new generation to history');
-        }
+        // Calculate offset for "generate more"
+        const currentGeneration = recipeHistory.length;
+        const offset = forceRegenerate ? currentGeneration * 5 : 0;
 
-        // Log generation context
-        if (recipeHistory.length === 0) {
-            console.log('[RECIPES] First generation for this inventory');
-        } else {
-            console.log('[RECIPES] Generating new list - will be added to history (total:', recipeHistory.length + 1, ')');
+        console.log('[NEW AGENT] Requesting briefs with offset:', offset);
+
+        // Check if we can generate more (max 25 variants = 5 generations)
+        if (offset >= 25) {
+            toast.error('Maximum recipe variants reached (25). Recipes will refresh after 24 hours or when inventory changes.', { duration: 5000 });
+            return;
         }
 
         setGeneratingRecipes(true);
         try {
-            const result = await api.generateRecipesFromInventory({
-                max_recipes: 5,
-                prioritize_expiring: true,
-                max_missing_ingredients: 2
+            const result = await api.getRecipeBriefsFromInventory({
+                offset,
+                count: 5
             });
-            console.log('[RECIPES] Generated:', result);
 
-            // Add to history ONLY if we have actual recipes (don't add empty results)
-            if (result.recipes && result.recipes.length > 0) {
+            console.log('[NEW AGENT] ✅ Received briefs:', result);
+            console.log('[NEW AGENT] - Total generated:', result.total_generated);
+            console.log('[NEW AGENT] - Can generate more:', result.can_generate_more);
+            console.log('[NEW AGENT] - Cached:', result.cached);
+
+            // Add to history ONLY if we have actual recipes
+            if (result.briefs && result.briefs.length > 0) {
                 const newHistoryEntry = {
-                    recipes: result.recipes,
+                    recipes: result.briefs,
                     inventoryHash: currentHash,
                     timestamp: new Date()
                 };
 
-                // Keep max 10 generations in history
-                const updatedHistory = [...recipeHistory, newHistoryEntry].slice(-10);
+                // Keep max 5 generations in history (5 * 5 = 25 recipes)
+                const updatedHistory = [...recipeHistory, newHistoryEntry].slice(-5);
                 setRecipeHistory(updatedHistory);
-                setCurrentHistoryIndex(updatedHistory.length - 1); // Set to newest generation
+                setCurrentHistoryIndex(updatedHistory.length - 1);
 
-                console.log('[RECIPES] Added', result.recipes.length, 'recipes to history. Total generations:', updatedHistory.length);
-            } else if (result.recipe_count === 0) {
-                console.log('[RECIPES] No recipes generated - NOT adding to history');
-                // Don't add empty results to history
+                console.log('[NEW AGENT] ✅ Added to history. Total generations:', updatedHistory.length);
             }
 
-            setRecipes(result.recipes || []);
+            setRecipes(result.briefs || []);
             setShowRecipesModal(true);
 
-            if (result.recipe_count > 0) {
-                toast.success(`Generated ${result.recipe_count} recipe suggestions! 🍳`);
+            if (result.briefs && result.briefs.length > 0) {
+                const message = result.cached
+                    ? `Showing ${result.briefs.length} recipes from cache! 💾`
+                    : `Generated ${result.briefs.length} new recipe ideas! 🍳`;
+                toast.success(message);
             } else {
-                console.warn('[RECIPES] AI returned 0 recipes - this should not happen with fallback enabled');
-                toast.error('No recipes generated. Please check your inventory items or try again.', { duration: 4000 });
-
-                // Show cached recipes if available as fallback
-                if (cachedRecipes.length > 0) {
-                    console.log('[RECIPES] Showing previous cached recipes as fallback');
-                    setRecipes(cachedRecipes);
-                    toast.success(`Showing ${cachedRecipes.length} recipes from earlier`, { duration: 3000 });
-                }
+                toast.error('No recipes generated. Please check your inventory items.', { duration: 4000 });
             }
         } catch (error: any) {
-            console.error('[RECIPES] Generation failed:', error);
+            console.error('[NEW AGENT] ❌ Generation failed:', error);
 
             // User-friendly error message
             let errorMessage = 'Unable to generate recipes at the moment. Please try again.';
             if (error.message) {
                 const msg = error.message.toLowerCase();
                 if (msg.includes('throttled')) {
-                    // Extract wait time if available
-                    const match = error.message.match(/(\d+)\s*seconds/);
-                    const waitSeconds = match ? parseInt(match[1]) : 0;
-                    const waitMinutes = Math.ceil(waitSeconds / 60);
-                    errorMessage = waitMinutes > 1
-                        ? `Rate limit reached. Please wait ${waitMinutes} minutes and try again.`
-                        : `Rate limit reached. Please wait a moment and try again.`;
+                    errorMessage = 'Rate limit reached. Please wait a moment and try again.';
                 } else if (msg.includes('network') || msg.includes('timeout')) {
                     errorMessage = 'Network issue detected. Please check your connection and try again.';
                 } else if (msg.includes('no items') || msg.includes('inventory')) {
@@ -410,14 +406,13 @@ const Inventory: React.FC = () => {
 
             toast.error(errorMessage, { duration: 6000 });
 
-            // Always try to show cached recipes if available
+            // Show cached recipes if available
             if (cachedRecipes.length > 0) {
-                console.log('[RECIPES] Using cached recipes as fallback');
+                console.log('[NEW AGENT] Using cached recipes as fallback');
                 setRecipes(cachedRecipes);
                 setShowRecipesModal(true);
                 toast.success(`Showing ${cachedRecipes.length} recipes from earlier!`);
             } else {
-                // If no cache and generation failed, still show modal but with empty recipes
                 setRecipes([]);
                 setShowRecipesModal(true);
             }
@@ -446,18 +441,20 @@ const Inventory: React.FC = () => {
                     console.log('[RECIPE CREATE] User recipe ID:', createResponse.user_recipe.id);
                     console.log('[RECIPE CREATE] User recipe name:', createResponse.user_recipe.name);
                     console.log('[RECIPE CREATE] Canonical recipe ID:', createResponse.canonical_recipe?.id);
-                    console.log('[RECIPE CREATE] Full user recipe:', createResponse.user_recipe);
-                    console.log('[RECIPE CREATE] Full canonical recipe:', createResponse.canonical_recipe);
 
                     // Use the user_recipe (the fork) which is what shows in "My Recipes"
                     const createdRecipe = createResponse.user_recipe;
 
-                    setSelectedRecipe(createdRecipe);
-                    setShowRecipeDetailModal(true);
-
                     const statusText = createResponse.created ? 'created' : 'found';
                     toast.success(`Recipe "${createdRecipe.name}" ${statusText} and saved to your library!`);
+
+                    // Close the recipes modal
                     setShowRecipesModal(false);
+
+                    // Navigate to My Recipes page with the recipe ID
+                    console.log('[RECIPE CREATE] 🔗 Navigating to My Recipes page with recipe ID:', createdRecipe.id);
+                    window.location.href = `/recipes?id=${createdRecipe.id}`;
+
                 } else {
                     console.error('[RECIPE CREATE] ⚠️ Unexpected response format:', createResponse);
                     toast.error('Recipe created but there was an issue displaying it. Check your My Recipes page.');
@@ -920,6 +917,26 @@ const Inventory: React.FC = () => {
                                 </button>
                             </div>
 
+                            {/* Important Notice - Always visible at top */}
+                            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-lg mb-4">
+                                <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <h3 className="font-semibold text-amber-900 mb-1">
+                                        💡 Quick Recipe Ideas (Cached for 24 hours)
+                                    </h3>
+                                    <p className="text-sm text-amber-800">
+                                        These are brief recipe ideas based on your current inventory.
+                                        They're cached for 24 hours or until your inventory changes.
+                                        <strong className="font-semibold"> To create a full recipe, click on any idea below</strong> - the system will
+                                        check if the recipe already exists or generate a new one and save it to your "My Recipes" collection.
+                                        <br />
+                                        <br />
+                                        <strong className="font-semibold">💡 Tip:</strong> Don't like these options? Click "Generate More" to get 5 additional ideas (up to 25 total).
+                                        If you don't save a recipe you like, it will disappear after 24 hours or when inventory changes!
+                                    </p>
+                                </div>
+                            </div>
+
                             {/* History Navigation */}
                             {recipeHistory.length > 1 && (
                                 <div className="flex items-center justify-between gap-4 bg-gradient-to-r from-indigo-50 to-purple-50 p-4 rounded-lg mb-4">
@@ -983,24 +1000,6 @@ const Inventory: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Important Notice - Temporary Suggestions */}
-                        <div className="px-6 pb-4">
-                            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 p-4 rounded-lg">
-                                <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                                <div className="flex-1">
-                                    <h3 className="font-semibold text-amber-900 mb-1">
-                                        💡 Temporary Recipe Suggestions (24 hours)
-                                    </h3>
-                                    <p className="text-sm text-amber-800">
-                                        These are quick AI-generated suggestions based on your current inventory.
-                                        They're saved for 24 hours and will automatically expire.
-                                        <strong className="font-semibold"> To permanently save a recipe, click the "Create Recipe" button</strong> to generate
-                                        the full recipe with detailed instructions and add it to your "My Recipes" collection.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="p-6 pt-0 space-y-6">
                             {recipes.length === 0 ? (
                                 <p className="text-center text-gray-500 py-8">
@@ -1040,62 +1039,54 @@ const Inventory: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <p className="text-gray-700 mb-4 italic">
-                                            "{recipe.reasoning}"
+                                        <p className="text-gray-700 mb-4">
+                                            {recipe.description}
                                         </p>
 
-                                        <div className="grid md:grid-cols-2 gap-4 mb-4">
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-2">
-                                                    From Your Inventory:
-                                                </h4>
-                                                <ul className="text-sm text-gray-700 space-y-1">
-                                                    {recipe.ingredients_from_inventory.map((ing, idx) => (
-                                                        <li key={idx}>
-                                                            ✓ {ing.name}: {ing.quantity} {ing.unit}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                            <div>
-                                                <h4 className="font-semibold text-gray-900 mb-2">
-                                                    Missing Ingredients:
-                                                </h4>
-                                                {recipe.missing_ingredients.length === 0 ? (
-                                                    <p className="text-sm text-green-600">
-                                                        ✓ All ingredients available!
-                                                    </p>
-                                                ) : (
-                                                    <ul className="text-sm text-gray-700 space-y-1">
-                                                        {recipe.missing_ingredients.map((ing, idx) => (
-                                                            <li key={idx}>• {ing}</li>
-                                                        ))}
-                                                    </ul>
-                                                )}
-                                            </div>
+                                        <div className="mb-4">
+                                            <h4 className="font-semibold text-gray-900 mb-2">
+                                                Main Ingredients:
+                                            </h4>
+                                            <ul className="text-sm text-gray-700 space-y-1">
+                                                {(recipe.main_ingredients || []).map((ing, idx) => (
+                                                    <li key={idx}>
+                                                        ✓ {ing}
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </div>
 
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-4 text-sm text-gray-700 bg-gray-50 p-3 rounded-lg flex-1">
-                                                <span>📊 Nutrition:</span>
-                                                <span>{recipe.nutrition.calories} cal</span>
-                                                <span>Protein: {recipe.nutrition.protein}g</span>
-                                                <span>Carbs: {recipe.nutrition.carbs}g</span>
-                                                <span>Fat: {recipe.nutrition.fat}g</span>
+                                                <span>⏱️ {recipe.cook_time_minutes || recipe.cooking_time || 'N/A'} min</span>
+                                                <span>📊 {recipe.difficulty}</span>
+                                                {recipe.cuisine && <span>🌍 {recipe.cuisine}</span>}
                                             </div>
-                                            <button
-                                                onClick={() => handleRecipeClick(recipe)}
-                                                disabled={creatingRecipe !== null}
-                                                className={`ml-4 px-4 py-2 bg-indigo-600 text-white rounded-lg transition font-medium flex items-center gap-2 ${creatingRecipe === recipe.name
-                                                    ? 'opacity-50 cursor-not-allowed'
-                                                    : creatingRecipe !== null
-                                                        ? 'cursor-not-allowed'
-                                                        : 'hover:bg-indigo-700'
-                                                    }`}
-                                            >
-                                                <Eye className="w-4 h-4" />
-                                                {creatingRecipe === recipe.name ? 'Creating...' : 'Create Recipe'}
-                                            </button>
+                                            <div className="flex items-center gap-2 ml-4">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toast.success('Recipe will be saved to your collection!');
+                                                    }}
+                                                    className="px-3 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition font-medium flex items-center gap-2"
+                                                    title="Like this recipe"
+                                                >
+                                                    <Heart className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRecipeClick(recipe)}
+                                                    disabled={creatingRecipe !== null}
+                                                    className={`px-4 py-2 bg-indigo-600 text-white rounded-lg transition font-medium flex items-center gap-2 ${creatingRecipe === recipe.name
+                                                        ? 'opacity-50 cursor-not-allowed'
+                                                        : creatingRecipe !== null
+                                                            ? 'cursor-not-allowed'
+                                                            : 'hover:bg-indigo-700'
+                                                        }`}
+                                                >
+                                                    <Eye className="w-4 h-4" />
+                                                    {creatingRecipe === recipe.name ? 'Creating...' : 'View Recipe'}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))

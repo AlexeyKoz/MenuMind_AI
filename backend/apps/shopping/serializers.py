@@ -25,10 +25,15 @@ class ShoppingItemSerializer(serializers.ModelSerializer):
     is_recent = serializers.BooleanField(read_only=True)
     auto_enable_counter = serializers.SerializerMethodField()
 
+    # NEW: Display name in user's language
+    display_name = serializers.SerializerMethodField()
+
     class Meta:
         model = ShoppingItem
         fields = [
-            'id', 'name', 'quantity', 'unit', 'weight_quantity', 'liquid_quantity',
+            # NEW multilang fields
+            'id', 'name', 'name_translations', 'original_language', 'display_name',
+            'quantity', 'unit', 'weight_quantity', 'liquid_quantity',
             'category', 'notes', 'is_completed', 'completed_by', 'completed_by_name',
             'completed_at', 'added_by', 'added_by_name', 'added_by_first_name',
             'ai_suggested', 'nutrition_data', 'estimated_price',
@@ -36,11 +41,38 @@ class ShoppingItemSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'auto_enable_counter'
         ]
         read_only_fields = ['id', 'added_by', 'user_color',
-                            'priority', 'created_at', 'updated_at']
+                            'priority', 'created_at', 'updated_at', 'display_name']
 
     def get_auto_enable_counter(self, obj):
         """Get auto-enable counter flag if it exists"""
         return getattr(obj, '_auto_enable_counter', None)
+
+    def get_display_name(self, obj):
+        """
+        Get item name in user's preferred language
+        Falls back to original name if translation not available
+        """
+        # Get user language from request context
+        request = self.context.get('request')
+        if request and hasattr(request.user, 'preferred_language'):
+            user_lang = request.user.preferred_language
+        else:
+            user_lang = 'en'
+
+        # DEBUG: Log what we're looking for
+        print(f"[MULTILANG SERIALIZER] Item: {obj.name}")
+        print(f"[MULTILANG SERIALIZER] User language: {user_lang}")
+        print(f"[MULTILANG SERIALIZER] Available translations: {obj.name_translations}")
+
+        # If name_translations exists and has this language
+        if obj.name_translations and user_lang in obj.name_translations:
+            translated_name = obj.name_translations[user_lang]
+            print(f"[MULTILANG SERIALIZER] ✅ Returning translated: {translated_name}")
+            return translated_name
+
+        # Fallback: return original name
+        print(f"[MULTILANG SERIALIZER] ⚠️ No translation found, using original: {obj.name}")
+        return obj.name
 
 
 class ShoppingListSerializer(serializers.ModelSerializer):
