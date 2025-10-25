@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import SimpleLanguageSwitcher from '../components/SimpleLanguageSwitcher';
 
 interface RegistrationProps {
     onRegistrationSuccess: () => void;
@@ -8,7 +9,7 @@ interface RegistrationProps {
 }
 
 const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSwitchToLogin }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -17,6 +18,11 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const { register } = useAuth();
+
+    // Update HTML dir attribute for RTL support (Hebrew)
+    useEffect(() => {
+        document.documentElement.dir = i18n.language === 'he' ? 'rtl' : 'ltr';
+    }, [i18n.language]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,8 +41,13 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center">
-            <div className="bg-white rounded-lg shadow-xl p-8 w-96">
-                <h2 className="text-3xl font-bold text-center mb-2">{t('auth.welcomeMessage')}</h2>
+            <div className="bg-white rounded-lg shadow-xl p-8 w-96 relative">
+                {/* Language Switcher */}
+                <div className="absolute top-4 right-4">
+                    <SimpleLanguageSwitcher />
+                </div>
+
+                <h2 className="text-3xl font-bold text-center mb-2 mt-8">{t('auth.welcomeMessage')}</h2>
                 <p className="text-center text-gray-600 mb-6">{t('auth.registerSubtitle')}</p>
 
                 <form onSubmit={handleSubmit}>

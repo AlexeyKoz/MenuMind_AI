@@ -17,7 +17,6 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from apps.core.views import health_check, api_root
-
 urlpatterns = [
     path('', api_root, name='api_root'),
     path('admin/', admin.site.urls),
@@ -25,4 +24,10 @@ urlpatterns = [
     path('api/', include('apps.core.urls')),
     path('api/recipes/', include('apps.recipes.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
+    # Django-allauth URLs (for email confirmation)
+    path('accounts/', include('allauth.urls')),
+
+    # dj-rest-auth URLs (JWT-based auth)
+    path('dj-rest-auth/', include('dj_rest_auth.urls')),
+    path('dj-rest-auth/registration/', include('dj_rest_auth.registration.urls')),
 ]

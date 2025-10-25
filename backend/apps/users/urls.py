@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .views_google import google_login
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -23,6 +24,7 @@ urlpatterns = [
     # Authentication endpoints
     path('auth/login/', views.login_view, name='login'),
     path('auth/register/', views.UserRegistrationView.as_view(), name='register'),
+    path('auth/google/', google_login, name='google_login'),
     
     # User profile endpoints
     path('', include(router.urls)),

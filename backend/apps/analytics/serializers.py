@@ -32,7 +32,7 @@ class RecipeCookingLogSerializer(serializers.ModelSerializer):
 
 
 class DashboardOverviewSerializer(serializers.Serializer):
-    """Dashboard overview data"""
+    """Dashboard overview data with multilingual support"""
     period = serializers.CharField()
     overview = serializers.DictField()
     shopping = serializers.DictField()
@@ -40,7 +40,15 @@ class DashboardOverviewSerializer(serializers.Serializer):
     inventory = serializers.DictField()
     nutrition = serializers.DictField(allow_null=True)
     achievements = serializers.DictField()
-    ai_insight_of_day = serializers.CharField(allow_null=True)
+
+    # AI Insights (Sprint 9.3 structure)
+    ai_insights = serializers.DictField(allow_null=True, required=False)
+
+    # NEW: Multilingual support fields
+    language = serializers.CharField()
+    cached = serializers.BooleanField()
+    generated_at = serializers.DateTimeField()
+    cached_at = serializers.CharField(allow_null=True)
 
 
 class AIInsightsSerializer(serializers.Serializer):
@@ -51,17 +59,3 @@ class AIInsightsSerializer(serializers.Serializer):
     inventory_warnings = serializers.ListField(child=serializers.DictField())
     nutrition_coaching = serializers.DictField(allow_null=True)
     generated_at = serializers.DateTimeField()
-
-
-
-
-
-
-
-
-
-
-
-
-
-

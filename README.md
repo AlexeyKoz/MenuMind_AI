@@ -1,3 +1,260 @@
+# MenuMind AI Platform
+
+> Multi-tenant food intelligence platform combining collaborative shopping, inventory automation, personalized nutrition coaching, multilingual recipe discovery, and AI-powered assistance for households.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Django](https://img.shields.io/badge/Django-4.2-green.svg)](https://www.djangoproject.com/)
+[![React](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-4.9-blue.svg)](https://www.typescriptlang.org/)
+
+MenuMind AI orchestrates advanced recipe intelligence, family shopping collaboration, inventory automation, and rich nutrition analytics in a single product experience. The stack spans a Django/DRF backend, React 18 + TypeScript frontend, AI services (Groq, Gemini, Anthropic), and a multilingual pipeline covering English, Russian, and Hebrew.
+
+---
+
+## Table of Contents
+1. [Platform Overview](#platform-overview)
+2. [Key Capabilities](#key-capabilities)
+3. [System Architecture](#system-architecture)
+4. [Directory Reference](#directory-reference)
+5. [Backend Architecture](#backend-architecture)
+6. [Frontend Architecture](#frontend-architecture)
+7. [AI & Automation Services](#ai--automation-services)
+8. [Internationalization](#internationalization)
+9. [Data & Storage](#data--storage)
+10. [Environment Configuration](#environment-configuration)
+11. [Local Development](#local-development)
+12. [Docker & Deployment](#docker--deployment)
+13. [Testing & QA](#testing--qa)
+14. [Utility Scripts](#utility-scripts)
+15. [Additional Documentation](#additional-documentation)
+16. [License](#license)
+
+---
+
+## Platform Overview
+
+MenuMind AI is a full-stack food intelligence suite designed for coordinated household use. It connects shared shopping lists, inventory, recipe discovery, and nutrition tracking with AI assistants that translate, validate, and recommend content in multiple languages. Authentication supports email/password with email verification as well as Google OAuth (via django-allauth + dj-rest-auth).
+
+---
+
+## Key Capabilities
+
+- **Collaborative shopping** – Real-time list editing, granular permissions, collaboration keys, WebSocket updates, archival workflows, and integration with inventory.
+- **Recipe intelligence** – Canonical recipe catalog, AI-powered search/scraping, RCIP 2.0 ingestion/export, deduplication, cooking counters, and archiving.
+- **Inventory & nutrition** – Inventory tracking, AI recipe generation from pantry contents, macro logging, nutrition coaching streaks, badges, and component dashboards.
+- **AI & automation** – Groq/Gemini/Anthropic orchestration, smart translation cache (IML + CookLingo), validation pipeline, Celery background tasks, webhook-style agents.
+- **Multilingual UX** – Full UI localization (en/ru/he) with RTL layout support, live language switching, and background translation jobs for recipe data.
+- **User onboarding** – JWT authentication, refresh tokens, email verification flows, Google OAuth login, persistent AuthContext in frontend, toast feedback.
+
+---
+
+## System Architecture
+
+- **Backend (apps/users, recipes, shopping, nutrition, core)** – Django 4.2 + DRF + SimpleJWT, Channels for WebSockets, Celery workers for asynchronous translation/AI pipelines, Redis for cache/broker.
+- **Frontend (`frontend/src`)** – React 18 SPA with TypeScript, Tailwind styling, React Router v6, i18next, state via React context + localStorage tokens, Google OAuth provider.
+- **AI layer** – Services coordinate Groq Llama 3.1/3.3, Google Gemini Flash 2.0 Lite, Anthropic, deep translators, duckduckgo_search for discovery.
+- **Storage** – PostgreSQL (prod) / SQLite (dev) for relational data, Redis for realtime + cache, RCIP JSON exports for portability.
+- **Automation** – Celery beat schedules translation refresh, discovery cache rebuilds, cleanup agents; scripts provide CLI operations for imports/fixes/testing.
+
+---
+
+## Directory Reference
+
+| Path | Description |
+| ---- | ----------- |
+| `backend/apps/ai_agents` | Universal agent orchestration, Groq/Gemini integrations, RCIP validation utilities. |
+| `backend/apps/core` | Shared services (ingredient mapper, translators, unit conversion), RCIP models, admin tooling. |
+| `backend/apps/recipes` | Canonical recipe APIs, AI recipe workflows, discovery caching, translation endpoints. |
+| `backend/apps/shopping` | Collaborative list models, WebSocket consumers, permissions, archive flows. |
+| `backend/apps/nutrition` | Food log entries, AI meal logging, coaching analytics, dashboard metrics. |
+| `backend/apps/users` | Authentication, profile preferences, Google OAuth endpoint, email adapters, verified-email decorator. |
+| `frontend/src/components` | Shared UI (navigation, Google buttons, banners), i18n aware components, toast integration. |
+| `frontend/src/pages` | Feature pages: dashboard, shopping, recipes, discover, nutrition, archive, settings, auth flows. |
+| `docs/` | Sprint guides, implementation playbooks, OAuth rollout notes, technical briefs (see [Additional Documentation](#additional-documentation)). |
+| `scripts/` | Windows helper scripts for starting/stopping stacks, rebuilding frontend. |
+
+---
+
+## Backend Architecture
+
+- **Frameworks**: Django 4.2, Django REST Framework, Channels 4.0, dj-rest-auth, django-allauth, celery 5.3, redis 5.
+- **Auth**: SimpleJWT access/refresh tokens, email verification via dj-rest-auth registration, Google OAuth endpoint (`POST /api/users/auth/google/`) including code/ID token support, `verified_email_required` decorator for gated APIs.
+- **Apps & Responsibilities**:
+  - `recipes`: canonical + user recipe CRUD, AI generation, translation triggers, RCIP export/import.
+  - `shopping`: list collaboration, WebSocket consumer groups, permission management, archive lifecycles.
+  - `nutrition`: AI nutrition entries, streaks, dashboard endpoints, report generation.
+  - `core`: translation/validation services (IML, CookLingo), deduplication, unit conversion, admin imports.
+  - `users`: profile preferences, SimpleJWT integration, multilingual account adapter for emails, Google login view.
+- **Background workers**: Celery worker + beat handle translation queues, discovery cache refresh, cleanup tasks, AI validation pipelines. Redis acts as broker/result backend.
+- **Logging & diagnostics**: Extensive logging in Google OAuth view for debugging, CLI scripts under `backend/` for translation and data audits (e.g., `check_translation.py`, `run_e2e_tests.py`).
+
+---
+
+## Frontend Architecture
+
+- **Core stack**: React 18, TypeScript 4.9, Tailwind CSS, React Router v6, react-hot-toast, lucide-react icons.
+- **State & auth**: `AuthContext` persists JWT tokens in `localStorage`, fetches profile/preferences, tracks `email_verified`. `CollaborationProvider` drives shopping list realtime state.
+- **Routing**: BrowserRouter with explicit routes for dashboard, shopping, recipes, nutrition, inventory, archive, settings, `verify-email`, plus guest routes for login/registration.
+- **Internationalization**: i18next with `en`, `ru`, `he`. Locale files located in `frontend/src/locales/`. RTL considerations handled for Hebrew.
+- **AI UX**: Google OAuth button (`GoogleLogin` component), email verification banner + page, AI recipe generator flows, nutrition dashboards with charts.
+- **Tooling**: `@react-oauth/google` provider wrapper keyed by locale, `react-hot-toast` for notifications, environment-driven API base URL.
+
+---
+
+## AI & Automation Services
+
+- **Recipe translation pipeline**: Three-tier system combining Ingredient Multilingual Library (IML), CookLingo glossary, and Gemini→Groq fallbacks. Cached responses stored in database, served instantly after background jobs finish.
+- **Universal Agent API**: Backed by RCIP 2.0 models ensuring structured recipes, validation scoring, and automatic translation/caching.
+- **AI integrations**: Groq (Llama 3.x) for recipe generation/validation, Google Gemini Flash 2.0 Lite for translations, Anthropic & OpenAI adapters available for legacy flows, DuckDuckGo + web scraping for recipe discovery.
+- **Background jobs**: Celery beat schedules hourly translation scan/cache refresh, daily/weekly cleanup, ensuring translation freshness and cost control.
+
+---
+
+## Internationalization
+
+- **Supported locales**: English (`en`), Russian (`ru`), Hebrew (`he` with RTL). Language detection uses user preferences + i18next localStorage key.
+- **Frontend**: Locale JSONs stored under `frontend/src/locales/`. Google login/localized UI respects language via provider re-rendering.
+- **Backend**: Multilingual account adapter selects template per language, email templates under `backend/templates/account/email/` for en/he/ru.
+- **Recipe translation**: DB tables cache translated names/steps. Discovery returns English immediately and queues translation tasks; detail pages poll until translation completes.
+
+---
+
+## Data & Storage
+
+- **Primary DB**: PostgreSQL (production) / SQLite (dev) via Django ORM.
+- **Caching & realtime**: Redis for Celery broker, caching, WebSocket channel layers.
+- **Static assets**: Served via Django (dev) / Nginx (prod). RCIP exports available for recipe portability.
+- **Files & scripts**: Extensive helper scripts under `backend/` for translation maintenance, recipe diagnostics, and admin imports.
+
+---
+
+## Environment Configuration
+
+### Backend `.env`
+
+```
+SECRET_KEY=...
+DEBUG=True
+DATABASE_URL=postgres://user:pass@localhost:5432/menumine
+REDIS_URL=redis://localhost:6379/0
+FRONTEND_URL=http://localhost:3000
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+DEFAULT_FROM_EMAIL=noreply@menumine.ai
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GROQ_API_KEY=...
+GEMINI_API_KEY=...
+ANTHROPIC_API_KEY=...
+```
+
+> **Notes**: Configure SMTP credentials in production. `SOCIALACCOUNT_PROVIDERS['google']` reads from env. Update `SITE_ID=1` domain to match deployment.
+
+### Frontend `.env`
+
+```
+REACT_APP_API_URL=http://localhost:8000
+REACT_APP_GOOGLE_CLIENT_ID=...
+```
+
+Set production values per environment (e.g., Vite host/port if adapted, though current stack uses CRA).
+
+---
+
+## Local Development
+
+### 1. Quick start scripts (Windows)
+
+- `start_fullstack_complete.bat` – starts Redis (if available), Django via Daphne on :8000, React dev server on :3000, auxiliary test server on :8001.
+- `stop_servers_complete.bat` – stops running backend/frontend/test servers.
+- `rebuild_frontend.bat` – cleans and reinstalls frontend dependencies.
+
+### 2. Manual setup
+
+**Backend**
+
+```powershell
+cd backend
+python -m venv venv
+venv\Scripts\activate  # source venv/bin/activate on macOS/Linux
+pip install -r requirements.txt
+cp .env.example .env  # create from sample; populate secrets
+python manage.py migrate
+python manage.py createsuperuser
+daphne -b 0.0.0.0 -p 8000 menumine_ai.asgi:application
+```
+
+Run Celery worker + beat in separate terminals:
+
+```powershell
+celery -A menumine_ai worker --loglevel=info
+celery -A menumine_ai beat --loglevel=info
+```
+
+**Frontend**
+
+```powershell
+cd frontend
+npm install
+npm start
+```
+
+Access the app at http://localhost:3000. Backend API lives at http://localhost:8000.
+
+### 3. Auxiliary tools
+
+- API smoke tests: `http://localhost:8001/test_backend.html`
+- Frontend automation harness: `http://localhost:8001/test_api.html`
+- Default credentials: `testuser1/password123`, `testuser2/password123`.
+
+---
+
+## Docker & Deployment
+
+- `docker-compose.yml` – Local stack (backend, frontend, Redis, Postgres, nginx) with volumes for persistence. Run `docker-compose up --build`.
+- `docker-compose.prod.yml` – Production-oriented overrides.
+- `backend/Dockerfile.dev` & `Dockerfile.prod` – Multi-stage Django images.
+- Ensure `.env` files exist for backend/frontend containers; mount volumes or use environment variables from compose.
+- Nginx config under `nginx/` handles reverse proxy, static serving, websocket upgrades.
+
+---
+
+## Testing & QA
+
+- **Unit/Integration**: `cd backend && pytest` (uses `pytest-django`). Specific suites: `run_e2e_tests.py`, `run_nutrition_tests.py`, `test_dashboard_translation.py`.
+- **Frontend**: `cd frontend && npm test` (CRA test runner). Visual regression via manual snapshots.
+- **End-to-end**: Selenium-based flows orchestrated through HTML dashboards (`test_backend.html`, `test_api.html`).
+- **CI considerations**: Ensure Redis/Postgres services available; Celery tasks may require eager mode for deterministic tests.
+
+---
+
+## Utility Scripts
+
+- Translation maintenance: `check_translation.py`, `fix_translation.py`, `create_all_translations.py`.
+- Recipe tooling: `rcip_converter.py`, `deduplication_service.py`, `debug_recipe.py` utilities.
+- Diagnostics: `check_gemini_client.py`, `check_db_translations.py`, `debug_login.py`.
+- Data imports: `admin_import_history.py`, `write_recipe_names.py`, numerous `fix_*` scripts for targeted adjustments.
+
+---
+
+## Additional Documentation
+
+- `GOOGLE_OAUTH_COMPLETE_SETUP_GUIDE.md` – Full OAuth rollout checklist.
+- `GOOGLE_OAUTH_IMPLEMENTATION_COMPLETE.md` – Implementation log for Sprints 1–4.
+- `SPRINT_9_4_FRONTEND_COMPLETE.md`, `SPRINT_9_COMPLETE_SUMMARY.md` – Recent sprint retrospectives.
+- `NUTRITION_COACH_USER_GUIDE.md`, `AI_COACH_AGENT_TECHNICAL_BRIEF.md` – Feature-specific guides.
+- `docs/google_oauth_email_verification.md` – Consolidated OAuth + email verification timeline.
+
+---
+
+## License
+
+MenuMind AI is released under the [MIT License](LICENSE).
+
+---
+
+<details>
+<summary>Legacy README (full historical detail)</summary>
+
 # MenuMine AI 🥗🤖
 
 > **A complete family food intelligence platform** combining collaborative shopping lists, intelligent recipe discovery, meal planning, inventory management, and personalized nutrition coaching powered by advanced AI.

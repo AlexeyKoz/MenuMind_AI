@@ -22,6 +22,7 @@
         "yes": "כן",
         "no": "לא",
         "ok": "אישור",
+        "or": "או",
         "search": "חפש",
         "filter": "סנן",
         "sort": "מיין",
@@ -463,6 +464,10 @@
             "daysLogged": "ימים נרשמו"
         },
         "aiInsightTitle": "💡 תובנת היום מ-AI",
+        "aiInsights": "תובנות AI",
+        "loaded_from_cache": "נטען מהמטמון",
+        "language_changed": "השפה שונתה - טוען לוח בקרה חדש",
+        "cached": "מטמון",
         "shopping": {
             "title": "🛒 תובנות קניות",
             "budgetOverview": "💰 סקירת תקציב",
@@ -714,7 +719,27 @@
         "registerError": "ההרשמה נכשלה",
         "welcomeMessage": "ברוכים הבאים ל-MenuMind AI",
         "loginSubtitle": "התחבר לחשבון שלך",
-        "registerSubtitle": "צור חשבון חדש"
+        "registerSubtitle": "צור חשבון חדש",
+        "continueWithGoogle": "המשך עם Google",
+        "googleLoginFailed": "ההתחברות עם Google נכשלה. נסו שוב.",
+        "verificationRequired": "אנא אמתו את האימייל כדי להשתמש בכל התכונות.",
+        "checkInboxForVerification": "בדקו את תיבת הדואר ולחצו על קישור האימות.",
+        "resendEmail": "שלח שוב",
+        "resendVerificationEmail": "שלח אימייל אימות מחדש",
+        "verifyingEmail": "מאמתים את האימייל",
+        "pleaseWait": "אנא המתינו...",
+        "emailVerified": "האימייל אומת!",
+        "emailVerifiedMessage": "האימייל אומת בהצלחה.",
+        "continueToApp": "המשיכו לאפליקציה",
+        "verificationFailed": "האימות נכשל",
+        "verificationFailedMessage": "קישור האימות שגוי או שפג תוקפו.",
+        "verificationError": "אירעה שגיאה במהלך האימות.",
+        "verificationEmailResent": "אימייל האימות נשלח. בדקו את תיבת הדואר.",
+        "resendFailed": "השליחה נכשלה. נסו שוב.",
+        "resendError": "אירעה שגיאה בעת השליחה.",
+        "backToLogin": "חזרה להתחברות",
+        "enterEmailForResend": "הכניסו אימייל לשליחת אימות מחדש:",
+        "verificationKeyMissing": "מפתח האימות חסר. השתמשו בקישור שנשלח במייל."
     },
     "errors": {
         "required": "שדה זה חובה",
@@ -1046,5 +1071,29 @@
         "otherAllergens": "אלרגנים נוספים במתכון:",
         "contains": "מכיל אלרגנים:",
         "allMatch": "כל האלרגנים תואמים לפרופיל שלך"
+    },
+    "achievements": {
+        "streak": {
+            "nutrition_logging": "רצף תיעוד תזונה",
+            "nutrition_logging_description": "תעד את הארוחות שלך באופן עקבי",
+            "recipe_cooking": "רצף בישול מתכונים",
+            "recipe_cooking_description": "בשל מתכונים באופן קבוע"
+        },
+        "badge": {
+            "first_recipe": "מתכון ראשון",
+            "first_recipe_description": "בישלת את המתכון הראשון שלך!",
+            "week_logger": "מתעד שבוע",
+            "week_logger_description": "תיעדת תזונה למשך 7 ימים רצופים",
+            "month_logger": "מתעד חודש",
+            "month_logger_description": "תיעדת תזונה למשך 30 ימים רצופים",
+            "recipe_master": "מאסטר מתכונים",
+            "recipe_master_description": "בישלת 50 מתכונים"
+        },
+        "goal": {
+            "nutrition_streak": "רצף תזונה",
+            "nutrition_streak_description": "המשך לתעד את הארוחות שלך כדי להגיע ל-{{target}} ימים",
+            "cooking_streak": "רצף בישול",
+            "cooking_streak_description": "המשך לבשל כדי להגיע ל-{{target}} ימים"
+        }
     }
 }

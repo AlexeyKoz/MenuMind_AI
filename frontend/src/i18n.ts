@@ -21,9 +21,18 @@ i18n
             escapeValue: false
         },
         detection: {
-            order: ['localStorage', 'navigator'],
-            caches: ['localStorage']
+            order: ['localStorage', 'navigator', 'htmlTag'],
+            caches: ['localStorage'],
+            lookupLocalStorage: 'i18nextLng',
+            lookupFromPathIndex: 0,
+            lookupFromSubdomainIndex: 0,
+            htmlTag: document.documentElement
         }
     });
+
+// Log detected language
+console.log(`🌍 i18n initialized with language: ${i18n.language}`);
+console.log(`🌍 Browser language: ${navigator.language}`);
+console.log(`🌍 localStorage language: ${localStorage.getItem('i18nextLng')}`);
 
 export default i18n;

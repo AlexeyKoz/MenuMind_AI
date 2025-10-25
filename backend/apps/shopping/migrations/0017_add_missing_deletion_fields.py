@@ -15,11 +15,7 @@ class Migration(migrations.Migration):
             name='deletion_warning_sent',
             field=models.BooleanField(default=False),
         ),
-        migrations.AddField(
-            model_name='shoppinglist',
-            name='deletion_warning_sent_at',
-            field=models.DateTimeField(null=True, blank=True),
-        ),
+        # Note: deletion_warning_sent_at was already added in migration 0009
         migrations.AddField(
             model_name='shoppinglist',
             name='last_activity',

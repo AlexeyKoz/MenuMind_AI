@@ -12,7 +12,9 @@ from django.utils import timezone
 class DashboardCache(models.Model):
     """
     Caches dashboard analytics data to avoid expensive recalculations.
-    Invalidated when source data changes.
+
+    NEW: Language-aware caching for multilingual support
+    Invalidated when source data changes or language changes.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
@@ -23,6 +25,18 @@ class DashboardCache(models.Model):
         ('90days', 'Last 90 days'),
         ('1year', 'Last year'),
     ])
+
+    # NEW: Language field for multilingual caching
+    language = models.CharField(
+        max_length=2,
+        choices=[
+            ('en', 'English'),
+            ('he', 'Hebrew'),
+            ('ru', 'Russian')
+        ],
+        default='en',
+        help_text="Language for cached content"
+    )
 
     # Cached data (JSON)
     shopping_data = models.JSONField(default=dict, blank=True)
@@ -43,9 +57,10 @@ class DashboardCache(models.Model):
 
     class Meta:
         db_table = 'dashboard_cache'
-        unique_together = [['user', 'period']]
+        # NEW: Unique constraint now includes language
+        unique_together = [['user', 'period', 'language']]
         indexes = [
-            models.Index(fields=['user', 'period']),
+            models.Index(fields=['user', 'period', 'language']),
             models.Index(fields=['expires_at']),
         ]
 
@@ -53,7 +68,7 @@ class DashboardCache(models.Model):
         return timezone.now() > self.expires_at
 
     def __str__(self):
-        return f"{self.user.username} - {self.period} - {'expired' if self.is_expired() else 'valid'}"
+        return f"{self.user.username} - {self.period} - {self.language} - {'expired' if self.is_expired() else 'valid'}"
 
 
 class Achievement(models.Model):
@@ -199,17 +214,3 @@ class RecipeCookingLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} cooked {self.recipe.name} on {self.cooked_at.date()}"
-
-
-
-
-
-
-
-
-
-
-
-
-
-

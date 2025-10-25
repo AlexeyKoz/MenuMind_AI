@@ -1,34 +1,48 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CollaborationProvider } from './contexts/CollaborationContext';
 import Navigation from './components/Navigation';
+import EmailVerificationBanner from './components/EmailVerificationBanner';
 import { Dashboard, ShoppingList, NutritionTracker, Recipes, Login, Inventory, SettingsPage, CanonicalRecipesPage } from './pages';
 import Registration from './pages/Registration';
 import ArchivePage from './pages/ArchivePage';
+import VerifyEmail from './pages/VerifyEmail';
 import './App.css';
 
-const AppContent: React.FC = () => {
-    // Parse URL on mount to determine initial page
-    const getInitialPage = () => {
-        const path = window.location.pathname.replace('/', '');
+const useCurrentPage = (isAuthenticated: boolean) => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [currentPage, setCurrentPage] = useState<string>(() => {
+        const path = location.pathname.replace('/', '');
         const validPages = ['dashboard', 'shopping', 'nutrition', 'recipes', 'discover', 'inventory', 'archive', 'settings'];
-        const initialPage = validPages.includes(path) ? path : 'shopping';
-        console.log(`🎯 App initializing - URL: ${window.location.href}, Path: ${path}, Initial Page: ${initialPage}`);
-        return initialPage;
+        return validPages.includes(path) ? path : 'shopping';
+    });
+
+    useEffect(() => {
+        if (!isAuthenticated) {
+            return;
+        }
+        const path = location.pathname.replace('/', '');
+        const validPages = ['dashboard', 'shopping', 'nutrition', 'recipes', 'discover', 'inventory', 'archive', 'settings'];
+        if (validPages.includes(path) && path !== currentPage) {
+            setCurrentPage(path);
+        }
+    }, [location.pathname, isAuthenticated, currentPage]);
+
+    const handleSetPage = (page: string) => {
+        setCurrentPage(page);
+        navigate(`/${page}${location.search}`);
     };
 
-    const [currentPage, setCurrentPage] = useState(getInitialPage());
+    return { currentPage, setCurrentPage: handleSetPage };
+};
+
+const AppContent: React.FC = () => {
     const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
     const { user, loading } = useAuth();
-
-    // Update URL when page changes
-    useEffect(() => {
-        if (user && currentPage) {
-            const newUrl = `/${currentPage}${window.location.search}`;
-            window.history.pushState({ page: currentPage }, '', newUrl);
-        }
-    }, [currentPage, user]);
+    const { currentPage, setCurrentPage } = useCurrentPage(Boolean(user));
 
     // Page component mapping
     const pageComponents: { [key: string]: React.ComponentType } = {
@@ -54,28 +68,52 @@ const AppContent: React.FC = () => {
 
     if (!user) {
         return (
-            <>
-                {authMode === 'login' ? (
-                    <Login
-                        onLoginSuccess={() => window.location.reload()}
-                        onSwitchToRegistration={() => setAuthMode('register')}
-                    />
-                ) : (
-                    <Registration
-                        onRegistrationSuccess={() => window.location.reload()}
-                        onSwitchToLogin={() => setAuthMode('login')}
-                    />
-                )}
-                <Toaster position="top-right" />
-            </>
+            <Routes>
+                <Route
+                    path="/verify-email/:key"
+                    element={<VerifyEmail />}
+                />
+                <Route
+                    path="/verify-email"
+                    element={<VerifyEmail />}
+                />
+                <Route
+                    path="*"
+                    element={authMode === 'login' ? (
+                        <Login
+                            onLoginSuccess={() => window.location.reload()}
+                            onSwitchToRegistration={() => setAuthMode('register')}
+                        />
+                    ) : (
+                        <Registration
+                            onRegistrationSuccess={() => window.location.reload()}
+                            onSwitchToLogin={() => setAuthMode('login')}
+                        />
+                    )}
+                />
+            </Routes>
         );
     }
 
     return (
         <CollaborationProvider>
             <div className="min-h-screen bg-gray-100">
+                <EmailVerificationBanner />
                 <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
-                <CurrentPageComponent />
+                <Routes>
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/shopping" element={<ShoppingList />} />
+                    <Route path="/nutrition" element={<NutritionTracker />} />
+                    <Route path="/recipes" element={<Recipes />} />
+                    <Route path="/discover" element={<CanonicalRecipesPage />} />
+                    <Route path="/inventory" element={<Inventory />} />
+                    <Route path="/archive" element={<ArchivePage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/verify-email" element={<VerifyEmail />} />
+                    <Route path="/verify-email/:key" element={<VerifyEmail />} />
+                    <Route path="/" element={<CurrentPageComponent />} />
+                    <Route path="*" element={<CurrentPageComponent />} />
+                </Routes>
                 <Toaster position="top-right" />
             </div>
         </CollaborationProvider>
@@ -84,9 +122,16 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
     return (
-        <AuthProvider>
-            <AppContent />
-        </AuthProvider>
+        <BrowserRouter
+            future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true
+            }}
+        >
+            <AuthProvider>
+                <AppContent />
+            </AuthProvider>
+        </BrowserRouter>
     );
 };
 

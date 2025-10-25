@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import GoogleSignInButton from '../components/GoogleSignInButton';
+import SimpleLanguageSwitcher from '../components/SimpleLanguageSwitcher';
 
 interface LoginProps {
     onLoginSuccess: () => void;
@@ -8,12 +10,25 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [copiedUser, setCopiedUser] = useState<string | null>(null);
     const { login } = useAuth();
+
+    // Update HTML dir attribute for RTL support (Hebrew)
+    useEffect(() => {
+        document.documentElement.dir = i18n.language === 'he' ? 'rtl' : 'ltr';
+
+        // Update HTML lang for Google SDK
+        const googleLangMap: { [key: string]: string } = {
+            'en': 'en',
+            'ru': 'ru',
+            'he': 'iw'
+        };
+        document.documentElement.lang = googleLangMap[i18n.language] || 'en';
+    }, [i18n.language]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -34,8 +49,13 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center">
-            <div className="bg-white rounded-lg shadow-xl p-8 w-96">
-                <h2 className="text-3xl font-bold text-center mb-2">{t('auth.welcomeMessage')}</h2>
+            <div className="bg-white rounded-lg shadow-xl p-8 w-96 relative">
+                {/* Language Switcher */}
+                <div className="absolute top-4 right-4">
+                    <SimpleLanguageSwitcher />
+                </div>
+
+                <h2 className="text-3xl font-bold text-center mb-2 mt-8">{t('auth.welcomeMessage')}</h2>
                 <p className="text-center text-gray-600 mb-6">{t('auth.loginSubtitle')}</p>
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
@@ -72,6 +92,23 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                         {t('auth.loginButton')}
                     </button>
                 </form>
+
+                {/* Divider */}
+                <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-300"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                        <span className="px-2 bg-white text-gray-500">{t('common.or')}</span>
+                    </div>
+                </div>
+
+                {/* Google Sign-In */}
+                <GoogleSignInButton
+                    onSuccess={onLoginSuccess}
+                    onError={(error) => setError(error)}
+                />
+
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
                     <h3 className="text-sm font-semibold text-gray-700 mb-3 text-center">🧪 Test Accounts</h3>
                     <div className="space-y-2">

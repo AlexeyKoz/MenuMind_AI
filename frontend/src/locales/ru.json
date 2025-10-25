@@ -22,6 +22,7 @@
         "yes": "Да",
         "no": "Нет",
         "ok": "ОК",
+        "or": "или",
         "search": "Поиск",
         "filter": "Фильтр",
         "sort": "Сортировка",
@@ -463,6 +464,10 @@
             "daysLogged": "Дней записано"
         },
         "aiInsightTitle": "💡 Совет дня от ИИ",
+        "aiInsights": "Инсайты ИИ",
+        "loaded_from_cache": "Загружено из кэша",
+        "language_changed": "Язык изменен - загружаю новую панель",
+        "cached": "Кэшировано",
         "shopping": {
             "title": "🛒 Аналитика покупок",
             "budgetOverview": "💰 Обзор бюджета",
@@ -711,10 +716,30 @@
         "loginSuccess": "С возвращением!",
         "registerSuccess": "Аккаунт успешно создан!",
         "loginError": "Неверное имя пользователя или пароль",
-        "registerError": "Ошибка регистрации",
+        "registerError": "Регистрация не удалась",
         "welcomeMessage": "Добро пожаловать в MenuMind AI",
         "loginSubtitle": "Войдите в свой аккаунт",
-        "registerSubtitle": "Создайте новый аккаунт"
+        "registerSubtitle": "Создайте новый аккаунт",
+        "continueWithGoogle": "Продолжить с Google",
+        "googleLoginFailed": "Вход через Google не удался. Попробуйте ещё раз.",
+        "verificationRequired": "Подтвердите email для доступа ко всем функциям.",
+        "checkInboxForVerification": "Проверьте почту и перейдите по ссылке подтверждения.",
+        "resendEmail": "Отправить снова",
+        "resendVerificationEmail": "Отправить письмо повторно",
+        "verifyingEmail": "Подтверждаем email",
+        "pleaseWait": "Пожалуйста, подождите...",
+        "emailVerified": "Email подтверждён!",
+        "emailVerifiedMessage": "Ваш email успешно подтверждён.",
+        "continueToApp": "Перейти в приложение",
+        "verificationFailed": "Подтверждение не удалось",
+        "verificationFailedMessage": "Ссылка подтверждения недействительна или просрочена.",
+        "verificationError": "Произошла ошибка при подтверждении.",
+        "verificationEmailResent": "Письмо с подтверждением отправлено. Проверьте почту.",
+        "resendFailed": "Не удалось отправить. Попробуйте ещё раз.",
+        "resendError": "Произошла ошибка при отправке.",
+        "backToLogin": "Назад к входу",
+        "enterEmailForResend": "Введите email для повторной отправки:",
+        "verificationKeyMissing": "Ключ подтверждения отсутствует. Используйте ссылку из письма."
     },
     "errors": {
         "required": "Это поле обязательно",
@@ -1048,5 +1073,29 @@
         "otherAllergens": "Другие аллергены в этом рецепте:",
         "contains": "Содержит аллергены:",
         "allMatch": "Все аллергены совпадают с вашим профилем"
+    },
+    "achievements": {
+        "streak": {
+            "nutrition_logging": "Серия записей питания",
+            "nutrition_logging_description": "Постоянно записывайте свои приемы пищи",
+            "recipe_cooking": "Серия приготовления рецептов",
+            "recipe_cooking_description": "Регулярно готовьте рецепты"
+        },
+        "badge": {
+            "first_recipe": "Первый рецепт",
+            "first_recipe_description": "Приготовили свой первый рецепт!",
+            "week_logger": "Недельный трекер",
+            "week_logger_description": "Записывали питание 7 дней подряд",
+            "month_logger": "Месячный трекер",
+            "month_logger_description": "Записывали питание 30 дней подряд",
+            "recipe_master": "Мастер рецептов",
+            "recipe_master_description": "Приготовили 50 рецептов"
+        },
+        "goal": {
+            "nutrition_streak": "Серия питания",
+            "nutrition_streak_description": "Продолжайте записывать приемы пищи, чтобы достичь {{target}} дней",
+            "cooking_streak": "Серия готовки",
+            "cooking_streak_description": "Продолжайте готовить, чтобы достичь {{target}} дней"
+        }
     }
 }

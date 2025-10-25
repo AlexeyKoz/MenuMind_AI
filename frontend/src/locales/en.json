@@ -22,6 +22,7 @@
         "yes": "Yes",
         "no": "No",
         "ok": "OK",
+        "or": "or",
         "search": "Search",
         "filter": "Filter",
         "sort": "Sort",
@@ -463,6 +464,10 @@
             "daysLogged": "Days Logged"
         },
         "aiInsightTitle": "💡 AI Insight of the Day",
+        "aiInsights": "AI Insights",
+        "loaded_from_cache": "Loaded from cache",
+        "language_changed": "Language changed - loading new dashboard",
+        "cached": "Cached",
         "shopping": {
             "title": "🛒 Shopping Insights",
             "budgetOverview": "💰 Budget Overview",
@@ -714,7 +719,27 @@
         "registerError": "Registration failed",
         "welcomeMessage": "Welcome to MenuMind AI",
         "loginSubtitle": "Sign in to your account",
-        "registerSubtitle": "Create a new account"
+        "registerSubtitle": "Create a new account",
+        "continueWithGoogle": "Continue with Google",
+        "googleLoginFailed": "Google login failed. Please try again.",
+        "verificationRequired": "Please verify your email to use all features.",
+        "checkInboxForVerification": "Check your inbox and click the verification link.",
+        "resendEmail": "Resend email",
+        "resendVerificationEmail": "Resend Verification Email",
+        "verifyingEmail": "Verifying Your Email",
+        "pleaseWait": "Please wait...",
+        "emailVerified": "Email Verified!",
+        "emailVerifiedMessage": "Your email has been successfully verified.",
+        "continueToApp": "Continue to App",
+        "verificationFailed": "Verification Failed",
+        "verificationFailedMessage": "The verification link is invalid or has expired.",
+        "verificationError": "An error occurred during verification.",
+        "verificationEmailResent": "Verification email sent. Check your inbox.",
+        "resendFailed": "Failed to resend. Please try again.",
+        "resendError": "An error occurred while resending.",
+        "backToLogin": "Back to Login",
+        "enterEmailForResend": "Enter your email to resend verification:",
+        "verificationKeyMissing": "Verification key missing. Please use the link from your email."
     },
     "errors": {
         "required": "This field is required",
@@ -1046,5 +1071,29 @@
         "otherAllergens": "Other allergens in this recipe:",
         "contains": "Contains allergens:",
         "allMatch": "All allergens match your profile"
+    },
+    "achievements": {
+        "streak": {
+            "nutrition_logging": "Nutrition Logging Streak",
+            "nutrition_logging_description": "Log your meals consistently",
+            "recipe_cooking": "Recipe Cooking Streak",
+            "recipe_cooking_description": "Cook recipes regularly"
+        },
+        "badge": {
+            "first_recipe": "First Recipe",
+            "first_recipe_description": "Cooked your first recipe!",
+            "week_logger": "Week Logger",
+            "week_logger_description": "Logged nutrition for 7 days straight",
+            "month_logger": "Month Logger",
+            "month_logger_description": "Logged nutrition for 30 days straight",
+            "recipe_master": "Recipe Master",
+            "recipe_master_description": "Cooked 50 recipes"
+        },
+        "goal": {
+            "nutrition_streak": "Nutrition Streak",
+            "nutrition_streak_description": "Keep logging your meals to reach {{target}} days",
+            "cooking_streak": "Cooking Streak",
+            "cooking_streak_description": "Keep cooking to reach {{target}} days"
+        }
     }
 }

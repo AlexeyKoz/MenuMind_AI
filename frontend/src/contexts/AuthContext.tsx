@@ -15,6 +15,7 @@ interface User {
     unit_system?: 'metric' | 'imperial';
     allergies?: string[];
     temperature_unit?: 'celsius' | 'fahrenheit';
+    email_verified?: boolean;
 }
 
 interface AuthContextType {
@@ -44,6 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
     const [loading, setLoading] = useState(true);
+    const apiBaseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/?$/, '');
 
     useEffect(() => {
         if (token) {
@@ -62,7 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
 
             // Fetch user profile
-            const profileResponse = await fetch('http://localhost:8000/api/users/profile/', {
+            const profileResponse = await fetch(`${apiBaseUrl}/api/users/profile/`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
@@ -76,7 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
             // ⬇️ NEW: Fetch user preferences
             try {
-                const prefsResponse = await fetch('http://localhost:8000/api/users/profile/preferences/', {
+                const prefsResponse = await fetch(`${apiBaseUrl}/api/users/profile/preferences/`, {
                     headers: {
                         'Authorization': `Bearer ${token}`,
                     },
@@ -90,6 +92,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                         ...profileData,
                         preferred_language: prefsData.preferred_language,
                         unit_system: prefsData.unit_system,
+                        email_verified: profileData?.email_verified ?? prefsData?.email_verified,
                     });
 
                     console.log('✅ User preferences loaded:', {
@@ -98,7 +101,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     });
                 } else {
                     // If preferences don't exist yet, set user without them
-                    setUser(profileData);
+                    setUser({
+                        ...profileData,
+                        email_verified: profileData?.email_verified,
+                    });
                     console.log('⚠️ No preferences found, using defaults');
                 }
             } catch (prefsError) {
@@ -120,7 +126,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const login = async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
         try {
             console.log('🔐 Attempting login for:', username);
-            const response = await fetch('http://localhost:8000/api/users/auth/login/', {
+            const response = await fetch(`${apiBaseUrl}/api/users/auth/login/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
@@ -132,7 +138,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 const data = await response.json();
                 console.log('✅ Login successful, received data:', data);
                 setToken(data.access);
-                setUser(data.user);
+                setUser({ ...data.user, email_verified: data?.user?.email_verified });
                 localStorage.setItem('token', data.access);
                 localStorage.setItem('refresh', data.refresh);
                 return { success: true };
@@ -150,7 +156,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const register = async (username: string, email: string, password: string, firstName: string, lastName: string): Promise<{ success: boolean; error?: string }> => {
         try {
             console.log('📝 Attempting registration for:', username);
-            const response = await fetch('http://localhost:8000/api/users/auth/register/', {
+            const response = await fetch(`${apiBaseUrl}/api/users/auth/register/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -5,6 +5,7 @@
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { useAuth } from '../contexts/AuthContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -13,6 +14,23 @@ import {
     ShoppingCart, UtensilsCrossed, AlertTriangle, Flame, Trophy, Sparkles,
     Calendar, RefreshCw
 } from 'lucide-react';
+
+interface AIInsight {
+    text: string;
+    type: string;
+    fallback?: boolean;
+}
+
+interface AIInsights {
+    insight_of_day: string;
+    shopping_insights: AIInsight[];
+    recipe_insights: AIInsight[];
+    inventory_insights: AIInsight[];
+    nutrition_insights: AIInsight[];
+    language: string;
+    ai_provider: string | null;
+    fallback_used: boolean;
+}
 
 interface DashboardData {
     period: string;
@@ -27,7 +45,14 @@ interface DashboardData {
     inventory: any;
     nutrition: any | null;
     achievements: any;
-    ai_insight_of_day: string | null;
+    ai_insight_of_day?: string | null; // Legacy field
+    ai_insights?: AIInsights; // NEW: Sprint 9.3 structure
+
+    // NEW: Multilingual support fields
+    language: string;
+    cached: boolean;
+    generated_at: string;
+    cached_at?: string;
 }
 
 const Dashboard: React.FC = () => {
@@ -43,19 +68,64 @@ const Dashboard: React.FC = () => {
     const [data, setData] = useState<DashboardData | null>(null);
     const [period, setPeriod] = useState<'7days' | '30days' | '90days' | '1year'>('30days');
     const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
+    const [currentLanguage, setCurrentLanguage] = useState(i18n.language);
 
     const loadDashboard = useCallback(async () => {
         try {
             setLoading(true);
-            const response = await api.getDashboardOverview({ period, include_ai: true });
+            const response = await api.getDashboardOverview({
+                period,
+                include_ai: true,
+                language: i18n.language  // ← NEW: Pass current language
+            });
+
             setData(response);
+
+            // Show cache indicator
+            if (response.cached) {
+                toast.success(t('dashboard.loaded_from_cache'), {
+                    duration: 2000
+                });
+            }
+
         } catch (error) {
             console.error('Failed to load dashboard:', error);
             toast.error(t('dashboard.failedToLoadData'));
         } finally {
             setLoading(false);
         }
-    }, [api, period, t]);
+    }, [api, period, i18n.language, t]);
+
+    // NEW: Detect language changes and reload dashboard
+    useEffect(() => {
+        if (i18n.language !== currentLanguage) {
+            handleLanguageChange();
+        }
+    }, [i18n.language]);
+
+    const handleLanguageChange = async () => {
+        // Clear old data (it's in wrong language)
+        if (data) {
+            toast(t('dashboard.language_changed'), {
+                icon: '🌍',
+                duration: 3000
+            });
+
+            setData(null);
+        }
+
+        // Invalidate old cache
+        try {
+            await api.invalidateDashboardCache(currentLanguage);
+        } catch (error) {
+            console.warn('Failed to invalidate dashboard cache:', error);
+        }
+
+        setCurrentLanguage(i18n.language);
+
+        // Reload in new language
+        await loadDashboard();
+    };
 
     useEffect(() => {
         loadDashboard();
@@ -143,6 +213,11 @@ const Dashboard: React.FC = () => {
                                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                             </button>
 
+                            {/* Language Badge */}
+                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-200">
+                                <span className="font-medium">🌍 {data.language.toUpperCase()}</span>
+                            </div>
+
                             {/* AI Status */}
                             <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-200">
                                 <Sparkles className="w-5 h-5" />
@@ -181,13 +256,29 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 {/* AI Insight of the Day */}
-                {data.ai_insight_of_day && (
+                {data.ai_insights?.insight_of_day && (
                     <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
                         <div className="flex items-start gap-4">
                             <Sparkles className="w-8 h-8 flex-shrink-0 mt-1" />
-                            <div>
+                            <div className="flex-1">
                                 <h2 className="text-xl font-bold mb-2">{t('dashboard.aiInsightTitle')}</h2>
-                                <p className="text-lg opacity-95">{data.ai_insight_of_day}</p>
+                                <p className="text-lg opacity-95 mb-3">{data.ai_insights.insight_of_day}</p>
+
+                                {/* Cache metadata */}
+                                <div className="flex items-center gap-3 text-sm opacity-75 flex-wrap">
+                                    {data.cached && (
+                                        <span className="px-2 py-1 bg-white/20 rounded-full">
+                                            ⚡ {t('dashboard.cached')}
+                                        </span>
+                                    )}
+                                    <span>📊 {data.language.toUpperCase()}</span>
+                                    {data.ai_insights.ai_provider && (
+                                        <span className="px-2 py-1 bg-white/20 rounded-full">
+                                            🤖 {data.ai_insights.ai_provider}
+                                            {data.ai_insights.fallback_used && ' (fallback)'}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -197,6 +288,7 @@ const Dashboard: React.FC = () => {
                 <div className="space-y-6">
                     <ShoppingInsightsSection
                         data={data.shopping}
+                        insights={data.ai_insights?.shopping_insights}
                         period={getPeriodLabel()}
                         expanded={expandedSections.has('shopping')}
                         onToggle={() => toggleSection('shopping')}
@@ -204,6 +296,7 @@ const Dashboard: React.FC = () => {
 
                     <RecipeInsightsSection
                         data={data.recipes}
+                        insights={data.ai_insights?.recipe_insights}
                         period={getPeriodLabel()}
                         expanded={expandedSections.has('recipes')}
                         onToggle={() => toggleSection('recipes')}
@@ -211,6 +304,7 @@ const Dashboard: React.FC = () => {
 
                     <InventoryInsightsSection
                         data={data.inventory}
+                        insights={data.ai_insights?.inventory_insights}
                         expanded={expandedSections.has('inventory')}
                         onToggle={() => toggleSection('inventory')}
                     />
@@ -218,6 +312,7 @@ const Dashboard: React.FC = () => {
                     {data.nutrition && (
                         <NutritionCoachSection
                             data={data.nutrition}
+                            insights={data.ai_insights?.nutrition_insights}
                             period={getPeriodLabel()}
                             expanded={expandedSections.has('nutrition')}
                             onToggle={() => toggleSection('nutrition')}
@@ -265,10 +360,11 @@ const QuickStatCard: React.FC<{
 // Shopping Insights Section
 const ShoppingInsightsSection: React.FC<{
     data: any;
+    insights?: AIInsight[];
     period: string;
     expanded: boolean;
     onToggle: () => void;
-}> = ({ data, period, expanded, onToggle }) => {
+}> = ({ data, insights, period, expanded, onToggle }) => {
     const { t } = useTranslation();
     if (!data) return null;
 
@@ -289,6 +385,27 @@ const ShoppingInsightsSection: React.FC<{
 
             {expanded && (
                 <div className="p-6 border-t border-gray-200 space-y-6">
+                    {/* AI Insights */}
+                    {insights && insights.length > 0 && (
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-green-600" />
+                                {t('dashboard.aiInsights')}
+                            </h3>
+                            <div className="space-y-2">
+                                {insights.map((insight, index) => (
+                                    <div key={index} className="flex items-start gap-2 text-gray-700">
+                                        <span className="text-green-600 font-bold">•</span>
+                                        <span>{insight.text}</span>
+                                        {insight.fallback && (
+                                            <span className="text-xs text-gray-500 ml-1">(fallback)</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Budget Overview */}
                     <div>
                         <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('dashboard.shopping.budgetOverview')} ({period})</h3>
@@ -374,10 +491,11 @@ const ShoppingInsightsSection: React.FC<{
 // Recipe Insights Section (simplified - will be similar structure)
 const RecipeInsightsSection: React.FC<{
     data: any;
+    insights?: AIInsight[];
     period: string;
     expanded: boolean;
     onToggle: () => void;
-}> = ({ data, period, expanded, onToggle }) => {
+}> = ({ data, insights, period, expanded, onToggle }) => {
     const { t } = useTranslation();
     if (!data) return null;
 
@@ -397,7 +515,28 @@ const RecipeInsightsSection: React.FC<{
             </button>
 
             {expanded && (
-                <div className="p-6 border-t border-gray-200">
+                <div className="p-6 border-t border-gray-200 space-y-6">
+                    {/* AI Insights */}
+                    {insights && insights.length > 0 && (
+                        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-purple-600" />
+                                {t('dashboard.aiInsights')}
+                            </h3>
+                            <div className="space-y-2">
+                                {insights.map((insight, index) => (
+                                    <div key={index} className="flex items-start gap-2 text-gray-700">
+                                        <span className="text-purple-600 font-bold">•</span>
+                                        <span>{insight.text}</span>
+                                        {insight.fallback && (
+                                            <span className="text-xs text-gray-500 ml-1">(fallback)</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-purple-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-purple-600">{data.total_cooked}</div>
@@ -435,9 +574,10 @@ const RecipeInsightsSection: React.FC<{
 // Inventory Insights Section (simplified)
 const InventoryInsightsSection: React.FC<{
     data: any;
+    insights?: AIInsight[];
     expanded: boolean;
     onToggle: () => void;
-}> = ({ data, expanded, onToggle }) => {
+}> = ({ data, insights, expanded, onToggle }) => {
     const { t } = useTranslation();
     if (!data) return null;
 
@@ -463,6 +603,27 @@ const InventoryInsightsSection: React.FC<{
 
             {expanded && (
                 <div className="p-6 border-t border-gray-200 space-y-6">
+                    {/* AI Insights */}
+                    {insights && insights.length > 0 && (
+                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-blue-600" />
+                                {t('dashboard.aiInsights')}
+                            </h3>
+                            <div className="space-y-2">
+                                {insights.map((insight, index) => (
+                                    <div key={index} className="flex items-start gap-2 text-gray-700">
+                                        <span className="text-blue-600 font-bold">•</span>
+                                        <span>{insight.text}</span>
+                                        {insight.fallback && (
+                                            <span className="text-xs text-gray-500 ml-1">(fallback)</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-3 gap-4">
                         <div className="bg-blue-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-blue-600">{data.total_items}</div>
@@ -524,10 +685,11 @@ const InventoryInsightsSection: React.FC<{
 // Nutrition Coach Section (simplified)
 const NutritionCoachSection: React.FC<{
     data: any;
+    insights?: AIInsight[];
     period: string;
     expanded: boolean;
     onToggle: () => void;
-}> = ({ data, period, expanded, onToggle }) => {
+}> = ({ data, insights, period, expanded, onToggle }) => {
     const { t } = useTranslation();
     if (!data) return null;
 
@@ -554,6 +716,27 @@ const NutritionCoachSection: React.FC<{
 
             {expanded && (
                 <div className="p-6 border-t border-gray-200 space-y-6">
+                    {/* AI Insights */}
+                    {insights && insights.length > 0 && (
+                        <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-4 border border-orange-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <Sparkles className="w-5 h-5 text-orange-600" />
+                                {t('dashboard.aiInsights')}
+                            </h3>
+                            <div className="space-y-2">
+                                {insights.map((insight, index) => (
+                                    <div key={index} className="flex items-start gap-2 text-gray-700">
+                                        <span className="text-orange-600 font-bold">•</span>
+                                        <span>{insight.text}</span>
+                                        {insight.fallback && (
+                                            <span className="text-xs text-gray-500 ml-1">(fallback)</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-orange-50 p-4 rounded-lg">
                             <div className="text-3xl font-bold text-orange-600">{data.days_logged}/{data.total_days}</div>

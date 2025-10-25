@@ -7,8 +7,13 @@ class ApiService {
 
     constructor(token: string | null, onTokenExpired?: () => void) {
         this.token = token;
-        this.baseURL = 'http://localhost:8000/api';
+        const envBaseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+        this.baseURL = `${envBaseUrl.replace(/\/?$/, '')}/api`;
         this.onTokenExpired = onTokenExpired;
+    }
+
+    private getCurrentLanguage(): string {
+        return localStorage.getItem('i18nextLng') || 'en';
     }
 
     private async request(endpoint: string, options: RequestInit = {}): Promise<any> {
@@ -18,6 +23,7 @@ class ApiService {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${this.token}`,
+                'X-User-Language': this.getCurrentLanguage(),  // ← NEW: Add language header
                 ...options.headers
             }
         };
@@ -666,19 +672,27 @@ class ApiService {
     // DASHBOARD & ANALYTICS
     // ========================================
 
-    // Dashboard Overview
-    getDashboardOverview = (params?: { period?: '7days' | '30days' | '90days' | '1year'; include_ai?: boolean }) => {
+    // Dashboard Overview (multilingual)
+    getDashboardOverview = (params?: {
+        period?: '7days' | '30days' | '90days' | '1year';
+        include_ai?: boolean;
+        language?: string;  // ← NEW: Language parameter
+    }) => {
         const queryParams = new URLSearchParams();
         if (params?.period) queryParams.append('period', params.period);
         if (params?.include_ai !== undefined) queryParams.append('include_ai', String(params.include_ai));
+        if (params?.language) queryParams.append('lang', params.language);  // ← NEW: Language support
+
         const queryString = queryParams.toString();
         return this.request(`/analytics/dashboard/overview/${queryString ? '?' + queryString : ''}`);
     };
 
-    // AI Insights
-    getAIInsights = (params?: { period?: string }) => {
+    // AI Insights (multilingual)
+    getAIInsights = (params?: { period?: string; language?: string }) => {
         const queryParams = new URLSearchParams();
         if (params?.period) queryParams.append('period', params.period);
+        if (params?.language) queryParams.append('lang', params.language);  // ← NEW: Language support
+
         const queryString = queryParams.toString();
         return this.request(`/analytics/dashboard/ai_insights/${queryString ? '?' + queryString : ''}`);
     };
@@ -688,6 +702,16 @@ class ApiService {
             method: 'POST',
             body: JSON.stringify({ period: period || '30days' })
         });
+
+    // NEW: Cache management endpoints
+    invalidateDashboardCache = (language?: string, period?: string) =>
+        this.request('/analytics/dashboard/invalidate-cache/', {
+            method: 'POST',
+            body: JSON.stringify({ language, period })
+        });
+
+    getDashboardCacheStats = () =>
+        this.request('/analytics/dashboard/cache-stats/');
 
     // Achievements
     getAchievements = () =>
