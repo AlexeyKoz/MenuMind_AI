@@ -74,7 +74,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 throw new Error('Failed to fetch profile');
             }
 
-            const profileData = await profileResponse.json();
+            const profileResponseData = await profileResponse.json();
+
+            // Extract user from paginated response
+            const profileData = profileResponseData.results?.[0] || profileResponseData;
 
             // ⬇️ NEW: Fetch user preferences
             try {

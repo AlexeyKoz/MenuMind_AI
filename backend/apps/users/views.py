@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
+from django.conf import settings as django_settings
 
 from .models import User
 from .serializers import (
@@ -12,6 +13,14 @@ from .serializers import (
     UserProfileSerializer, PartnerConnectionSerializer,
     UserSettingsSerializer
 )
+
+try:
+    from allauth.account.models import EmailAddress, EmailConfirmation
+    from allauth.account.utils import send_email_confirmation
+except ImportError:
+    EmailAddress = None
+    EmailConfirmation = None
+    send_email_confirmation = None
 
 
 class UserRegistrationView(generics.CreateAPIView):
@@ -25,6 +34,22 @@ class UserRegistrationView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
+        # Create EmailAddress for allauth verification
+        if EmailAddress is not None and user.email:
+            email_address, created = EmailAddress.objects.get_or_create(
+                user=user,
+                email=user.email.lower(),
+                defaults={'primary': True, 'verified': False}
+            )
+
+            # Send verification email
+            if send_email_confirmation is not None:
+                try:
+                    send_email_confirmation(request, user, signup=True)
+                    print(f"📧 Verification email sent to {user.email}")
+                except Exception as e:
+                    print(f"⚠️ Failed to send verification email: {e}")
+
         # Generate tokens
         refresh = RefreshToken.for_user(user)
 
@@ -32,6 +57,7 @@ class UserRegistrationView(generics.CreateAPIView):
             'user': UserSerializer(user).data,
             'refresh': str(refresh),
             'access': str(refresh.access_token),
+            'message': 'Registration successful. Please check your email to verify your account.'
         }, status=status.HTTP_201_CREATED)
 
 
@@ -235,3 +261,73 @@ def login_view(request):
         {'error': 'Invalid credentials'},
         status=status.HTTP_401_UNAUTHORIZED
     )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def resend_verification_email(request):
+    """Resend email verification link"""
+    try:
+        user = request.user
+
+        if EmailAddress is None:
+            return Response(
+                {'error': 'Email verification not configured'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Check if email is already verified
+        email_address = EmailAddress.objects.filter(
+            user=user,
+            email=user.email,
+            verified=True
+        ).first()
+
+        if email_address:
+            return Response(
+                {'message': 'Email already verified'},
+                status=status.HTTP_200_OK
+            )
+
+        # Get or create unverified email address
+        email_address, created = EmailAddress.objects.get_or_create(
+            user=user,
+            email=user.email.lower(),
+            defaults={'primary': True, 'verified': False}
+        )
+
+        print(
+            f"📧 EmailAddress for {user.email}: verified={email_address.verified}")
+
+        # Send verification email
+        if send_email_confirmation is not None:
+            try:
+                # The send_email_confirmation will now automatically use EmailJS
+                # (via MultilingualAccountAdapter) if configured, otherwise falls back to SMTP
+                send_email_confirmation(request, user, signup=False)
+                print(f"✅ Resent verification email to {user.email}")
+                return Response(
+                    {'message': 'Verification email sent. Please check your inbox.'},
+                    status=status.HTTP_200_OK
+                )
+            except Exception as e:
+                print(f"❌ Failed to send verification email: {e}")
+                import traceback
+                traceback.print_exc()
+                return Response(
+                    {'error': f'Failed to send verification email: {str(e)}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+        return Response(
+            {'error': 'Email service not available'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    except Exception as e:
+        print(f"❌ Unexpected error in resend_verification_email: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'Unexpected error: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

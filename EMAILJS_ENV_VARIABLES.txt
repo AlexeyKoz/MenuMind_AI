@@ -1,0 +1,83 @@
+# ==============================================================================
+# EmailJS Configuration - Email Service Integration
+# ==============================================================================
+# 
+# Get these values from: https://dashboard.emailjs.com/
+# 
+# SETUP STEPS:
+# 1. Create account at https://www.emailjs.com/
+# 2. Add Email Service (e.g., Gmail, Outlook, SendGrid)
+# 3. Create 3 email templates (English, Russian, Hebrew)
+# 4. Copy IDs from dashboard to this file
+# 5. Restart Django server
+#
+# NOTE: If not configured, system will fall back to Django SMTP automatically
+# ==============================================================================
+
+# Your EmailJS Service ID (from Email Services page)
+# Example: service_abc123xyz
+EMAILJS_SERVICE_ID=
+
+# Your Public API Key (from Account → API Keys)
+# Example: user_abc123xyz  
+EMAILJS_PUBLIC_KEY=
+
+# Your Private API Key (from Account → API Keys)
+# ⚠️ KEEP SECRET - Never commit or expose this key
+# Example: abc123xyz-private-key-here
+EMAILJS_PRIVATE_KEY=
+
+# Email Template IDs (from Email Templates page)
+# Create one template for each language using the same HTML structure
+
+# English verification template
+# Example: template_verification_en
+EMAILJS_TEMPLATE_VERIFY_EN=
+
+# Russian verification template  
+# Example: template_verification_ru
+EMAILJS_TEMPLATE_VERIFY_RU=
+
+# Hebrew verification template
+# Example: template_verification_he  
+EMAILJS_TEMPLATE_VERIFY_HE=
+
+# ==============================================================================
+# Template Variables Available:
+# ==============================================================================
+# Your EmailJS templates can use these variables:
+#
+# - {{to_email}}       : Recipient's email address
+# - {{user_name}}      : User's display name
+# - {{activate_url}}   : Full verification URL (e.g., http://localhost:3000/verify-email/key)
+# - {{site_name}}      : "MenuMind AI"
+# - {{greeting}}       : Localized greeting (e.g., "Hi John", "Привет, Иван", "שלום יוחנן")
+# - {{message}}        : Localized main message
+# - {{button_text}}    : Localized button text
+# - {{footer_text}}    : Localized footer disclaimer
+# - {{subject}}        : Email subject line
+#
+# ==============================================================================
+# Testing:
+# ==============================================================================
+# After configuration, test with:
+#
+# 1. Register a new user:
+#    curl -X POST http://localhost:8000/api/users/auth/registration/ \
+#      -H "Content-Type: application/json" \
+#      -d '{"username":"test","email":"test@example.com","password":"Pass123!"}'
+#
+# 2. Check backend logs for:
+#    [EmailJS] ✅ Successfully sent verification email
+#
+# ==============================================================================
+# Fallback Behavior:
+# ==============================================================================
+# If EmailJS is not configured or fails:
+# - System automatically falls back to Django SMTP
+# - No emails are lost
+# - Check logs for [EmailJS] ⚠️ messages
+#
+# Add these variables to your backend/.env file
+# ==============================================================================
+

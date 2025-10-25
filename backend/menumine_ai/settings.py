@@ -1,11 +1,18 @@
 import os
 import sys
 from pathlib import Path
-from datetime import timedelta
+from datetime import timedelta, date
 import environ
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Version Configuration
+APP_VERSION = "0.9.0"
+APP_BUILD_DATE = date.today().isoformat()  # Automatically updates
+VERSION_MAJOR = 0
+VERSION_MINOR = 9
+VERSION_PATCH = 0
 
 # Initialize environment variables
 env = environ.Env()
@@ -352,7 +359,8 @@ else:
     EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
     EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@menumindai.com')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL',
+                         default='noreply@menumindai.com')
 EMAIL_SUBJECT_PREFIX = '[MenuMindAI] '
 
 # Frontend URL for email links

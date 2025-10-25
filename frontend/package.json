@@ -1,8 +1,10 @@
 {
     "name": "menumine-ai-frontend",
-    "version": "0.1.0",
+    "version": "0.9.0",
     "private": true,
     "description": "MenuMind AI - React frontend for smart family food platform",
+    "author": "Alexey Kozlov",
+    "license": "MIT",
     "dependencies": {
         "@react-oauth/google": "^0.12.2",
         "ajv": "^8.17.1",

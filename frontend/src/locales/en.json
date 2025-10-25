@@ -741,6 +741,34 @@
         "enterEmailForResend": "Enter your email to resend verification:",
         "verificationKeyMissing": "Verification key missing. Please use the link from your email."
     },
+    "footer": {
+        "allRightsReserved": "All rights reserved.",
+        "about": "About",
+        "settings": "Settings"
+    },
+    "about": {
+        "title": "About MenuMineAI",
+        "whatIsMenuMineAI": "What is MenuMineAI?",
+        "description": "MenuMineAI is an intelligent meal planning and nutrition tracking application that helps you manage your diet, create shopping lists, and achieve your health goals with AI-powered insights.",
+        "features": "Features",
+        "feature1": "AI-powered meal planning and recipe suggestions",
+        "feature2": "Comprehensive nutrition tracking and analytics",
+        "feature3": "Smart shopping list management with collaboration",
+        "feature4": "Multilingual support (English, Russian, Hebrew)",
+        "feature5": "Personalized nutrition coaching and insights",
+        "contact": "Contact",
+        "contactInfo": "For questions or feedback, please contact the developer."
+    },
+    "settings": {
+        "title": "Settings",
+        "comingSoon": "This page is under development. More settings will be available soon!",
+        "plannedFeatures": "Planned Features:",
+        "plannedFeature1": "Account settings and preferences",
+        "plannedFeature2": "Privacy and security options",
+        "plannedFeature3": "Notification preferences",
+        "plannedFeature4": "Data export and backup",
+        "plannedFeature5": "Theme customization"
+    },
     "errors": {
         "required": "This field is required",
         "invalid": "Invalid value",
@@ -750,7 +778,11 @@
         "forbidden": "Forbidden",
         "serverError": "Server error",
         "networkError": "Network error",
-        "tryAgain": "Please try again"
+        "tryAgain": "Please try again",
+        "emailVerificationRequired": "Email Verification Required",
+        "verifyEmailToGenerate": "Please verify your email address before generating recipes. Check your inbox for the verification link we sent you.",
+        "resendVerificationFromProfile": "If you didn't receive it, you can request a new one from your profile.",
+        "contactSupportIfPersists": "Please contact support if you continue to see this message."
     },
     "forms": {
         "submit": "Submit",

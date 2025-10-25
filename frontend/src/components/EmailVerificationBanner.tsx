@@ -1,22 +1,37 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../contexts/AuthContext';
 
 const EmailVerificationBanner: React.FC = () => {
     const { t } = useTranslation();
     const [dismissed, setDismissed] = useState(false);
-    const token = localStorage.getItem('token');
+    const { user, token } = useAuth();
 
-    // TODO: Replace with actual verified flag once available in AuthContext
-    const emailVerified = true;
+    const emailVerified = user?.email_verified ?? false;
+
+    // Debug logging
+    console.log('🟡 EmailVerificationBanner - user:', user);
+    console.log('🟡 EmailVerificationBanner - email_verified:', emailVerified);
+    console.log('🟡 EmailVerificationBanner - will show banner:', !dismissed && !emailVerified && !!token && !!user);
 
     const handleResend = async () => {
+        console.log('🔵 Resend button clicked');
+        console.log('Token:', token ? 'exists' : 'missing');
+
         if (!token) {
+            console.log('❌ No token, returning');
+            alert('You need to be logged in to resend verification email');
             return;
         }
 
         try {
             const apiUrl = (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/?$/, '');
-            const res = await fetch(`${apiUrl}/dj-rest-auth/registration/resend-email/`, {
+            const url = `${apiUrl}/api/users/auth/resend-verification/`;
+
+            console.log('📤 Sending request to:', url);
+            console.log('Authorization header:', `Bearer ${token.substring(0, 20)}...`);
+
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -24,19 +39,24 @@ const EmailVerificationBanner: React.FC = () => {
                 },
             });
 
+            console.log('📥 Response status:', res.status);
+
             if (res.ok) {
-                alert(t('auth.verificationEmailResent'));
+                const data = await res.json();
+                console.log('✅ Success response:', data);
+                alert(data.message || t('auth.verificationEmailResent'));
             } else {
                 const data = await res.json().catch(() => ({}));
-                alert(data?.detail || t('auth.resendFailed'));
+                console.log('❌ Error response:', data);
+                alert(data?.error || data?.detail || t('auth.resendFailed'));
             }
         } catch (error) {
-            console.error('Resend email error:', error);
+            console.error('🚨 Resend email error:', error);
             alert(t('auth.resendError'));
         }
     };
 
-    if (dismissed || emailVerified || !token) {
+    if (dismissed || emailVerified || !token || !user) {
         return null;
     }
 

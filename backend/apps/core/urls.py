@@ -5,6 +5,10 @@ urlpatterns = [
     # API root endpoint
     path('', views.api_root, name='api_root'),
 
+    # System endpoints
+    path('version/', views.version_info, name='version-info'),
+    path('health/', views.health_check, name='health-check'),
+
     # Include other app URLs here
     path('shopping/', include('apps.shopping.urls')),
     path('nutrition/', include('apps.nutrition.urls')),

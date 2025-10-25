@@ -1,6 +1,16 @@
 """
 Inventory Management Views - Complete API endpoints for inventory
 """
+from .inventory_services import InventoryCategorizationService, InventoryRecipeGenerator
+from .serializers import (
+    InventorySerializer,
+    InventoryHistorySerializer,
+    AICategorizationSuggestionSerializer,
+    BulkInventoryCreateSerializer,
+    InventoryConsumeSerializer,
+    RecipeFromInventorySerializer
+)
+from .models import Inventory, InventoryHistory, ShoppingList, ShoppingItem
 import logging
 from rest_framework import views
 from rest_framework import viewsets, status
@@ -12,17 +22,6 @@ from datetime import timedelta, datetime
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
-
-from .models import Inventory, InventoryHistory, ShoppingList, ShoppingItem
-from .serializers import (
-    InventorySerializer,
-    InventoryHistorySerializer,
-    AICategorizationSuggestionSerializer,
-    BulkInventoryCreateSerializer,
-    InventoryConsumeSerializer,
-    RecipeFromInventorySerializer
-)
-from .inventory_services import InventoryCategorizationService, InventoryRecipeGenerator
 
 
 class InventoryViewSet(viewsets.ModelViewSet):
@@ -519,15 +518,15 @@ class InventoryViewSet(viewsets.ModelViewSet):
     def recipe_briefs(self, request):
         """
         Generate recipe briefs from inventory (NEW AGENT)
-        
+
         This is the entry point for the new inventory recipe agent.
         It generates short recipe briefs (5 at a time) and caches them for 24h.
-        
+
         POST /api/inventory/recipe-briefs/
         Query params:
             - offset: Number of recipes to skip (default: 0)
             - count: Number of recipes to return (default: 5)
-        
+
         Response:
         {
             "success": true,
@@ -539,7 +538,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
         }
         """
         from apps.inventory.inventory_recipe_agent import get_inventory_recipe_agent
-        
+
         # Get inventory items
         inventory_items = self.get_queryset()
         items_data = []
@@ -552,11 +551,11 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'location': item.location,
                 'expiration_date': item.expiration_date.isoformat() if item.expiration_date else None
             })
-        
+
         # Get parameters
         offset = int(request.query_params.get('offset', 0))
         count = int(request.query_params.get('count', 5))
-        
+
         # Generate briefs
         agent = get_inventory_recipe_agent()
         result = agent.generate_recipe_briefs(
@@ -565,23 +564,23 @@ class InventoryViewSet(viewsets.ModelViewSet):
             count=count,
             offset=offset
         )
-        
+
         return Response({
             'success': True,
             **result
         })
-    
+
     @action(detail=False, methods=['post'], url_path='generate-full-recipe')
     def generate_full_recipe(self, request):
         """
         Generate full recipe from a brief (NEW AGENT)
-        
+
         This endpoint:
         1. Takes a recipe brief
         2. Generates full recipe with detailed steps
         3. Checks for duplicates using deduplication service
         4. Returns full recipe (or duplicate if found)
-        
+
         POST /api/inventory/generate-full-recipe/
         Body:
         {
@@ -594,7 +593,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 "cuisine": "Italian"
             }
         }
-        
+
         Response:
         {
             "success": true,
@@ -606,7 +605,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
         from apps.inventory.inventory_recipe_agent import get_inventory_recipe_agent
         from apps.core.deduplication_service import get_deduplication_service
         from apps.recipes.models import CanonicalRecipe
-        
+
         # Get brief from request
         brief = request.data.get('brief')
         if not brief:
@@ -614,10 +613,10 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'error': 'Recipe brief is required'
             }, status=status.HTTP_400_BAD_REQUEST)
-        
+
         # Get user's language
         target_language = self._get_user_language(request)
-        
+
         # Get inventory items
         inventory_items = self.get_queryset()
         items_data = []
@@ -628,7 +627,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'unit': item.unit,
                 'category': item.category
             })
-        
+
         # Generate full recipe
         agent = get_inventory_recipe_agent()
         full_recipe = agent.generate_full_recipe(
@@ -636,20 +635,21 @@ class InventoryViewSet(viewsets.ModelViewSet):
             inventory_items=items_data,
             target_language=target_language
         )
-        
+
         if not full_recipe:
             return Response({
                 'success': False,
                 'error': 'Failed to generate recipe'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
         # Check for duplicates
         dedup_service = get_deduplication_service()
         duplicate = dedup_service.check_duplicate(
             recipe_name=full_recipe['name'],
-            ingredients=[ing['name'] for ing in full_recipe.get('ingredients', [])]
+            ingredients=[ing['name']
+                         for ing in full_recipe.get('ingredients', [])]
         )
-        
+
         if duplicate:
             return Response({
                 'success': True,
@@ -658,7 +658,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'duplicate_name': duplicate.name,
                 'message': f'Similar recipe already exists: {duplicate.name}'
             })
-        
+
         # Save as canonical recipe
         try:
             # Convert to RCIP format
@@ -679,14 +679,14 @@ class InventoryViewSet(viewsets.ModelViewSet):
                     'steps': [{'instruction': step} for step in full_recipe.get('instructions', [])]
                 }
             }
-            
+
             canonical_recipe = CanonicalRecipe.objects.create(
                 canonical_data=rcip_data,
                 author=request.user,
                 source='inventory_agent',
                 recipe_status='validated'
             )
-            
+
             return Response({
                 'success': True,
                 'is_duplicate': False,
@@ -694,7 +694,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'recipe': full_recipe,
                 'message': 'Recipe created successfully'
             })
-        
+
         except Exception as e:
             logger.error(f"[INV AGENT] Failed to save recipe: {e}")
             return Response({
@@ -744,8 +744,62 @@ class InventoryViewSet(viewsets.ModelViewSet):
         """
         import time
         from apps.shopping.inventory_cache_service import get_inventory_cache_service
+        from apps.ai_agents.rate_limiter import AIRateLimiter
+        from allauth.account.models import EmailAddress
 
         start_time = time.time()
+
+        # ⭐ CHECK EMAIL VERIFICATION FIRST
+        try:
+            email_address = EmailAddress.objects.get(
+                user=request.user,
+                email=request.user.email
+            )
+
+            if not email_address.verified:
+                return Response({
+                    'success': False,
+                    'error': 'Email verification required',
+                    'message': (
+                        'Please verify your email address before generating recipes. '
+                        'Check your inbox for the verification link we sent you. '
+                        'If you didn\'t receive it, you can request a new one from your profile.'
+                    ),
+                    'verification_required': True,
+                    'email': request.user.email,
+                    'recipes': []
+                }, status=status.HTTP_403_FORBIDDEN)
+
+        except EmailAddress.DoesNotExist:
+            # Email not registered in allauth (shouldn't happen, but handle gracefully)
+            return Response({
+                'success': False,
+                'error': 'Email verification required',
+                'message': (
+                    'Your email address needs to be verified. '
+                    'Please contact support if you continue to see this message.'
+                ),
+                'verification_required': True,
+                'recipes': []
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Get generation parameters first to check rate limit
+        max_recipes = request.data.get('max_recipes', 5)
+        force_regenerate = request.data.get('force_regenerate', False)
+
+        # ⭐ CHECK RATE LIMIT (only if not using cache or forcing regeneration)
+        # Cached recipes don't count against the limit
+        if force_regenerate:
+            allowed, message, limit_type = AIRateLimiter.check_rate_limit(
+                request.user, max_recipes)
+
+            if not allowed:
+                return Response({
+                    'success': False,
+                    'error': message,
+                    'limit_type': limit_type,
+                    'rate_limited': True
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         # Phase 2: Detect user's language
         user_language = self._get_user_language(request)
@@ -767,11 +821,10 @@ class InventoryViewSet(viewsets.ModelViewSet):
 
         # Get generation parameters
         generation_params = {
-            'max_recipes': request.data.get('max_recipes', 5),
+            'max_recipes': max_recipes,
             'prioritize_expiring': request.data.get('prioritize_expiring', True),
             'max_missing_ingredients': request.data.get('max_missing_ingredients', 2)
         }
-        force_regenerate = request.data.get('force_regenerate', False)
 
         # Phase 3: Check cache (unless force_regenerate)
         cache_service = get_inventory_cache_service()
@@ -787,7 +840,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             )
 
             if cached_recipes:
-                # Cache hit - return immediately
+                # Cache hit - return immediately (no rate limit applied)
                 cache_time_ms = int((time.time() - start_time) * 1000)
 
                 # Determine cache source from log message (Redis vs PostgreSQL)
@@ -810,6 +863,19 @@ class InventoryViewSet(viewsets.ModelViewSet):
                         'cache_hit': True
                     }
                 })
+
+        # ⭐ CHECK RATE LIMIT before generating (for non-forced requests)
+        if not force_regenerate:
+            allowed, message, limit_type = AIRateLimiter.check_rate_limit(
+                request.user, max_recipes)
+
+            if not allowed:
+                return Response({
+                    'success': False,
+                    'error': message,
+                    'limit_type': limit_type,
+                    'rate_limited': True
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
         # Cache miss - generate with AI (Phase 1 & 2)
         user_profile = {
@@ -848,7 +914,16 @@ class InventoryViewSet(viewsets.ModelViewSet):
             generation_time_ms=generation_time_ms
         )
 
-        return Response({
+        # ⭐ LOG SUCCESSFUL REQUEST
+        AIRateLimiter.log_request(request.user, len(recipes))
+
+        # Get updated stats
+        stats = AIRateLimiter.get_user_stats(request.user)
+
+        # Get rate limit headers
+        headers = AIRateLimiter.get_rate_limit_headers(request.user)
+
+        response = Response({
             'success': True,
             'language': user_language,
             'cached': False,
@@ -863,8 +938,15 @@ class InventoryViewSet(viewsets.ModelViewSet):
                 'validated': True,
                 'language': user_language,
                 'cache_hit': False
-            }
+            },
+            'rate_limit_stats': stats
         })
+
+        # Add rate limit headers to response
+        for header_name, header_value in headers.items():
+            response[header_name] = header_value
+
+        return response
 
     def perform_create(self, serializer):
         """Override to invalidate cache when inventory item is created"""

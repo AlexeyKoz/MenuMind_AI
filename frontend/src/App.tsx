@@ -5,10 +5,13 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CollaborationProvider } from './contexts/CollaborationContext';
 import Navigation from './components/Navigation';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
+import Footer from './components/Footer';
 import { Dashboard, ShoppingList, NutritionTracker, Recipes, Login, Inventory, SettingsPage, CanonicalRecipesPage } from './pages';
 import Registration from './pages/Registration';
 import ArchivePage from './pages/ArchivePage';
 import VerifyEmail from './pages/VerifyEmail';
+import About from './pages/About';
+import Settings from './pages/Settings';
 import './App.css';
 
 const useCurrentPage = (isAuthenticated: boolean) => {
@@ -68,52 +71,64 @@ const AppContent: React.FC = () => {
 
     if (!user) {
         return (
-            <Routes>
-                <Route
-                    path="/verify-email/:key"
-                    element={<VerifyEmail />}
-                />
-                <Route
-                    path="/verify-email"
-                    element={<VerifyEmail />}
-                />
-                <Route
-                    path="*"
-                    element={authMode === 'login' ? (
-                        <Login
-                            onLoginSuccess={() => window.location.reload()}
-                            onSwitchToRegistration={() => setAuthMode('register')}
-                        />
-                    ) : (
-                        <Registration
-                            onRegistrationSuccess={() => window.location.reload()}
-                            onSwitchToLogin={() => setAuthMode('login')}
-                        />
-                    )}
-                />
-            </Routes>
+            <div className="min-h-screen flex flex-col">
+                <Routes>
+                    <Route
+                        path="/verify-email/:key"
+                        element={<VerifyEmail />}
+                    />
+                    <Route
+                        path="/verify-email"
+                        element={<VerifyEmail />}
+                    />
+                    <Route
+                        path="/about"
+                        element={<About />}
+                    />
+                    <Route
+                        path="*"
+                        element={authMode === 'login' ? (
+                            <Login
+                                onLoginSuccess={() => window.location.reload()}
+                                onSwitchToRegistration={() => setAuthMode('register')}
+                            />
+                        ) : (
+                            <Registration
+                                onRegistrationSuccess={() => window.location.reload()}
+                                onSwitchToLogin={() => setAuthMode('login')}
+                            />
+                        )}
+                    />
+                </Routes>
+                <Footer />
+            </div>
         );
     }
 
     return (
         <CollaborationProvider>
-            <div className="min-h-screen bg-gray-100">
+            <div className="min-h-screen bg-gray-100 flex flex-col">
                 <EmailVerificationBanner />
                 <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
-                <Routes>
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/shopping" element={<ShoppingList />} />
-                    <Route path="/nutrition" element={<NutritionTracker />} />
-                    <Route path="/recipes" element={<Recipes />} />
-                    <Route path="/discover" element={<CanonicalRecipesPage />} />
-                    <Route path="/inventory" element={<Inventory />} />
-                    <Route path="/archive" element={<ArchivePage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/verify-email" element={<VerifyEmail />} />
-                    <Route path="/verify-email/:key" element={<VerifyEmail />} />
-                    <Route path="/" element={<CurrentPageComponent />} />
-                    <Route path="*" element={<CurrentPageComponent />} />
-                </Routes>
+                <div className="flex-1">
+                    <Routes>
+                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route path="/shopping" element={<ShoppingList />} />
+                        <Route path="/nutrition" element={<NutritionTracker />} />
+                        <Route path="/recipes" element={<Recipes />} />
+                        <Route path="/discover" element={<CanonicalRecipesPage />} />
+                        <Route path="/inventory" element={<Inventory />} />
+                        <Route path="/archive" element={<ArchivePage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/about" element={<About />} />
+                        <Route path="/app-settings" element={<Settings />} />
+                        <Route path="/verify-email" element={<VerifyEmail />} />
+                        <Route path="/verify-email/:key" element={<VerifyEmail />} />
+                        <Route path="/" element={<CurrentPageComponent />} />
+                        <Route path="*" element={<CurrentPageComponent />} />
+                    </Routes>
+                </div>
+                <Footer />
                 <Toaster position="top-right" />
             </div>
         </CollaborationProvider>

@@ -3,9 +3,24 @@ from .models import User
 
 
 class UserSerializer(serializers.ModelSerializer):
+    email_verified = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+        fields = ['id', 'username', 'email',
+                  'first_name', 'last_name', 'email_verified']
+
+    def get_email_verified(self, obj):
+        """Check if user's email is verified via allauth"""
+        try:
+            from allauth.account.models import EmailAddress
+            return EmailAddress.objects.filter(
+                user=obj,
+                email=obj.email,
+                verified=True
+            ).exists()
+        except ImportError:
+            return True  # If allauth not installed, assume verified
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -21,9 +36,23 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    email_verified = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = '__all__'
+
+    def get_email_verified(self, obj):
+        """Check if user's email is verified via allauth"""
+        try:
+            from allauth.account.models import EmailAddress
+            return EmailAddress.objects.filter(
+                user=obj,
+                email=obj.email,
+                verified=True
+            ).exists()
+        except ImportError:
+            return True  # If allauth not installed, assume verified
 
 
 class UserSettingsSerializer(serializers.ModelSerializer):

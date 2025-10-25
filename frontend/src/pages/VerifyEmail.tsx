@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 const VerifyEmail: React.FC = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const [status, setStatus] = useState<'pending' | 'success' | 'error'>('pending');
     const [errorMessage, setErrorMessage] = useState('');
 
@@ -45,6 +47,7 @@ const VerifyEmail: React.FC = () => {
     }, [t]);
 
     const handleContinue = () => {
+        // Force a full page reload to refresh user data from AuthContext
         window.location.href = '/';
     };
 

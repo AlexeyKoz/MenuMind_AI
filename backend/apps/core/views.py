@@ -3,8 +3,47 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import connection
 from django.core.cache import cache
+from django.utils import timezone
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 import redis
+import sys
 from django.conf import settings
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def version_info(request):
+    """
+    Return application version information.
+    Public endpoint, no authentication required.
+
+    GET /api/core/version/
+    """
+    try:
+        # Import version from __init__.py
+        from menumine_ai import __version__, __author__, __license__
+
+        version_data = {
+            'version': __version__,
+            'app_name': 'MenuMind AI',
+            'author': __author__,
+            'license': __license__,
+            'build_date': getattr(settings, 'APP_BUILD_DATE', None),
+            'environment': 'production' if not settings.DEBUG else 'development',
+            'api_version': 'v1',
+            'python_version': sys.version.split()[0],
+            'django_version': __import__('django').__version__,
+            'server_time': timezone.now().isoformat(),
+        }
+
+        return Response(version_data)
+    except Exception as e:
+        return Response({
+            'error': 'Version information unavailable',
+            'detail': str(e)
+        }, status=500)
 
 
 @require_http_methods(["GET"])
@@ -12,8 +51,11 @@ def health_check(request):
     """
     Health check endpoint for Docker containers
     """
+    from menumine_ai import __version__
+
     health_status = {
         'status': 'healthy',
+        'version': __version__,
         'timestamp': None,
         'services': {}
     }
@@ -49,10 +91,13 @@ def health_check(request):
 
 
 def api_root(request):
+    from menumine_ai import __version__
+
     return JsonResponse({
         'message': 'Welcome to MenuMind AI API',
-        'version': '1.0.0',
+        'version': __version__,
         'endpoints': {
+            'version': '/api/core/version/',
             'health': '/health/',
             'admin': '/admin/',
             'api': '/api/',

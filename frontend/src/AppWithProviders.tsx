@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import i18n from './i18n';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
@@ -43,7 +44,9 @@ const AppWithProviders: React.FC = () => {
             clientId={GOOGLE_CLIENT_ID}
             key={locale}  // Force re-render when locale changes
         >
-            <App />
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>
         </GoogleOAuthProvider>
     );
 };
