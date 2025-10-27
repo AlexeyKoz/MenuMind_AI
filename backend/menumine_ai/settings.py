@@ -366,6 +366,83 @@ EMAIL_SUBJECT_PREFIX = '[MenuMindAI] '
 # Frontend URL for email links
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')
 
+# ============================================
+# EMAILJS CONFIGURATION
+# ============================================
+EMAILJS_SERVICE_ID = env('EMAILJS_SERVICE_ID', default='')
+EMAILJS_PUBLIC_KEY = env('EMAILJS_PUBLIC_KEY', default='')
+EMAILJS_PRIVATE_KEY = env('EMAILJS_PRIVATE_KEY', default='')
+EMAILJS_TEMPLATE_VERIFY_EN = env('EMAILJS_TEMPLATE_VERIFY_EN', default='')
+EMAILJS_TEMPLATE_VERIFY_RU = env('EMAILJS_TEMPLATE_VERIFY_RU', default='')
+EMAILJS_TEMPLATE_VERIFY_HE = env('EMAILJS_TEMPLATE_VERIFY_HE', default='')
+
+# ============================================
+# MAILJET CONFIGURATION - PRIMARY EMAIL SERVICE
+# ============================================
+MAILJET_API_KEY = env('MAILJET_API_KEY', default='')
+MAILJET_SECRET_KEY = env('MAILJET_SECRET_KEY', default='')
+MAILJET_SENDER_EMAIL = env('MAILJET_SENDER_EMAIL', default='')
+MAILJET_SENDER_NAME = env('MAILJET_SENDER_NAME', default='MenuMind AI')
+
+# Email Verification Templates
+MAILJET_TEMPLATE_VERIFY_EN = env('MAILJET_TEMPLATE_VERIFY_EN', default='')
+MAILJET_TEMPLATE_VERIFY_RU = env('MAILJET_TEMPLATE_VERIFY_RU', default='')
+MAILJET_TEMPLATE_VERIFY_HE = env('MAILJET_TEMPLATE_VERIFY_HE', default='')
+
+# Welcome Email Templates (optional)
+MAILJET_TEMPLATE_WELCOME_EN = env('MAILJET_TEMPLATE_WELCOME_EN', default='')
+MAILJET_TEMPLATE_WELCOME_RU = env('MAILJET_TEMPLATE_WELCOME_RU', default='')
+MAILJET_TEMPLATE_WELCOME_HE = env('MAILJET_TEMPLATE_WELCOME_HE', default='')
+
+# Password Reset Templates (optional)
+MAILJET_TEMPLATE_PASSWORD_RESET_EN = env(
+    'MAILJET_TEMPLATE_PASSWORD_RESET_EN', default='')
+MAILJET_TEMPLATE_PASSWORD_RESET_RU = env(
+    'MAILJET_TEMPLATE_PASSWORD_RESET_RU', default='')
+MAILJET_TEMPLATE_PASSWORD_RESET_HE = env(
+    'MAILJET_TEMPLATE_PASSWORD_RESET_HE', default='')
+
+# Notification Templates (optional)
+MAILJET_TEMPLATE_NOTIFICATION_EN = env(
+    'MAILJET_TEMPLATE_NOTIFICATION_EN', default='')
+MAILJET_TEMPLATE_NOTIFICATION_RU = env(
+    'MAILJET_TEMPLATE_NOTIFICATION_RU', default='')
+MAILJET_TEMPLATE_NOTIFICATION_HE = env(
+    'MAILJET_TEMPLATE_NOTIFICATION_HE', default='')
+
+# ============================================
+# BREVO (SENDINBLUE) CONFIGURATION - SECONDARY EMAIL SERVICE
+# ============================================
+BREVO_API_KEY = env('BREVO_API_KEY', default='')
+BREVO_SENDER_EMAIL = env('BREVO_SENDER_EMAIL', default='')
+BREVO_SENDER_NAME = env('BREVO_SENDER_NAME', default='MenuMind AI')
+
+# Email Verification Templates
+BREVO_TEMPLATE_VERIFY_EN = env('BREVO_TEMPLATE_VERIFY_EN', default='')
+BREVO_TEMPLATE_VERIFY_RU = env('BREVO_TEMPLATE_VERIFY_RU', default='')
+BREVO_TEMPLATE_VERIFY_HE = env('BREVO_TEMPLATE_VERIFY_HE', default='')
+
+# Welcome Email Templates (optional)
+BREVO_TEMPLATE_WELCOME_EN = env('BREVO_TEMPLATE_WELCOME_EN', default='')
+BREVO_TEMPLATE_WELCOME_RU = env('BREVO_TEMPLATE_WELCOME_RU', default='')
+BREVO_TEMPLATE_WELCOME_HE = env('BREVO_TEMPLATE_WELCOME_HE', default='')
+
+# Password Reset Templates (optional)
+BREVO_TEMPLATE_PASSWORD_RESET_EN = env(
+    'BREVO_TEMPLATE_PASSWORD_RESET_EN', default='')
+BREVO_TEMPLATE_PASSWORD_RESET_RU = env(
+    'BREVO_TEMPLATE_PASSWORD_RESET_RU', default='')
+BREVO_TEMPLATE_PASSWORD_RESET_HE = env(
+    'BREVO_TEMPLATE_PASSWORD_RESET_HE', default='')
+
+# Notification Templates (optional)
+BREVO_TEMPLATE_NOTIFICATION_EN = env(
+    'BREVO_TEMPLATE_NOTIFICATION_EN', default='')
+BREVO_TEMPLATE_NOTIFICATION_RU = env(
+    'BREVO_TEMPLATE_NOTIFICATION_RU', default='')
+BREVO_TEMPLATE_NOTIFICATION_HE = env(
+    'BREVO_TEMPLATE_NOTIFICATION_HE', default='')
+
 # Search & Scraping APIs
 BRAVE_SEARCH_API_KEY = env('BRAVE_SEARCH_API_KEY', default='')
 FIRECRAWL_API_KEY = env('FIRECRAWL_API_KEY', default='')

@@ -1,0 +1,69 @@
+# ============================================
+# BREVO (SENDINBLUE) EMAIL SERVICE
+# ============================================
+
+# Get API Key from: https://app.brevo.com/settings/keys/api
+# Click "Generate a new API key" or use existing one
+# Format: xkeysib-xxxxxxxxxxxxxxxxxxxxx-yyyyyyyyyyyy
+BREVO_API_KEY=
+
+# Verified sender email (must be verified in Brevo dashboard)
+# Go to: https://app.brevo.com/senders
+# Click "Add a Sender" and verify your email
+# For Gmail: Use menumindaiproject@gmail.com
+# For custom domain: Use noreply@yourdomain.com (after domain verification)
+BREVO_SENDER_EMAIL=menumindaiproject@gmail.com
+
+# Sender name that appears in emails
+BREVO_SENDER_NAME=MenuMind AI
+
+# Template IDs (get from Brevo Dashboard → Templates)
+# Create 3 templates for multilingual support:
+# 1. English verification template
+BREVO_TEMPLATE_VERIFY_EN=
+
+# 2. Russian verification template  
+BREVO_TEMPLATE_VERIFY_RU=
+
+# 3. Hebrew verification template (set RTL direction)
+BREVO_TEMPLATE_VERIFY_HE=
+
+# ============================================
+# EXAMPLE WITH REAL VALUES:
+# ============================================
+# BREVO_API_KEY=xkeysib-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t-1A2B3C4D5E6F7G8H
+# BREVO_SENDER_EMAIL=menumindaiproject@gmail.com
+# BREVO_SENDER_NAME=MenuMind AI
+# BREVO_TEMPLATE_VERIFY_EN=1
+# BREVO_TEMPLATE_VERIFY_RU=2
+# BREVO_TEMPLATE_VERIFY_HE=3
+
+# ============================================
+# INSTRUCTIONS:
+# ============================================
+# 1. Sign up at https://www.brevo.com/
+# 2. Verify your sender email (menumindaiproject@gmail.com)
+# 3. Get API key from Settings → API Keys
+# 4. Create 3 email templates (see BREVO_SETUP_COMPLETE_GUIDE.md)
+# 5. Copy template IDs and paste above
+# 6. Restart backend: python manage.py runserver
+# 7. Test: python test_brevo.py
+
+# ============================================
+# BREVO BENEFITS:
+# ============================================
+# ✅ 300 free emails per day
+# ✅ 99%+ delivery rate
+# ✅ Real-time tracking and analytics
+# ✅ No sender restrictions (use any verified email)
+# ✅ Faster than SMTP (API-based)
+# ✅ Official Python SDK support
+
+# ============================================
+# TROUBLESHOOTING:
+# ============================================
+# - Service not enabled? → Check all 6 variables are set
+# - Email not received? → Check Brevo Dashboard → Logs
+# - Invalid API key? → Regenerate from dashboard
+# - Template not found? → Make sure templates are "Active" (not draft)
+

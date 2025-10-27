@@ -4,11 +4,12 @@ from .models import User
 
 class UserSerializer(serializers.ModelSerializer):
     email_verified = serializers.SerializerMethodField()
+    preferred_language = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email',
-                  'first_name', 'last_name', 'email_verified']
+                  'first_name', 'last_name', 'email_verified', 'preferred_language']
 
     def get_email_verified(self, obj):
         """Check if user's email is verified via allauth"""
@@ -21,17 +22,42 @@ class UserSerializer(serializers.ModelSerializer):
             ).exists()
         except ImportError:
             return True  # If allauth not installed, assume verified
+    
+    def get_preferred_language(self, obj):
+        """Get user's preferred language from UserPreferences"""
+        try:
+            from .models import UserPreferences
+            prefs = UserPreferences.objects.filter(user=obj).first()
+            return prefs.language if prefs else 'en'  # Changed from preferred_language to language
+        except Exception:
+            return 'en'
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    preferred_language = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'first_name', 'last_name']
+        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'preferred_language']
 
     def create(self, validated_data):
+        preferred_language = validated_data.pop('preferred_language', 'en')
         user = User.objects.create_user(**validated_data)
+        
+        # Set preferred_language on user if it exists as a field
+        if hasattr(user, 'preferred_language'):
+            user.preferred_language = preferred_language
+            user.save()
+        
+        # Also create/update UserPreferences (field is 'language', not 'preferred_language')
+        from .models import UserPreferences
+        prefs, _ = UserPreferences.objects.get_or_create(user=user)
+        prefs.language = preferred_language  # Changed from preferred_language to language
+        prefs.save()
+        
+        print(f"[REGISTRATION] Created UserPreferences with language={preferred_language}", flush=True)
+        
         return user
 
 

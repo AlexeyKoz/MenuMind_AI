@@ -42,17 +42,41 @@ def _ensure_email_verified(user) -> None:
     if not email:
         return
 
-    email_address, created = EmailAddress.objects.get_or_create(
-        user=user,
-        email=email,
-        defaults={'verified': True, 'primary': True},
-    )
-    if not created and not email_address.verified:
-        email_address.verified = True
-        email_address.save(update_fields=['verified'])
-    if not email_address.primary:
-        email_address.primary = True
-        email_address.save(update_fields=['primary'])
+    try:
+        # Try to get existing EmailAddress for this user
+        email_address = EmailAddress.objects.filter(user=user, email=email).first()
+        
+        if email_address:
+            # Update existing record
+            if not email_address.verified:
+                email_address.verified = True
+                email_address.save(update_fields=['verified'])
+            if not email_address.primary:
+                email_address.primary = True
+                email_address.save(update_fields=['primary'])
+        else:
+            # Check if email exists for another user (shouldn't happen, but handle it)
+            existing = EmailAddress.objects.filter(email=email).first()
+            if existing:
+                # Email belongs to another user - this is a conflict
+                # Update the user reference to current user
+                existing.user = user
+                existing.verified = True
+                existing.primary = True
+                existing.save()
+            else:
+                # Create new EmailAddress
+                EmailAddress.objects.create(
+                    user=user,
+                    email=email,
+                    verified=True,
+                    primary=True
+                )
+    except Exception as e:
+        # Log but don't fail - Google login should still work
+        print(f"⚠️ Warning: Could not update EmailAddress: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 @api_view(['POST'])

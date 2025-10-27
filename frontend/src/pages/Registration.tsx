@@ -29,7 +29,7 @@ const Registration: React.FC<RegistrationProps> = ({ onRegistrationSuccess, onSw
         setIsLoading(true);
         setError('');
 
-        const result = await register(username, email, password, firstName, lastName);
+        const result = await register(username, email, password, firstName, lastName, i18n.language);
         setIsLoading(false);
 
         if (result.success) {

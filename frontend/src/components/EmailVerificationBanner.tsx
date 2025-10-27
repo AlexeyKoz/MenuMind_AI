@@ -45,6 +45,8 @@ const EmailVerificationBanner: React.FC = () => {
                 const data = await res.json();
                 console.log('✅ Success response:', data);
                 alert(data.message || t('auth.verificationEmailResent'));
+                // Force page reload to refresh user data
+                window.location.reload();
             } else {
                 const data = await res.json().catch(() => ({}));
                 console.log('❌ Error response:', data);

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface User {
     id: string;
@@ -23,7 +24,7 @@ interface AuthContextType {
     token: string | null;
     loading: boolean;
     login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
-    register: (username: string, email: string, password: string, firstName: string, lastName: string) => Promise<{ success: boolean; error?: string }>;
+    register: (username: string, email: string, password: string, firstName: string, lastName: string, preferredLanguage?: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
 }
 
@@ -46,6 +47,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
     const [loading, setLoading] = useState(true);
     const apiBaseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:8000').replace(/\/?$/, '');
+    const { i18n } = useTranslation();
+
+    // Sync language when user changes
+    useEffect(() => {
+        if (user?.preferred_language && user.preferred_language !== i18n.language) {
+            console.log(`🌐 Syncing language: ${i18n.language} → ${user.preferred_language}`);
+            i18n.changeLanguage(user.preferred_language);
+            localStorage.setItem('i18nextLng', user.preferred_language);
+            document.documentElement.lang = user.preferred_language;
+            document.documentElement.dir = user.preferred_language === 'he' ? 'rtl' : 'ltr';
+        }
+    }, [user?.preferred_language, i18n]);
 
     useEffect(() => {
         if (token) {
@@ -140,8 +153,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             if (response.ok) {
                 const data = await response.json();
                 console.log('✅ Login successful, received data:', data);
+                console.log('🌐 User preferred_language:', data.user?.preferred_language);
                 setToken(data.access);
-                setUser({ ...data.user, email_verified: data?.user?.email_verified });
+                setUser({
+                    ...data.user,
+                    email_verified: data?.user?.email_verified,
+                    preferred_language: data?.user?.preferred_language
+                });
                 localStorage.setItem('token', data.access);
                 localStorage.setItem('refresh', data.refresh);
                 return { success: true };
@@ -156,9 +174,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
     };
 
-    const register = async (username: string, email: string, password: string, firstName: string, lastName: string): Promise<{ success: boolean; error?: string }> => {
+    const register = async (username: string, email: string, password: string, firstName: string, lastName: string, preferredLanguage?: string): Promise<{ success: boolean; error?: string }> => {
         try {
             console.log('📝 Attempting registration for:', username);
+            console.log('🌐 Preferred language:', preferredLanguage || 'en (default)');
             const response = await fetch(`${apiBaseUrl}/api/users/auth/register/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -167,7 +186,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     email,
                     password,
                     first_name: firstName,
-                    last_name: lastName
+                    last_name: lastName,
+                    preferred_language: preferredLanguage || 'en'
                 })
             });
 
@@ -177,7 +197,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 const data = await response.json();
                 console.log('✅ Registration successful, received data:', data);
                 setToken(data.access);
-                setUser(data.user);
+                setUser({
+                    ...data.user,
+                    preferred_language: preferredLanguage || data.user?.preferred_language || 'en'
+                });
                 localStorage.setItem('token', data.access);
                 localStorage.setItem('refresh', data.refresh);
                 return { success: true };

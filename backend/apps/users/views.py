@@ -1,3 +1,9 @@
+from .serializers import (
+    UserSerializer, UserRegistrationSerializer,
+    UserProfileSerializer, PartnerConnectionSerializer,
+    UserSettingsSerializer
+)
+from .models import User
 from rest_framework import status, generics, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -6,21 +12,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
 from django.conf import settings as django_settings
+import logging
 
-from .models import User
-from .serializers import (
-    UserSerializer, UserRegistrationSerializer,
-    UserProfileSerializer, PartnerConnectionSerializer,
-    UserSettingsSerializer
-)
+logger = logging.getLogger(__name__)
 
-try:
-    from allauth.account.models import EmailAddress, EmailConfirmation
-    from allauth.account.utils import send_email_confirmation
-except ImportError:
-    EmailAddress = None
-    EmailConfirmation = None
-    send_email_confirmation = None
+# Note: EmailAddress import moved inside functions to avoid app loading order issues
 
 
 class UserRegistrationView(generics.CreateAPIView):
@@ -30,6 +26,24 @@ class UserRegistrationView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def create(self, request, *args, **kwargs):
+        # Import here to avoid app loading order issues
+        EmailAddress = None
+        send_email_confirmation = None
+        
+        try:
+            from allauth.account.models import EmailAddress as EA
+            EmailAddress = EA
+            print(f"[REGISTRATION] ✅ Imported EmailAddress: {EmailAddress}", flush=True)
+        except Exception as e:
+            print(f"[REGISTRATION] ❌ Error EmailAddress: {e}", flush=True)
+        
+        try:
+            from allauth.account.utils import send_email_confirmation as sec
+            send_email_confirmation = sec
+            print(f"[REGISTRATION] ✅ Imported send_email_confirmation: {send_email_confirmation}", flush=True)
+        except Exception as e:
+            print(f"[REGISTRATION] ❌ Error send_email_confirmation: {e}", flush=True)
+            
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -45,10 +59,15 @@ class UserRegistrationView(generics.CreateAPIView):
             # Send verification email
             if send_email_confirmation is not None:
                 try:
+                    print(
+                        f"📧 Attempting to send verification email to {user.email}")
                     send_email_confirmation(request, user, signup=True)
-                    print(f"📧 Verification email sent to {user.email}")
+                    print(
+                        f"✅ Verification email sent successfully to {user.email}")
                 except Exception as e:
-                    print(f"⚠️ Failed to send verification email: {e}")
+                    print(f"❌ Failed to send verification email: {e}")
+                    import traceback
+                    traceback.print_exc()
 
         # Generate tokens
         refresh = RefreshToken.for_user(user)
@@ -267,15 +286,63 @@ def login_view(request):
 @permission_classes([IsAuthenticated])
 def resend_verification_email(request):
     """Resend email verification link"""
+    import sys
+    import traceback as tb
+    sys.stdout.flush()  # Force flush output
+    sys.stderr.flush()
+    
+    # Import here to avoid app loading order issues
+    EmailAddress = None
+    send_email_confirmation = None
+    
     try:
+        from allauth.account.models import EmailAddress as EA
+        EmailAddress = EA
+        print(f"[DEBUG] ✅ Successfully imported EmailAddress: {EmailAddress}", flush=True)
+    except ImportError as e:
+        print(f"[DEBUG] ❌ ImportError importing EmailAddress: {e}", flush=True)
+    except Exception as e:
+        print(f"[DEBUG] ❌ Unexpected error importing EmailAddress: {e}", flush=True)
+    
+    try:
+        from allauth.account.utils import send_email_confirmation as sec
+        send_email_confirmation = sec
+        print(f"[DEBUG] ✅ Successfully imported send_email_confirmation: {send_email_confirmation}", flush=True)
+    except ImportError as e:
+        print(f"[DEBUG] ❌ ImportError importing send_email_confirmation: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+    except Exception as e:
+        print(f"[DEBUG] ❌ Unexpected error importing send_email_confirmation: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+
+    # Use multiple output methods
+    logger.error("="*60)
+    logger.error("🔄 RESEND VERIFICATION EMAIL - FUNCTION CALLED")
+    logger.error("="*60)
+    print(f"\n{'='*60}", flush=True)
+    print(f"🔄 RESEND VERIFICATION EMAIL REQUEST", flush=True)
+    print(f"{'='*60}", flush=True)
+
+    try:
+        print(f"User: {request.user}", flush=True)
+        print(f"User email: {request.user.email}", flush=True)
+
         user = request.user
 
+        print(f"[DEBUG] Step 1: Got user {user.username}", flush=True)
+        print(f"[DEBUG] Step 2: Checking EmailAddress import...", flush=True)
+        print(f"[DEBUG] EmailAddress is: {EmailAddress}", flush=True)
+
         if EmailAddress is None:
+            print("[DEBUG] EmailAddress is None, returning error", flush=True)
             return Response(
                 {'error': 'Email verification not configured'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+        print("[DEBUG] Step 3: Checking if email already verified...", flush=True)
         # Check if email is already verified
         email_address = EmailAddress.objects.filter(
             user=user,
@@ -283,12 +350,16 @@ def resend_verification_email(request):
             verified=True
         ).first()
 
+        print(f"[DEBUG] Step 4: Found email_address: {email_address}", flush=True)
+
         if email_address:
+            print("[DEBUG] Email already verified", flush=True)
             return Response(
                 {'message': 'Email already verified'},
                 status=status.HTTP_200_OK
             )
 
+        print("[DEBUG] Step 5: Getting or creating email address...", flush=True)
         # Get or create unverified email address
         email_address, created = EmailAddress.objects.get_or_create(
             user=user,
@@ -296,14 +367,24 @@ def resend_verification_email(request):
             defaults={'primary': True, 'verified': False}
         )
 
+        print(f"[DEBUG] Step 6: Email address created={created}", flush=True)
         print(
             f"📧 EmailAddress for {user.email}: verified={email_address.verified}")
+        
+        print(f"[DEBUG] Step 6.5: Checking send_email_confirmation...", flush=True)
+        print(f"[DEBUG] send_email_confirmation is: {send_email_confirmation}", flush=True)
 
         # Send verification email
         if send_email_confirmation is not None:
+            print("[DEBUG] Step 7: Sending verification email...", flush=True)
             try:
-                # The send_email_confirmation will now automatically use EmailJS
-                # (via MultilingualAccountAdapter) if configured, otherwise falls back to SMTP
+                # The send_email_confirmation will automatically use:
+                # 1. Simple Mailjet (plain HTML) - PRIMARY
+                # 2. Mailjet (with templates) - SECONDARY
+                # 3. Brevo (if configured) - TERTIARY
+                # 4. EmailJS (if configured) - QUATERNARY
+                # 5. Django SMTP (fallback) - FINAL
+                # This is handled by MultilingualAccountAdapter.send_confirmation_mail
                 send_email_confirmation(request, user, signup=False)
                 print(f"✅ Resent verification email to {user.email}")
                 return Response(
@@ -312,8 +393,7 @@ def resend_verification_email(request):
                 )
             except Exception as e:
                 print(f"❌ Failed to send verification email: {e}")
-                import traceback
-                traceback.print_exc()
+                tb.print_exc()
                 return Response(
                     {'error': f'Failed to send verification email: {str(e)}'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -324,9 +404,14 @@ def resend_verification_email(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     except Exception as e:
-        print(f"❌ Unexpected error in resend_verification_email: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n{'='*60}", flush=True)
+        print(f"❌ CATASTROPHIC ERROR in resend_verification_email", flush=True)
+        print(f"Error type: {type(e).__name__}", flush=True)
+        print(f"Error message: {str(e)}", flush=True)
+        print(f"{'='*60}\n", flush=True)
+        tb.print_exc()
+        sys.stdout.flush()
+        sys.stderr.flush()
         return Response(
             {'error': f'Unexpected error: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

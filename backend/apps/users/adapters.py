@@ -4,7 +4,10 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
 
-# Import EmailJS service
+# Import email services
+from .services.simple_mailjet_service import get_simple_mailjet_service
+from .services.mailjet_email_service import get_mailjet_service
+from .services.brevo_email_service import get_brevo_service
 from .services.email_service import get_emailjs_service
 
 
@@ -14,11 +17,30 @@ class MultilingualAccountAdapter(DefaultAccountAdapter):
     fallback_language = 'en'
 
     def get_user_language(self, user):
+        """Get user's preferred language from UserPreferences"""
+        try:
+            # Import here to avoid circular imports
+            from .models import UserPreferences
+            prefs = UserPreferences.objects.filter(user=user).first()
+            if prefs and prefs.language:
+                print(f"[ADAPTER] User {user.username} language from UserPreferences: {prefs.language}", flush=True)
+                return prefs.language
+        except Exception as e:
+            print(f"[ADAPTER] Error getting language from UserPreferences: {e}", flush=True)
+        
+        # Fallback: check if user model has preferred_language attribute
         if hasattr(user, 'preferred_language') and user.preferred_language:
+            print(f"[ADAPTER] User {user.username} language from user attribute: {user.preferred_language}", flush=True)
             return user.preferred_language
+        
+        print(f"[ADAPTER] User {user.username} using fallback language: {self.fallback_language}", flush=True)
         return self.fallback_language
 
     def send_confirmation_mail(self, request, emailconfirmation, signup):
+        print(f"\n{'='*60}", flush=True)
+        print(f"🔔 ADAPTER CALLED: send_confirmation_mail", flush=True)
+        print(f"{'='*60}", flush=True)
+        
         user = emailconfirmation.email_address.user
         language = self.get_user_language(user)
 
@@ -40,9 +62,74 @@ class MultilingualAccountAdapter(DefaultAccountAdapter):
         print(f"To: {to_email}")
         print(f"Language: {language}")
         print(f"Verification URL: {activate_url}")
-        print(f"{'='*60}\n")
+        print(f"{'='*60}\n", flush=True)
 
-        # Try EmailJS first (if configured)
+        # Try Simple Mailjet first (plain HTML, no templates) - PRIMARY
+        simple_mailjet = get_simple_mailjet_service()
+        
+        if simple_mailjet.enabled:
+            success, message = simple_mailjet.send_verification_email(
+                to_email=to_email,
+                user_name=user_name,
+                activate_url=activate_url,
+                language=language
+            )
+            
+            if success:
+                print(f"[Simple Mailjet] ✅ Successfully sent verification email to {to_email}")
+                print(f"[Simple Mailjet] Message: {message}")
+                return
+            else:
+                print(f"[Simple Mailjet] ⚠️ Failed to send: {message}")
+                print(f"[Simple Mailjet] ⚠️ Trying alternative services...")
+        else:
+            print(f"[Simple Mailjet] ⚠️ Not configured, trying alternatives")
+
+        # Try Mailjet with templates (if configured) - SECONDARY
+        mailjet_service = get_mailjet_service()
+
+        if mailjet_service.enabled:
+            success, message = mailjet_service.send_verification_email(
+                to_email=to_email,
+                user_name=user_name,
+                activate_url=activate_url,
+                language=language
+            )
+
+            if success:
+                print(
+                    f"[Mailjet] ✅ Successfully sent verification email to {to_email}")
+                print(f"[Mailjet] Message: {message}")
+                return
+            else:
+                print(f"[Mailjet] ⚠️ Failed to send via Mailjet: {message}")
+                print(f"[Mailjet] ⚠️ Falling back to alternative email service")
+        else:
+            print(f"[Mailjet] ⚠️ Mailjet not configured, trying alternative services")
+
+        # Try Brevo as secondary option (if configured)
+        brevo_service = get_brevo_service()
+
+        if brevo_service.enabled:
+            success, message = brevo_service.send_verification_email(
+                to_email=to_email,
+                user_name=user_name,
+                activate_url=activate_url,
+                language=language
+            )
+
+            if success:
+                print(
+                    f"[Brevo] ✅ Successfully sent verification email to {to_email}")
+                print(f"[Brevo] Message: {message}")
+                return
+            else:
+                print(f"[Brevo] ⚠️ Failed to send via Brevo: {message}")
+                print(f"[Brevo] ⚠️ Falling back to alternative email service")
+        else:
+            print(f"[Brevo] ⚠️ Brevo not configured, trying alternative services")
+
+        # Try EmailJS as secondary option (if configured)
         emailjs_service = get_emailjs_service()
 
         if emailjs_service.enabled:
@@ -63,7 +150,7 @@ class MultilingualAccountAdapter(DefaultAccountAdapter):
         else:
             print(f"[EmailJS] ⚠️ EmailJS not configured, using Django SMTP fallback")
 
-        # Fallback to Django's SMTP (existing implementation)
+        # Final fallback to Django's SMTP (existing implementation)
         context = {
             'user': user,
             'activate_url': activate_url,

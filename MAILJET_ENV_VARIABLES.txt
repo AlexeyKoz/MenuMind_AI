@@ -1,0 +1,32 @@
+# ============================================
+# MAILJET EMAIL SERVICE CONFIGURATION
+# ============================================
+
+# API Credentials (from: https://app.mailjet.com/account/api_keys)
+MAILJET_API_KEY=5c73c3615ed646d7e974407de9a57247
+MAILJET_SECRET_KEY=YOUR_SECRET_KEY_HERE    # Click eye icon to reveal
+
+# Sender Information (must be verified at: https://app.mailjet.com/account/sender)
+MAILJET_SENDER_EMAIL=menumindaiproject@gmail.com
+MAILJET_SENDER_NAME=MenuMind AI
+
+# Email Verification Templates
+MAILJET_TEMPLATE_VERIFY_EN=    # English template ID
+MAILJET_TEMPLATE_VERIFY_RU=    # Russian template ID
+MAILJET_TEMPLATE_VERIFY_HE=    # Hebrew template ID
+
+# Optional: Welcome Email Templates
+# MAILJET_TEMPLATE_WELCOME_EN=
+# MAILJET_TEMPLATE_WELCOME_RU=
+# MAILJET_TEMPLATE_WELCOME_HE=
+
+# Optional: Password Reset Templates
+# MAILJET_TEMPLATE_PASSWORD_RESET_EN=
+# MAILJET_TEMPLATE_PASSWORD_RESET_RU=
+# MAILJET_TEMPLATE_PASSWORD_RESET_HE=
+
+# Optional: Notification Templates
+# MAILJET_TEMPLATE_NOTIFICATION_EN=
+# MAILJET_TEMPLATE_NOTIFICATION_RU=
+# MAILJET_TEMPLATE_NOTIFICATION_HE=
+
