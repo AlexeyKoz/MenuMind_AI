@@ -22,42 +22,108 @@ class UserSerializer(serializers.ModelSerializer):
             ).exists()
         except ImportError:
             return True  # If allauth not installed, assume verified
-    
+
     def get_preferred_language(self, obj):
         """Get user's preferred language from UserPreferences"""
         try:
             from .models import UserPreferences
             prefs = UserPreferences.objects.filter(user=obj).first()
-            return prefs.language if prefs else 'en'  # Changed from preferred_language to language
+            # Changed from preferred_language to language
+            return prefs.language if prefs else 'en'
         except Exception:
             return 'en'
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-    preferred_language = serializers.CharField(required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, min_length=8)
+    preferred_language = serializers.CharField(
+        required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'first_name', 'last_name', 'preferred_language']
+        fields = ['email', 'password', 'first_name',
+                  'last_name', 'preferred_language']
+
+    def validate_email(self, value):
+        """Validate that email is unique and properly formatted"""
+        if User.objects.filter(email=value.lower()).exists():
+            raise serializers.ValidationError(
+                "This email address is already registered. Please use a different email or try logging in."
+            )
+
+        # Additional email format validation
+        if not value or '@' not in value:
+            raise serializers.ValidationError(
+                "Please enter a valid email address."
+            )
+
+        return value.lower()
+
+    def validate_password(self, value):
+        """
+        Validate password requirements:
+        - At least 8 characters
+        - At least one uppercase letter
+        - At least one number
+        - No emojis or special unicode characters
+        """
+        if len(value) < 8:
+            raise serializers.ValidationError(
+                "Password must be at least 8 characters long."
+            )
+
+        if not any(char.isupper() for char in value):
+            raise serializers.ValidationError(
+                "Password must contain at least one uppercase letter."
+            )
+
+        if not any(char.isdigit() for char in value):
+            raise serializers.ValidationError(
+                "Password must contain at least one number."
+            )
+
+        # Check for emojis and non-ASCII characters
+        try:
+            value.encode('ascii')
+        except UnicodeEncodeError:
+            raise serializers.ValidationError(
+                "Password must only contain standard characters (no emojis or special symbols)."
+            )
+
+        return value
 
     def create(self, validated_data):
         preferred_language = validated_data.pop('preferred_language', 'en')
-        user = User.objects.create_user(**validated_data)
-        
-        # Set preferred_language on user if it exists as a field
-        if hasattr(user, 'preferred_language'):
-            user.preferred_language = preferred_language
-            user.save()
-        
-        # Also create/update UserPreferences (field is 'language', not 'preferred_language')
+        email = validated_data.pop('email')
+
+        # Create username from email (everything before @)
+        username = email.split('@')[0]
+
+        # Make username unique if it already exists
+        base_username = username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+
+        # Create user with email as username
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            **validated_data
+        )
+
+        # Create/update UserPreferences
         from .models import UserPreferences
         prefs, _ = UserPreferences.objects.get_or_create(user=user)
-        prefs.language = preferred_language  # Changed from preferred_language to language
+        prefs.language = preferred_language
         prefs.save()
-        
-        print(f"[REGISTRATION] Created UserPreferences with language={preferred_language}", flush=True)
-        
+
+        print(
+            f"[REGISTRATION] Created user: {username} (from email: {email})", flush=True)
+        print(
+            f"[REGISTRATION] Created UserPreferences with language={preferred_language}", flush=True)
+
         return user
 
 

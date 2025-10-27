@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'apps.nutrition',
     'apps.analytics',
     'apps.core.apps.CoreConfig',  # Use CoreConfig for service initialization
+    'legal',  # Legal compliance framework
 ]
 
 MIDDLEWARE = [

@@ -11,7 +11,7 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration }) => {
     const { t, i18n } = useTranslation();
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [copiedUser, setCopiedUser] = useState<string | null>(null);
@@ -32,7 +32,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const result = await login(username, password);
+        const result = await login(email, password);
         if (result.success) {
             onLoginSuccess();
         } else {
@@ -40,10 +40,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
         }
     };
 
-    const handleTestUserClick = (testUsername: string, testPassword: string) => {
-        setUsername(testUsername);
+    const handleTestUserClick = (testEmail: string, testPassword: string) => {
+        setEmail(testEmail);
         setPassword(testPassword);
-        setCopiedUser(testUsername);
+        setCopiedUser(testEmail);
         setTimeout(() => setCopiedUser(null), 2000); // Clear the copied state after 2 seconds
     };
 
@@ -59,12 +59,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                 <p className="text-center text-gray-600 mb-6">{t('auth.loginSubtitle')}</p>
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
-                        <label className="block text-sm font-medium mb-2">{t('auth.username')}</label>
+                        <label className="block text-sm font-medium mb-2">{t('auth.email')}</label>
                         <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder={t('auth.enterUsername')}
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder={t('auth.enterEmail')}
                             className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                             required
                         />

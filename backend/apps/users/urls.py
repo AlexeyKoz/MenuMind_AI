@@ -16,6 +16,8 @@ def users_root(request):
             'login': '/api/users/auth/login/',
             'register': '/api/users/auth/register/',
             'profile': '/api/users/profile/',
+            'export-data': '/api/users/export-data/',
+            'delete-account': '/api/users/delete-account/',
         }
     })
 
@@ -29,6 +31,13 @@ urlpatterns = [
     path('auth/google/', google_login, name='google_login'),
     path('auth/resend-verification/',
          views.resend_verification_email, name='resend_verification'),
+
+    # GDPR/CCPA Compliance - Data Rights
+    path('export-data/', views.export_user_data, name='export_user_data'),
+    path('get-data/', views.get_user_data_export, name='get_user_data_export'),
+    path('delete-account/', views.delete_account, name='delete_account'),
+    path('cancel-deletion/', views.cancel_account_deletion,
+         name='cancel_account_deletion'),
 
     # User profile endpoints
     path('', include(router.urls)),

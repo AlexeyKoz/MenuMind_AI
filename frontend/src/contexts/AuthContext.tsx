@@ -66,7 +66,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else {
             setLoading(false);
         }
-    }, [token]);
+    }, []); // Empty dependency array - run once on mount
 
     const fetchUserProfile = async () => {
         try {
@@ -205,9 +205,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 localStorage.setItem('refresh', data.refresh);
                 return { success: true };
             } else {
-                const errorData = await response.text();
-                console.log('❌ Registration failed with response:', errorData);
-                return { success: false, error: 'Registration failed' };
+                // Parse error response as JSON
+                try {
+                    const errorData = await response.json();
+                    console.log('❌ Registration failed with response:', errorData);
+
+                    // Extract the first error message from the response
+                    // Backend returns errors in format: {"field": ["Error message"]}
+                    let errorMessage = 'Registration failed';
+
+                    if (typeof errorData === 'object') {
+                        // Get the first field with an error
+                        for (const field in errorData) {
+                            if (Array.isArray(errorData[field]) && errorData[field].length > 0) {
+                                errorMessage = errorData[field][0];
+                                break;
+                            } else if (typeof errorData[field] === 'string') {
+                                errorMessage = errorData[field];
+                                break;
+                            }
+                        }
+                    }
+
+                    return { success: false, error: errorMessage };
+                } catch (parseError) {
+                    console.error('Failed to parse error response:', parseError);
+                    return { success: false, error: 'Registration failed' };
+                }
             }
         } catch (error) {
             console.error('🚨 Registration error:', error);

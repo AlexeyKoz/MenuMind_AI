@@ -33,7 +33,14 @@ MenuMind AI orchestrates advanced recipe intelligence, family shopping collabora
 
 ## Platform Overview
 
-MenuMind AI is a full-stack food intelligence suite designed for coordinated household use. It connects shared shopping lists, inventory, recipe discovery, and nutrition tracking with AI assistants that translate, validate, and recommend content in multiple languages. Authentication supports email/password with email verification as well as Google OAuth (via django-allauth + dj-rest-auth).
+MenuMind AI is a full-stack food intelligence suite designed for coordinated household use. It connects shared shopping lists, inventory, recipe discovery, and nutrition tracking with AI assistants that translate, validate, and recommend content in multiple languages. 
+
+**Authentication & Security:**
+- **Email/Password Registration** with email verification flow
+- **Google OAuth** for social login (via django-allauth + dj-rest-auth)
+- **JWT Tokens** with refresh mechanism
+- **Email Verification Required** for certain features
+- **Legal Compliance** with GDPR, CCPA, and Israel Privacy Protection Law Amendment 13
 
 ---
 
@@ -68,9 +75,11 @@ MenuMind AI is a full-stack food intelligence suite designed for coordinated hou
 | `backend/apps/shopping` | Collaborative list models, WebSocket consumers, permissions, archive flows. |
 | `backend/apps/nutrition` | Food log entries, AI meal logging, coaching analytics, dashboard metrics. |
 | `backend/apps/users` | Authentication, profile preferences, Google OAuth endpoint, email adapters, verified-email decorator. |
-| `frontend/src/components` | Shared UI (navigation, Google buttons, banners), i18n aware components, toast integration. |
-| `frontend/src/pages` | Feature pages: dashboard, shopping, recipes, discover, nutrition, archive, settings, auth flows. |
+| `backend/legal` | Legal compliance framework (GDPR/CCPA), legal documents, cookie consent, data export/deletion. |
+| `frontend/src/components` | Shared UI (navigation, Google buttons, banners, legal viewers), i18n aware components, toast integration. |
+| `frontend/src/pages` | Feature pages: dashboard, shopping, recipes, discover, nutrition, archive, settings, auth flows, legal pages. |
 | `docs/` | Sprint guides, implementation playbooks, OAuth rollout notes, technical briefs (see [Additional Documentation](#additional-documentation)). |
+| `legal_documents/` | Multilingual legal documents (EN, RU, HE) in Markdown format, master file list. |
 | `scripts/` | Windows helper scripts for starting/stopping stacks, rebuilding frontend. |
 
 ---
@@ -79,6 +88,17 @@ MenuMind AI is a full-stack food intelligence suite designed for coordinated hou
 
 - **Frameworks**: Django 4.2, Django REST Framework, Channels 4.0, dj-rest-auth, django-allauth, celery 5.3, redis 5.
 - **Auth**: SimpleJWT access/refresh tokens, email verification via dj-rest-auth registration, Google OAuth endpoint (`POST /api/users/auth/google/`) including code/ID token support, `verified_email_required` decorator for gated APIs.
+- **Email Verification**:
+  - Required for account activation
+  - Multilingual email templates (EN, RU, HE)
+  - Resend verification link functionality
+  - Yellow banner reminder for unverified users
+  - Email verification page with success/error states
+- **Google OAuth Integration**:
+  - One-click login with Google account
+  - Automatic email verification for Google users
+  - Multilingual Google button component
+  - Fallback to traditional registration if OAuth fails
 - **Apps & Responsibilities**:
   - `recipes`: canonical + user recipe CRUD, AI generation, translation triggers, RCIP export/import.
   - `shopping`: list collaboration, WebSocket consumer groups, permission management, archive lifecycles.
@@ -107,6 +127,68 @@ MenuMind AI is a full-stack food intelligence suite designed for coordinated hou
 - **Universal Agent API**: Backed by RCIP 2.0 models ensuring structured recipes, validation scoring, and automatic translation/caching.
 - **AI integrations**: Groq (Llama 3.x) for recipe generation/validation, Google Gemini Flash 2.0 Lite for translations, Anthropic & OpenAI adapters available for legacy flows, DuckDuckGo + web scraping for recipe discovery.
 - **Background jobs**: Celery beat schedules hourly translation scan/cache refresh, daily/weekly cleanup, ensuring translation freshness and cost control.
+
+---
+
+## Legal Compliance Framework
+
+MenuMind AI includes a comprehensive legal compliance system meeting GDPR, CCPA, and Israel Privacy Protection Law requirements.
+
+### Legal Documents (Multilingual)
+- **Terms of Service v2.0** - User agreement and service terms
+- **Privacy Policy v2.0** - Data collection, usage, and rights
+- **Cookie Policy v2.0** - Cookie usage and preferences
+- **Copyright Notice v1.0** - Copyright and intellectual property
+- **RCIP License v1.0** - Recipe Card Interchange Protocol license
+
+All documents available in **English, Russian, and Hebrew** with proper RTL support for Hebrew.
+
+### Cookie Consent System
+- **2025 Symmetric Design Standards** - Equal prominence for accept/reject options
+- **Granular Controls** - Essential, Functional, Analytics, Performance cookies
+- **GPC Signal Detection** - Global Privacy Control support
+- **User Preferences Management** - Persistent cookie settings
+
+### User Data Rights (GDPR/CCPA Article 17-20)
+- **Right to Data Portability** - Export all user data in JSON format
+- **Right to Erasure** - Account deletion with 30-day grace period
+- **Cookie Preferences** - Manage cookie consent at any time
+- **Email Verification** - Required for account security
+
+### Compliance Badges
+- 🇮🇱 **Israel PPL Amendment 13** (August 2025)
+- 🇺🇸 **CCPA/CPRA Compliant** (California)
+- 🇪🇺 **GDPR Compliant** (European Union)
+
+### API Endpoints
+```http
+GET    /api/legal/terms/?lang=en|ru|he          # Terms of Service
+GET    /api/legal/privacy/?lang=en|ru|he        # Privacy Policy
+GET    /api/legal/cookies/?lang=en|ru|he        # Cookie Policy
+GET    /api/legal/copyright/?lang=en|ru|he      # Copyright Notice
+GET    /api/legal/rcip/?lang=en|ru|he           # RCIP License
+POST   /api/legal/accept/                        # Record legal acceptance
+POST   /api/legal/cookie_consent/                # Save cookie preferences
+GET    /api/legal/get_cookie_consent/            # Get current preferences
+GET    /api/users/get-data/                      # Export user data
+POST   /api/users/export-data/                   # Request data export (async)
+POST   /api/users/delete-account/                # Request account deletion
+POST   /api/users/cancel-deletion/               # Cancel deletion request
+```
+
+### Frontend Components
+- `LegalDocumentViewer` - Displays legal documents with RTL support
+- `CookieConsentBanner` - Symmetric design banner with preferences
+- `Footer` - Multilingual footer with legal links and compliance badges
+
+### Management Commands
+```bash
+# Load legal documents (initial setup)
+python manage.py load_legal_translations --path ../legal_documents/
+
+# Force update existing documents
+python manage.py load_legal_translations --path ../legal_documents/ --force
+```
 
 ---
 
@@ -240,9 +322,14 @@ Access the app at http://localhost:3000. Backend API lives at http://localhost:8
 
 - `GOOGLE_OAUTH_COMPLETE_SETUP_GUIDE.md` – Full OAuth rollout checklist.
 - `GOOGLE_OAUTH_IMPLEMENTATION_COMPLETE.md` – Implementation log for Sprints 1–4.
+- `EMAIL_VERIFICATION_COMPLETE_FINAL.md` – Email verification implementation guide.
+- `MULTILINGUAL_LEGAL_DOCS_COMPLETE.md` – Multilingual legal documents implementation summary.
+- `FOOTER_MULTILINGUAL_COMPLETE.md` – Footer translation implementation details.
+- `MULTILINGUAL_LEGAL_QUICK_REFERENCE.md` – Quick reference for legal documents system.
 - `SPRINT_9_4_FRONTEND_COMPLETE.md`, `SPRINT_9_COMPLETE_SUMMARY.md` – Recent sprint retrospectives.
 - `NUTRITION_COACH_USER_GUIDE.md`, `AI_COACH_AGENT_TECHNICAL_BRIEF.md` – Feature-specific guides.
 - `docs/google_oauth_email_verification.md` – Consolidated OAuth + email verification timeline.
+- `docs/rate_limiting_quota_design.md` – Rate limiting and quota design documentation.
 
 ---
 

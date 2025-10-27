@@ -1,0 +1,433 @@
+/**
+ * Privacy Settings Page Styles
+ */
+
+.privacy-settings {
+    min-height: 100vh;
+    background: linear-gradient(to bottom, #f9fafb 0%, #f3f4f6 100%);
+    padding: 40px 20px;
+}
+
+.privacy-settings__container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Header */
+.privacy-settings__header {
+    text-align: center;
+    margin-bottom: 48px;
+}
+
+.privacy-settings__title {
+    font-size: 36px;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 16px 0;
+}
+
+.privacy-settings__subtitle {
+    font-size: 16px;
+    color: #6b7280;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Message Alerts */
+.privacy-settings__message {
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.privacy-settings__message--success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+}
+
+.privacy-settings__message--error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+/* Sections */
+.privacy-settings__section {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.privacy-settings__section--danger {
+    border: 2px solid #fca5a5;
+}
+
+.privacy-settings__section-header {
+    margin-bottom: 24px;
+}
+
+.privacy-settings__section-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 12px 0;
+}
+
+.privacy-settings__section-description {
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Cookie Options */
+.privacy-settings__cookie-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.privacy-settings__cookie-option {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+.privacy-settings__cookie-option:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.privacy-settings__label {
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+    gap: 12px;
+}
+
+.privacy-settings__checkbox {
+    margin-top: 4px;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: #2563eb;
+}
+
+.privacy-settings__checkbox:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.privacy-settings__option-text {
+    flex: 1;
+}
+
+.privacy-settings__option-text strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #111827;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.privacy-settings__option-text p {
+    margin: 0;
+    font-size: 13px;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+.privacy-settings__required {
+    color: #dc2626;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 8px;
+    display: inline-block;
+}
+
+/* Data Info */
+.privacy-settings__data-info {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.privacy-settings__info-item {
+    font-size: 14px;
+    color: #1e40af;
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.privacy-settings__info-item:last-child {
+    margin-bottom: 0;
+}
+
+.privacy-settings__info-item strong {
+    font-weight: 600;
+}
+
+/* Warning Box */
+.privacy-settings__warning {
+    background: #fef3c7;
+    border: 2px solid #fbbf24;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.privacy-settings__warning strong {
+    display: block;
+    margin-bottom: 12px;
+    color: #92400e;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.privacy-settings__warning ul {
+    margin: 12px 0;
+    padding-left: 24px;
+    color: #92400e;
+}
+
+.privacy-settings__warning li {
+    margin: 6px 0;
+    font-size: 14px;
+}
+
+.privacy-settings__warning p {
+    margin: 12px 0 0 0;
+    font-size: 13px;
+    color: #92400e;
+    font-weight: 500;
+}
+
+/* Delete Confirmation */
+.privacy-settings__delete-confirm {
+    margin-top: 20px;
+    padding: 20px;
+    background: #fee2e2;
+    border: 2px solid #dc2626;
+    border-radius: 8px;
+}
+
+.privacy-settings__delete-confirm p {
+    margin: 0 0 12px 0;
+    color: #7f1d1d;
+    font-size: 14px;
+}
+
+.privacy-settings__input {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    border: 2px solid #d1d5db;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-family: inherit;
+}
+
+.privacy-settings__input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.privacy-settings__delete-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Buttons */
+.privacy-settings__button {
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.privacy-settings__button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.privacy-settings__button--primary {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.privacy-settings__button--primary:hover:not(:disabled) {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.privacy-settings__button--secondary {
+    background: #6b7280;
+    color: #ffffff;
+}
+
+.privacy-settings__button--secondary:hover:not(:disabled) {
+    background: #4b5563;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+}
+
+.privacy-settings__button--danger {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.privacy-settings__button--danger:hover:not(:disabled) {
+    background: #b91c1c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+/* Legal Links */
+.privacy-settings__legal-links {
+    text-align: center;
+    padding: 32px 20px;
+}
+
+.privacy-settings__legal-links h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #4b5563;
+    margin: 0 0 16px 0;
+}
+
+.privacy-settings__links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 24px;
+}
+
+.privacy-settings__links a {
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+.privacy-settings__links a:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+/* Not Logged In State */
+.privacy-settings__not-logged-in {
+    text-align: center;
+    padding: 80px 20px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.privacy-settings__not-logged-in h2 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 16px 0;
+}
+
+.privacy-settings__not-logged-in p {
+    font-size: 16px;
+    color: #6b7280;
+    margin: 0 0 24px 0;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .privacy-settings {
+        padding: 24px 16px;
+    }
+
+    .privacy-settings__container {
+        max-width: 100%;
+    }
+
+    .privacy-settings__title {
+        font-size: 28px;
+    }
+
+    .privacy-settings__section {
+        padding: 24px 20px;
+    }
+
+    .privacy-settings__section-title {
+        font-size: 20px;
+    }
+
+    .privacy-settings__delete-actions {
+        flex-direction: column;
+    }
+
+    .privacy-settings__button {
+        width: 100%;
+    }
+
+    .privacy-settings__links {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .privacy-settings {
+        background: linear-gradient(to bottom, #111827 0%, #0f172a 100%);
+    }
+
+    .privacy-settings__section {
+        background: #1f2937;
+    }
+
+    .privacy-settings__title {
+        color: #f9fafb;
+    }
+
+    .privacy-settings__subtitle {
+        color: #9ca3af;
+    }
+
+    .privacy-settings__section-title {
+        color: #f3f4f6;
+    }
+
+    .privacy-settings__section-description {
+        color: #9ca3af;
+    }
+
+    .privacy-settings__cookie-option {
+        background: #111827;
+        border-color: #374151;
+    }
+
+    .privacy-settings__cookie-option:hover {
+        background: #1f2937;
+        border-color: #4b5563;
+    }
+}

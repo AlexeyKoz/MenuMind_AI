@@ -17,6 +17,8 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from apps.core.views import health_check, api_root
+from apps.users.views import verify_email
+
 urlpatterns = [
     path('', api_root, name='api_root'),
     path('admin/', admin.site.urls),
@@ -24,8 +26,13 @@ urlpatterns = [
     path('api/', include('apps.core.urls')),
     path('api/recipes/', include('apps.recipes.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
+    path('api/', include('legal.urls')),  # Legal compliance endpoints
     # Django-allauth URLs (for email confirmation)
     path('accounts/', include('allauth.urls')),
+
+    # Custom email verification endpoint (must be before dj-rest-auth)
+    path('dj-rest-auth/registration/verify-email/',
+         verify_email, name='verify_email'),
 
     # dj-rest-auth URLs (JWT-based auth)
     path('dj-rest-auth/', include('dj_rest_auth.urls')),

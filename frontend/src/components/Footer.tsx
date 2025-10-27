@@ -1,41 +1,130 @@
+/**
+ * Footer Component with Legal Links (Multilingual)
+ * 
+ * Displays legal links, copyright, and site information
+ * Supports EN, RU, HE with proper RTL for Hebrew
+ */
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { APP_VERSION } from '../config/version';
+import { useTranslation } from 'react-i18next';
+import './Footer.css';
 
 const Footer: React.FC = () => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const currentYear = new Date().getFullYear();
+    const currentLang = i18n.language?.split('-')[0] || 'en';
+    const isRTL = currentLang === 'he';
 
     return (
-        <footer className="bg-white border-t border-gray-200 mt-auto">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                    {/* Left side - Copyright */}
-                    <div className="text-sm text-gray-600">
-                        © {currentYear} Alexey Kozlov. {t('footer.allRightsReserved')}
+        <footer className={`footer ${isRTL ? 'footer--rtl' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
+            <div className="footer__container">
+                {/* Main Footer Content */}
+                <div className="footer__content">
+                    {/* Company Info */}
+                    <div className="footer__section">
+                        <h4 className="footer__heading">{t('footer.company')}</h4>
+                        <nav className="footer__nav">
+                            <Link to="/about" className="footer__link">
+                                {t('footer.aboutUs')}
+                            </Link>
+                            <Link to="/blog" className="footer__link">
+                                {t('footer.blog')}
+                            </Link>
+                            <a href="https://github.com/menumindai" target="_blank" rel="noopener noreferrer" className="footer__link">
+                                GitHub
+                            </a>
+                        </nav>
                     </div>
 
-                    {/* Center - Links */}
-                    <div className="flex items-center gap-4 text-sm">
-                        <Link
-                            to="/about"
-                            className="text-gray-600 hover:text-blue-600 transition-colors"
-                        >
-                            {t('footer.about')}
-                        </Link>
-                        <Link
-                            to="/settings"
-                            className="text-gray-600 hover:text-blue-600 transition-colors"
-                        >
-                            {t('footer.settings')}
-                        </Link>
+                    {/* Help & Support */}
+                    <div className="footer__section">
+                        <h4 className="footer__heading">{t('footer.support')}</h4>
+                        <nav className="footer__nav">
+                            <a href="mailto:support@menumindai.com" className="footer__link">
+                                {t('footer.contactSupport')}
+                            </a>
+                            <a href="mailto:legal@menumindai.com" className="footer__link">
+                                {t('footer.legalInquiries')}
+                            </a>
+                            <Link to="/settings" className="footer__link">
+                                {t('footer.privacySettings')}
+                            </Link>
+                        </nav>
                     </div>
 
-                    {/* Right side - Version */}
-                    <div className="text-sm text-gray-500 font-mono">
-                        v{APP_VERSION}
+                    {/* Legal Links */}
+                    <div className="footer__section">
+                        <h4 className="footer__heading">{t('footer.legal')}</h4>
+                        <nav className="footer__nav">
+                            <Link to={`/legal/terms?lang=${currentLang}`} className="footer__link">
+                                {t('footer.terms')}
+                            </Link>
+                            <Link to={`/legal/privacy?lang=${currentLang}`} className="footer__link">
+                                {t('footer.privacy')}
+                            </Link>
+                            <Link to={`/legal/cookies?lang=${currentLang}`} className="footer__link">
+                                {t('footer.cookies')}
+                            </Link>
+                            <Link to={`/legal/copyright?lang=${currentLang}`} className="footer__link">
+                                {t('footer.copyright')}
+                            </Link>
+                            <Link to={`/legal/rcip?lang=${currentLang}`} className="footer__link">
+                                {t('footer.rcipLicense')}
+                            </Link>
+                        </nav>
                     </div>
+
+                    {/* Brand Section */}
+                    <div className="footer__section footer__section--brand">
+                        <h3 className="footer__title">MenuMindAI</h3>
+                        <p className="footer__description">
+                            {t('footer.description')}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Compliance Notice */}
+                <div className="footer__compliance">
+                    <div className="footer__compliance-badges">
+                        <div className="footer__badge" title={t('footer.israelCompliance')}>
+                            <span className="footer__badge-icon">🇮🇱</span>
+                            <span className="footer__badge-text">{t('footer.israelPPL')}</span>
+                        </div>
+                        <div className="footer__badge" title={t('footer.ccpaCompliance')}>
+                            <span className="footer__badge-icon">🇺🇸</span>
+                            <span className="footer__badge-text">{t('footer.ccpaCompliant')}</span>
+                        </div>
+                        <div className="footer__badge" title={t('footer.gdprCompliance')}>
+                            <span className="footer__badge-icon">🇪🇺</span>
+                            <span className="footer__badge-text">{t('footer.gdprCompliant')}</span>
+                        </div>
+                    </div>
+                    <p className="footer__compliance-text">
+                        {t('footer.complianceText')}
+                    </p>
+                </div>
+
+                {/* Bottom Bar */}
+                <div className="footer__bottom">
+                    <div className="footer__bottom-links">
+                        <Link to={`/legal/copyright?lang=${currentLang}`} className="footer__link">
+                            {t('footer.licensing')}
+                        </Link>
+                        <span className="footer__divider">|</span>
+                        <button
+                            onClick={() => {
+                                // Trigger cookie preferences modal
+                                localStorage.removeItem('cookieConsent');
+                                window.location.reload();
+                            }}
+                            className="footer__link footer__link--button"
+                        >
+                            {t('footer.cookiePreferences')}
+                        </button>
+                    </div>
+                    <p className="footer__copyright">
+                        {t('footer.copyrightText', { year: currentYear })}
+                    </p>
                 </div>
             </div>
         </footer>
@@ -43,4 +132,3 @@ const Footer: React.FC = () => {
 };
 
 export default Footer;
-

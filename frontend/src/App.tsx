@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CollaborationProvider } from './contexts/CollaborationContext';
 import Navigation from './components/Navigation';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
+import CookieConsentBanner from './components/CookieConsentBanner';
 import Footer from './components/Footer';
 import { Dashboard, ShoppingList, NutritionTracker, Recipes, Login, Inventory, SettingsPage, CanonicalRecipesPage } from './pages';
 import Registration from './pages/Registration';
@@ -12,6 +13,12 @@ import ArchivePage from './pages/ArchivePage';
 import VerifyEmail from './pages/VerifyEmail';
 import About from './pages/About';
 import Settings from './pages/Settings';
+import PrivacySettings from './pages/PrivacySettings';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import CookiePolicy from './pages/CookiePolicy';
+import CopyrightNotice from './pages/CopyrightNotice';
+import RCIPLicense from './pages/RCIPLicense';
 import './App.css';
 
 const useCurrentPage = (isAuthenticated: boolean) => {
@@ -73,6 +80,13 @@ const AppContent: React.FC = () => {
         return (
             <div className="min-h-screen flex flex-col">
                 <Routes>
+                    {/* Legal Routes - Public */}
+                    <Route path="/legal/terms" element={<TermsOfService />} />
+                    <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+                    <Route path="/legal/cookies" element={<CookiePolicy />} />
+                    <Route path="/legal/copyright" element={<CopyrightNotice />} />
+                    <Route path="/legal/rcip" element={<RCIPLicense />} />
+
                     <Route
                         path="/verify-email/:key"
                         element={<VerifyEmail />}
@@ -100,6 +114,7 @@ const AppContent: React.FC = () => {
                         )}
                     />
                 </Routes>
+                <CookieConsentBanner />
                 <Footer />
             </div>
         );
@@ -112,6 +127,16 @@ const AppContent: React.FC = () => {
                 <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
                 <div className="flex-1">
                     <Routes>
+                        {/* Legal Routes - Accessible to authenticated users too */}
+                        <Route path="/legal/terms" element={<TermsOfService />} />
+                        <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+                        <Route path="/legal/cookies" element={<CookiePolicy />} />
+                        <Route path="/legal/copyright" element={<CopyrightNotice />} />
+                        <Route path="/legal/rcip" element={<RCIPLicense />} />
+
+                        {/* Privacy Settings Page */}
+                        <Route path="/privacy-settings" element={<PrivacySettings />} />
+
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/shopping" element={<ShoppingList />} />
                         <Route path="/nutrition" element={<NutritionTracker />} />
@@ -128,6 +153,7 @@ const AppContent: React.FC = () => {
                         <Route path="*" element={<CurrentPageComponent />} />
                     </Routes>
                 </div>
+                <CookieConsentBanner />
                 <Footer />
                 <Toaster position="top-right" />
             </div>
