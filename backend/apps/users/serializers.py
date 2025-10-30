@@ -119,11 +119,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         prefs.language = preferred_language
         prefs.save()
 
-        print(
-            f"[REGISTRATION] Created user: {username} (from email: {email})", flush=True)
-        print(
-            f"[REGISTRATION] Created UserPreferences with language={preferred_language}", flush=True)
-
         return user
 
 

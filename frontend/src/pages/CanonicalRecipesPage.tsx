@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 import { RecipeCard, RecipeBuilderWizard, ReviewsSection, LoadingSpinner, AllergenWarning } from '../components';
+import { AllergenWarningBanner } from '../components/WarningBanners';
 import RecipeProgressModal from '../components/RecipeProgressModal';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
 import { Heart, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -23,6 +25,7 @@ import { convertTemperaturesInText, getUserTemperatureUnit } from '../utils/reci
 const CanonicalRecipesPage: React.FC = () => {
     const { t } = useTranslation();
     const { token, user, logout } = useAuth();
+    const { startGuide } = useUserGuide();
     const api = new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
         alert(t('discover.sessionExpired'));
@@ -60,6 +63,15 @@ const CanonicalRecipesPage: React.FC = () => {
     useEffect(() => {
         loadRecipes();
     }, [search, cuisine, difficulty, dietLabels, sortBy]);
+
+    // Start user guide on first visit
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            startGuide('discover');
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, []); // Only run once on mount
 
     // Reload recipe list when language changes
     useEffect(() => {
@@ -676,6 +688,7 @@ const CanonicalRecipesPage: React.FC = () => {
                         </p>
                     </div>
                     <button
+                        id="create-recipe-button"
                         onClick={() => setShowBuilder(true)}
                         className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
                     >
@@ -686,8 +699,11 @@ const CanonicalRecipesPage: React.FC = () => {
                     </button>
                 </div>
 
+                {/* Allergen Warning Banner */}
+                <AllergenWarningBanner className="mb-6" />
+
                 {/* AI Search Panel */}
-                <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200">
+                <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200" id="ai-recipe-search">
                     <div className="flex items-center gap-3">
                         <Sparkles className="w-6 h-6 text-purple-600" />
                         <input
@@ -713,7 +729,7 @@ const CanonicalRecipesPage: React.FC = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+                <div className="bg-white rounded-xl shadow-md p-6 mb-8" id="recipe-filters">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         {/* Search */}
                         <input
@@ -805,7 +821,7 @@ const CanonicalRecipesPage: React.FC = () => {
                         {t('discover.noRecipesFound')}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="recipe-cards-section">
                         {recipes.map((recipe) => (
                             <RecipeCard
                                 key={recipe.id}

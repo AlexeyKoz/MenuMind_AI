@@ -17,6 +17,10 @@ interface CookieSettings {
     performance: boolean;
 }
 
+// GLOBAL flag to prevent multiple instances from checking simultaneously
+let globalCheckInProgress = false;
+let globalHasChecked = false;
+
 const CookieConsentBanner: React.FC = () => {
     const [showBanner, setShowBanner] = useState(false);
     const [showCustomize, setShowCustomize] = useState(false);
@@ -29,11 +33,24 @@ const CookieConsentBanner: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        checkCookieConsent();
+        // Only check once globally across all instances
+        if (!globalHasChecked && !globalCheckInProgress) {
+            checkCookieConsent();
+        }
     }, []);
 
     const checkCookieConsent = async () => {
+        // CRITICAL: Prevent any duplicate calls
+        if (globalCheckInProgress || globalHasChecked) {
+            console.log('⏭️ Cookie consent check already in progress or completed');
+            return;
+        }
+        
+        globalCheckInProgress = true;
+        globalHasChecked = true;
+        
         try {
+            console.log('🍪 Checking cookie consent (ONE TIME ONLY)...');
             const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
             const response = await fetch(`${apiUrl}/api/legal/get_cookie_consent/`, {
                 credentials: 'include', // Include session cookie
@@ -44,10 +61,9 @@ const CookieConsentBanner: React.FC = () => {
                 // No consent found - show banner
                 setShowBanner(true);
 
-                // Check if GPC signal detected
+                // Check if GPC signal detected - DON'T auto-reject, just show banner
                 if (data.gpc_detected) {
-                    console.log('🔒 GPC signal detected - auto-rejecting non-essential cookies');
-                    await rejectAll();
+                    console.log('🔒 GPC signal detected - user will need to make choice');
                 }
             } else {
                 // Apply existing settings
@@ -58,6 +74,8 @@ const CookieConsentBanner: React.FC = () => {
             console.error('Error checking cookie consent:', error);
             // If API fails, show banner to be safe
             setShowBanner(true);
+        } finally {
+            globalCheckInProgress = false;
         }
     };
 

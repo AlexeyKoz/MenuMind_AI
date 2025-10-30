@@ -22,6 +22,18 @@ const RecipeProgressModal: React.FC<RecipeProgressModalProps> = ({ isOpen, onClo
         message: 'Starting...'
     });
 
+    // CRITICAL FIX: Reset progress when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            console.log('[PROGRESS] Modal opened - RESETTING progress to initial state');
+            setProgress({
+                stage: 'searching',
+                percent: 10,
+                message: 'Starting...'
+            });
+        }
+    }, [isOpen]);
+
     useEffect(() => {
         if (!isOpen) {
             console.log('[PROGRESS] Modal closed, not setting up listener');

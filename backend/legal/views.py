@@ -200,7 +200,9 @@ class LegalViewSet(viewsets.ViewSet):
         """
         try:
             doc = LegalDocument.objects.get(
-                document_type='copyright', is_active=True)
+                document_type='copyright',
+                language_code='en',
+                is_active=True)
             return Response({
                 'content': doc.content,
                 'version': doc.version,
@@ -222,7 +224,9 @@ class LegalViewSet(viewsets.ViewSet):
         """
         try:
             doc = LegalDocument.objects.get(
-                document_type='rcip', is_active=True)
+                document_type='rcip',
+                language_code='en',
+                is_active=True)
             return Response({
                 'content': doc.content,
                 'version': doc.version,

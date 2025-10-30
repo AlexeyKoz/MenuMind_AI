@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
 import toast from 'react-hot-toast';
 import {
@@ -132,6 +133,7 @@ const clearRecipeHistoryFromStorage = () => {
 const Inventory: React.FC = () => {
     const { t } = useTranslation();
     const { token, logout } = useAuth();
+    const { startGuide } = useUserGuide();
     const [locationData, setLocationData] = useState<LocationGroup>({});
     const [loading, setLoading] = useState(true);
     const [expandedLocations, setExpandedLocations] = useState<Set<string>>(new Set(['fridge', 'freezer']));
@@ -263,6 +265,16 @@ const Inventory: React.FC = () => {
     useEffect(() => {
         loadInventory();
     }, [loadInventory]);
+
+    // Start user guide on first visit
+    useEffect(() => {
+        // Delay guide start slightly to ensure UI is rendered
+        const timer = setTimeout(() => {
+            startGuide('inventory');
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, []); // Only run once on mount
 
     // Show notification if recipes were restored from storage on mount
     useEffect(() => {
@@ -748,7 +760,7 @@ const Inventory: React.FC = () => {
                         </h1>
                         <p className="text-gray-600 mt-1">
                             {totalItems} {t('inventory.items')} · {totalExpiring > 0 && (
-                                <span className="text-red-600 font-medium">
+                                <span className="text-red-600 font-medium" id="expiring-items-section">
                                     ⚠️ {totalExpiring} {t('inventory.expiringSoon')}
                                 </span>
                             )}
@@ -756,6 +768,7 @@ const Inventory: React.FC = () => {
                     </div>
                     <div className="flex gap-3">
                         <button
+                            id="get-recipes-button"
                             onClick={() => handleGenerateRecipes()}
                             disabled={generatingRecipes || totalItems === 0}
                             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition disabled:opacity-50 font-medium"
@@ -765,6 +778,7 @@ const Inventory: React.FC = () => {
                             {generatingRecipes ? t('inventory.generating') : cachedRecipes.length > 0 ? t('inventory.viewRecipes') : t('inventory.getRecipes')}
                         </button>
                         <button
+                            id="add-item-button"
                             onClick={() => {
                                 resetForm();
                                 setShowAddModal(true);
@@ -791,7 +805,7 @@ const Inventory: React.FC = () => {
             </div>
 
             {/* Location Sections */}
-            <div className="space-y-4">
+            <div className="space-y-4" id="location-tabs">
                 {(['fridge', 'freezer', 'pantry', 'counter'] as const).map(location => {
                     const locData = locationData[location] || { count: 0, expiring_count: 0, items: [] };
                     const filteredItems = filterItems(locData.items);

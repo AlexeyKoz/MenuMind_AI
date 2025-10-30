@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useCollaboration } from '../contexts/CollaborationContext';
+import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
 import CollaboratorManager from '../components/CollaboratorManager';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
@@ -14,6 +15,7 @@ import { Package, X, Check } from 'lucide-react';
 const ShoppingList: React.FC = () => {
     const { t, i18n } = useTranslation();
     const { token, user, logout } = useAuth();
+    const { startGuide } = useUserGuide();
     const {
         connectToList,
         disconnect,
@@ -178,6 +180,16 @@ const ShoppingList: React.FC = () => {
         loadLists();
         loadUserPreferences();
     }, [api, loadUserPreferences]);
+
+    // Start user guide on first visit
+    useEffect(() => {
+        // Delay guide start slightly to ensure UI is rendered
+        const timer = setTimeout(() => {
+            startGuide('shopping');
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, []); // Only run once on mount
 
     // Save generated recipes to localStorage whenever they change
     // Load recipes specific to the active list (SHARED by all collaborators)
@@ -1839,6 +1851,7 @@ const ShoppingList: React.FC = () => {
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-xl font-semibold">{t('shopping.myLists')}</h3>
                         <button
+                            id="create-list-button"
                             onClick={() => setShowCreateForm(!showCreateForm)}
                             className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition"
                         >
@@ -1952,7 +1965,7 @@ const ShoppingList: React.FC = () => {
                         <>
                             <h3 className="text-2xl font-semibold mb-4">{activeList.name}</h3>
 
-                            <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
+                            <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg" id="ai-add-section">
                                 <label className="block text-sm font-medium mb-2">
                                     🤖 {t('shopping.aiAddLabel')}
                                 </label>
@@ -2095,6 +2108,7 @@ const ShoppingList: React.FC = () => {
                             <div className="mb-6">
                                 <div className="flex gap-2">
                                     <input
+                                        id="manual-add-input"
                                         type="text"
                                         value={newItem}
                                         onChange={(e) => handleInputChange(e.target.value, setNewItem)}

@@ -1110,6 +1110,177 @@
             "createNew": "Create New Public Version"
         }
     },
+    "warnings": {
+        "aiDisclaimer": "⚠️ AI can make mistakes, please be careful and check the information",
+        "allergenTitle": "⚠️ Important: Allergen Warning",
+        "allergenMessage": "Always verify ingredients for potential allergens. This AI-generated information may not be complete. If you have severe allergies, consult the original product packaging or recipe source."
+    },
+    "guide": {
+        "tip": "💡 Quick Tip",
+        "next": "Next",
+        "skipTour": "Skip Tour",
+        "startTour": "Show Guide",
+        "shopping": {
+            "welcome": {
+                "title": "Welcome to Shopping Lists!",
+                "description": "Let's take a quick tour to help you get started with collaborative shopping lists. You can skip this anytime."
+            },
+            "createList": {
+                "title": "Create Your First List",
+                "description": "Click here to create a new shopping list. You can have multiple lists for different purposes (weekly shopping, party planning, etc.)"
+            },
+            "aiAdd": {
+                "title": "AI-Powered Shopping",
+                "description": "Just type what you need in natural language! For example: 'ingredients for pasta carbonara' or 'greek salad'. AI will add all items automatically."
+            },
+            "manualAdd": {
+                "title": "Quick Manual Entry",
+                "description": "Prefer typing items yourself? Just enter item names here and press Enter. You can adjust quantities later."
+            },
+            "collaborators": {
+                "title": "Invite Friends & Family",
+                "description": "Share your list with others! They can add items, check things off, and shop together in real-time."
+            },
+            "sendInventory": {
+                "title": "Send to Inventory",
+                "description": "Completed shopping? Send checked items to your inventory to track what you have at home and get recipe suggestions!"
+            },
+            "complete": {
+                "title": "You're All Set! 🎉",
+                "description": "You now know the basics! Explore more features or restart this guide anytime from Settings."
+            }
+        },
+        "inventory": {
+            "welcome": {
+                "title": "Welcome to Inventory!",
+                "description": "Track what you have at home and get smart recipe suggestions. Let's explore the key features together!"
+            },
+            "addItem": {
+                "title": "Add Items to Inventory",
+                "description": "Click here to manually add items or send completed shopping items to inventory. Track quantities, expiration dates, and locations."
+            },
+            "locations": {
+                "title": "Organize by Location",
+                "description": "Sort your items by storage location: Pantry, Fridge, Freezer, or Counter. This helps you find what you need quickly!"
+            },
+            "expiring": {
+                "title": "Track Expiring Items",
+                "description": "Items close to expiration are highlighted here. Use them first to reduce food waste and save money!"
+            },
+            "recipes": {
+                "title": "Get Recipe Suggestions",
+                "description": "Click here to get AI-powered recipe ideas using ingredients from your inventory. Smart cooking made easy!"
+            },
+            "complete": {
+                "title": "Inventory Mastered! 🎉",
+                "description": "You're ready to track your food inventory like a pro. Happy cooking!"
+            }
+        },
+        "discover": {
+            "welcome": {
+                "title": "Welcome to Recipe Discovery!",
+                "description": "Explore thousands of community recipes from around the world. Let's see what you can do here!"
+            },
+            "aiSearch": {
+                "title": "AI Recipe Search",
+                "description": "Just type what you want to cook! AI will search the web, find the recipe, and add it here automatically. Try 'chocolate cake' or 'pad thai'!"
+            },
+            "filters": {
+                "title": "Filter & Sort Recipes",
+                "description": "Use filters to find exactly what you need: cuisine type, difficulty level, dietary restrictions, and more. Sort by popularity or rating!"
+            },
+            "likeRate": {
+                "title": "Like & Rate Recipes",
+                "description": "Found something you love? Click the heart to save to favorites and rate recipes to help others discover great dishes!"
+            },
+            "create": {
+                "title": "Create Your Own Recipe",
+                "description": "Have a unique recipe? Share it with the community! Our AI wizard helps you format it perfectly in just a few steps."
+            },
+            "complete": {
+                "title": "Happy Cooking! 🎉",
+                "description": "You're ready to discover amazing recipes! Save your favorites and try something new today."
+            }
+        },
+        "recipes": {
+            "welcome": {
+                "title": "Welcome to My Recipes!",
+                "description": "Your personal recipe collection in RCIP format. Save, organize, and cook your favorite dishes!"
+            },
+            "upload": {
+                "title": "Upload RCIP Files",
+                "description": "Have recipes in RCIP format? Upload them here to add to your collection. You can also import from other apps!"
+            },
+            "filters": {
+                "title": "Filter Your Collection",
+                "description": "Search and filter your recipes by difficulty, cuisine, or ingredients. Find the perfect dish for any occasion!"
+            },
+            "viewDetail": {
+                "title": "View Recipe Details",
+                "description": "Click any recipe to see full instructions, ingredients, nutrition info, and cooking tips. Mark as cooked when you're done!"
+            },
+            "archive": {
+                "title": "Archive Recipes",
+                "description": "Not cooking something anymore? Archive it to keep your collection organized. You can always restore it from the Archive page later!"
+            },
+            "complete": {
+                "title": "Recipe Master! 🎉",
+                "description": "Your recipe collection is ready to use. Start cooking and enjoy delicious meals!"
+            }
+        },
+        "nutrition": {
+            "welcome": {
+                "title": "Welcome to Nutrition Tracker!",
+                "description": "Track your daily nutrition, set goals, and get AI-powered coaching. Let's start your health journey!"
+            },
+            "goals": {
+                "title": "Your Nutrition Goals",
+                "description": "See your daily progress for calories, protein, carbs, and fat. Goals can be set manually or calculated by AI based on your profile!"
+            },
+            "addEntry": {
+                "title": "Log Your Meals",
+                "description": "Click here to add meals and track what you eat. You can log from recipes, inventory items, or manually enter nutrition info."
+            },
+            "aiCoach": {
+                "title": "AI Nutrition Coach",
+                "description": "Get personalized meal suggestions and coaching tips! Enable AI Coach in settings to unlock smart recommendations based on your goals."
+            },
+            "settings": {
+                "title": "Nutrition Settings",
+                "description": "Customize your goals, enable AI coaching, and manage what data the AI can access to provide personalized suggestions."
+            },
+            "complete": {
+                "title": "Healthy Eating! 🎉",
+                "description": "You're ready to track your nutrition and reach your health goals. Keep logging and stay consistent!"
+            }
+        },
+        "dashboard": {
+            "welcome": {
+                "title": "Welcome to Your Dashboard!",
+                "description": "Your personal overview of everything - shopping, recipes, nutrition, and inventory. Let's explore what you can see here!"
+            },
+            "overview": {
+                "title": "Quick Stats Overview",
+                "description": "See your key metrics at a glance: spending, recipes cooked, inventory items, and nutrition tracking days. Everything important in one place!"
+            },
+            "insights": {
+                "title": "AI-Powered Insights",
+                "description": "Get daily personalized insights and recommendations from our AI. Tips about your spending, cooking habits, and nutrition all in one smart summary!"
+            },
+            "shopping": {
+                "title": "Shopping Insights",
+                "description": "Track your grocery spending, see category breakdowns, and discover your most purchased items. Smart budgeting made easy!"
+            },
+            "inventory": {
+                "title": "Inventory Alerts",
+                "description": "Get notified about expiring items and low stock. Never waste food again! Items that need attention are highlighted here."
+            },
+            "complete": {
+                "title": "Dashboard Master! 🎉",
+                "description": "You now know how to use your dashboard to monitor everything. Check back regularly for insights and updates!"
+            }
+        }
+    },
     "allergens": {
         "dairy": "Dairy",
         "eggs": "Eggs",

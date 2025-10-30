@@ -3,9 +3,12 @@ import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-ro
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CollaborationProvider } from './contexts/CollaborationContext';
+import { UserGuideProvider } from './contexts/UserGuideContext';
 import Navigation from './components/Navigation';
 import EmailVerificationBanner from './components/EmailVerificationBanner';
 import CookieConsentBanner from './components/CookieConsentBanner';
+import { AIWarningBanner } from './components/WarningBanners';
+import { GuideTooltip } from './components/GuideTooltip';
 import Footer from './components/Footer';
 import { Dashboard, ShoppingList, NutritionTracker, Recipes, Login, Inventory, SettingsPage, CanonicalRecipesPage } from './pages';
 import Registration from './pages/Registration';
@@ -19,6 +22,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import CookiePolicy from './pages/CookiePolicy';
 import CopyrightNotice from './pages/CopyrightNotice';
 import RCIPLicense from './pages/RCIPLicense';
+import { ShoppingListContainer } from './features/shopping/ShoppingListContainer';
 import './App.css';
 
 const useCurrentPage = (isAuthenticated: boolean) => {
@@ -40,6 +44,23 @@ const useCurrentPage = (isAuthenticated: boolean) => {
             setCurrentPage(path);
         }
     }, [location.pathname, isAuthenticated, currentPage]);
+
+    // Update page title based on current page
+    useEffect(() => {
+        const pageTitles: { [key: string]: string } = {
+            dashboard: 'Dashboard',
+            shopping: 'Shopping List',
+            nutrition: 'Nutrition Tracker',
+            recipes: 'My Recipes',
+            discover: 'Discover Recipes',
+            inventory: 'Inventory',
+            archive: 'Archive',
+            settings: 'Settings'
+        };
+        
+        const pageTitle = pageTitles[currentPage] || 'Shopping List';
+        document.title = `${pageTitle} - MenuMind AI`;
+    }, [currentPage]);
 
     const handleSetPage = (page: string) => {
         setCurrentPage(page);
@@ -114,7 +135,6 @@ const AppContent: React.FC = () => {
                         )}
                     />
                 </Routes>
-                <CookieConsentBanner />
                 <Footer />
             </div>
         );
@@ -122,10 +142,13 @@ const AppContent: React.FC = () => {
 
     return (
         <CollaborationProvider>
-            <div className="min-h-screen bg-gray-100 flex flex-col">
-                <EmailVerificationBanner />
-                <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
-                <div className="flex-1">
+            <UserGuideProvider>
+                <div className="min-h-screen bg-gray-100 flex flex-col">
+                    <EmailVerificationBanner />
+                    <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
+                    <AIWarningBanner />
+                    <GuideTooltip />
+                    <div className="flex-1">
                     <Routes>
                         {/* Legal Routes - Accessible to authenticated users too */}
                         <Route path="/legal/terms" element={<TermsOfService />} />
@@ -139,6 +162,8 @@ const AppContent: React.FC = () => {
 
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/shopping" element={<ShoppingList />} />
+                        <Route path="/shopping-mobile" element={<ShoppingListContainer />} />
+                        <Route path="/shopping-mobile/:listId" element={<ShoppingListContainer />} />
                         <Route path="/nutrition" element={<NutritionTracker />} />
                         <Route path="/recipes" element={<Recipes />} />
                         <Route path="/discover" element={<CanonicalRecipesPage />} />
@@ -153,10 +178,10 @@ const AppContent: React.FC = () => {
                         <Route path="*" element={<CurrentPageComponent />} />
                     </Routes>
                 </div>
-                <CookieConsentBanner />
                 <Footer />
                 <Toaster position="top-right" />
             </div>
+        </UserGuideProvider>
         </CollaborationProvider>
     );
 };
@@ -171,6 +196,7 @@ const App: React.FC = () => {
         >
             <AuthProvider>
                 <AppContent />
+                <CookieConsentBanner />
             </AuthProvider>
         </BrowserRouter>
     );

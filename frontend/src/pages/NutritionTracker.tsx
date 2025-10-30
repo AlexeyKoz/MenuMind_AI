@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
 import {
@@ -381,6 +382,7 @@ const toNumber = (value: any): number => {
 // Main Nutrition Tracker Component
 const NutritionTracker: React.FC = () => {
     const { t } = useTranslation();
+    const { startGuide } = useUserGuide();
     const { token, logout } = useAuth();
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
@@ -404,6 +406,15 @@ const NutritionTracker: React.FC = () => {
     useEffect(() => {
         loadData();
     }, [selectedDate]);
+
+    // Start user guide on first visit
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            startGuide('nutrition');
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, []); // Only run once on mount
 
     const loadData = async () => {
         setLoading(true);
@@ -539,6 +550,7 @@ const NutritionTracker: React.FC = () => {
                         </div>
                     )}
                     <a
+                        id="nutrition-settings-button"
                         href="/settings"
                         className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
                     >
@@ -594,7 +606,7 @@ const NutritionTracker: React.FC = () => {
                 {/* Left: Progress */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Progress Card */}
-                    <div className="bg-white rounded-lg shadow-sm p-6">
+                    <div id="nutrition-goals" className="bg-white rounded-lg shadow-sm p-6">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-xl font-bold text-gray-900">{t('nutrition.todaysProgress')}</h2>
                             <div className="text-sm text-gray-600">
@@ -663,6 +675,7 @@ const NutritionTracker: React.FC = () => {
                                             )}
                                         </div>
                                         <button
+                                            id="add-nutrition-entry-button"
                                             onClick={() => {
                                                 setSelectedMealType(mealType as any);
                                                 setShowManualModal(true);
@@ -737,7 +750,7 @@ const NutritionTracker: React.FC = () => {
                 {/* Right: AI Suggestions */}
                 <div className="space-y-6">
                     {settings?.ai_coach_enabled && aiSuggestions?.ai_enabled && (
-                        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow-sm p-6 border border-purple-200">
+                        <div id="ai-coach-suggestions" className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow-sm p-6 border border-purple-200">
                             <div className="flex items-center gap-2 mb-4">
                                 <Sparkles className="w-5 h-5 text-purple-600" />
                                 <h3 className="text-lg font-bold text-purple-900">{t('nutrition.aiCoach')}</h3>

@@ -7,6 +7,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
 import { toast } from 'react-hot-toast';
 import {
@@ -58,6 +59,7 @@ interface DashboardData {
 const Dashboard: React.FC = () => {
     const { t } = useTranslation();
     const { user, token, logout } = useAuth();
+    const { startGuide } = useUserGuide();
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
         toast.error(t('dashboard.sessionExpired'));
@@ -130,6 +132,15 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         loadDashboard();
     }, [loadDashboard]);
+
+    // Start user guide on first visit
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            startGuide('dashboard');
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, []); // Only run once on mount
 
     const toggleSection = (section: string) => {
         setExpandedSections(prev => {
@@ -228,7 +239,7 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 {/* Quick Overview Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div id="dashboard-overview" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                     <QuickStatCard
                         icon={<DollarSign className="w-8 h-8" />}
                         value={`$${data.overview.total_spent.toFixed(0)}`}
@@ -257,7 +268,7 @@ const Dashboard: React.FC = () => {
 
                 {/* AI Insight of the Day */}
                 {data.ai_insights?.insight_of_day && (
-                    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
+                    <div id="ai-insights-section" className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl shadow-lg p-6 mb-6 text-white">
                         <div className="flex items-start gap-4">
                             <Sparkles className="w-8 h-8 flex-shrink-0 mt-1" />
                             <div className="flex-1">
@@ -302,12 +313,14 @@ const Dashboard: React.FC = () => {
                         onToggle={() => toggleSection('recipes')}
                     />
 
-                    <InventoryInsightsSection
-                        data={data.inventory}
-                        insights={data.ai_insights?.inventory_insights}
-                        expanded={expandedSections.has('inventory')}
-                        onToggle={() => toggleSection('inventory')}
-                    />
+                    <div id="inventory-alerts-section">
+                        <InventoryInsightsSection
+                            data={data.inventory}
+                            insights={data.ai_insights?.inventory_insights}
+                            expanded={expandedSections.has('inventory')}
+                            onToggle={() => toggleSection('inventory')}
+                        />
+                    </div>
 
                     {data.nutrition && (
                         <NutritionCoachSection
@@ -369,7 +382,7 @@ const ShoppingInsightsSection: React.FC<{
     if (!data) return null;
 
     return (
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div id="shopping-insights-section" className="bg-white rounded-2xl shadow-lg overflow-hidden">
             <button
                 onClick={onToggle}
                 className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition"

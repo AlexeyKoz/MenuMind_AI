@@ -32,9 +32,9 @@ class Command(BaseCommand):
 
         # Document mapping: (type, filename, version)
         documents = [
-            ('terms', 'FINAL-terms-of-service-v2.md', '2.0'),
-            ('privacy', 'FINAL-privacy-policy-v2.md', '2.0'),
-            ('cookies', 'FINAL-cookie-policy-v2.md', '2.0'),
+            ('terms', 'Terms-of-service-v2.md', '2.0'),
+            ('privacy', 'Privacy-policy-v2.md', '2.0'),
+            ('cookies', 'Cookie-policy-v2.md', '2.0'),
             ('copyright', 'COPYRIGHT.md', '1.0'),
             ('rcip', 'rcip-license.md', '1.0'),
         ]
@@ -66,8 +66,10 @@ class Command(BaseCommand):
                     content = f.read()
 
                 # Check if document already exists
+                # Copyright and RCIP don't have language codes, so use language_code='en' as default
                 existing = LegalDocument.objects.filter(
-                    document_type=doc_type
+                    document_type=doc_type,
+                    language_code='en'
                 ).first()
 
                 if existing and not force:
@@ -82,6 +84,7 @@ class Command(BaseCommand):
                 # Create or update document
                 doc, created = LegalDocument.objects.update_or_create(
                     document_type=doc_type,
+                    language_code='en',  # Use English as default language
                     defaults={
                         'content': content,
                         'version': version,

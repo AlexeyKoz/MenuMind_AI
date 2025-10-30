@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
 import toast from 'react-hot-toast';
+import { AllergenWarningBanner } from '../components/WarningBanners';
 import {
     Search, Upload, Download, BookOpen, Clock, Users,
     ChefHat, Heart, ExternalLink, FileJson,
@@ -42,6 +44,7 @@ interface Recipe {
 const Recipes: React.FC = () => {
     const { t, i18n } = useTranslation();
     const { token, logout } = useAuth();
+    const { startGuide } = useUserGuide();
     const api = new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
         alert(t('recipes.sessionExpired'));
@@ -123,6 +126,15 @@ const Recipes: React.FC = () => {
             }
         }
     }, [recipes, selectedRecipe]);
+
+    // Start user guide on first visit
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            startGuide('recipes');
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, []); // Only run once on mount
 
     useEffect(() => {
         filterRecipes();
@@ -366,9 +378,13 @@ const Recipes: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Allergen Warning Banner */}
+                    <AllergenWarningBanner className="mb-6" />
+
                     {/* Upload Button */}
                     <div className="flex gap-2 mb-6">
                         <button
+                            id="upload-rcip-button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={loading}
                             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
@@ -403,7 +419,7 @@ const Recipes: React.FC = () => {
                     </div>
 
                     {/* Search and Filters */}
-                    <div className="flex gap-3">
+                    <div className="flex gap-3" id="recipes-filter-section">
                         <div className="flex-1 relative">
                             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
                             <input
@@ -495,7 +511,7 @@ const Recipes: React.FC = () => {
                         <p className="text-sm text-gray-400">{t('recipes.noRecipesDescription')}</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="recipe-collection">
                         {filteredRecipes.map((recipe) => (
                             <RecipeCard
                                 key={recipe.id}
