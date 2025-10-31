@@ -9,12 +9,16 @@ from .models import (
     IngredientTranslation,
     CookingTermCache,
     CookingTermTranslation,
-    ImportHistory
+    ImportHistory,
+    AppUpdate,
 )
 # Import sync services directly from services.py module
 from .services_old import IMLSyncService, CookLingoSyncService
 # Import new admin service from services/ directory
 from .services.admin_import_service import admin_import_service
+
+# Import AppUpdate admin
+from .admin_updates import AppUpdateAdmin
 
 
 class IngredientTranslationInline(admin.TabularInline):

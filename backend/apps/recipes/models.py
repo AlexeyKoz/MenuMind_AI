@@ -4,6 +4,7 @@ from apps.users.models import User
 import uuid
 import hashlib
 import json
+from django.utils import timezone
 
 
 class CanonicalRecipe(models.Model):
@@ -775,3 +776,91 @@ class DiscoveryCache(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.language})"
+
+
+# ============================================================================
+# BULK RECIPE GENERATION (Developer Tool)
+# ============================================================================
+
+class BulkRecipeGenerationJob(models.Model):
+    """
+    Track bulk recipe generation jobs for developers.
+    
+    Allows admins to provide a list of recipe names and automatically
+    generate them using the recipe agent service.
+    """
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('partial', 'Partially Completed'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    # Job info
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='bulk_recipe_jobs',
+        help_text='Admin who created this bulk generation job'
+    )
+    
+    # Recipe list (one per line)
+    recipe_list = models.TextField(
+        help_text='Recipe names to generate, one per line. Example:\nChicken Parmesan\nBeef Stroganoff\nVegetarian Lasagna'
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    
+    # Progress tracking
+    total_recipes = models.IntegerField(default=0)
+    completed_recipes = models.IntegerField(default=0)
+    failed_recipes = models.IntegerField(default=0)
+    
+    # Results
+    results = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Details about each recipe: {"recipe_name": {"status": "success/failed", "recipe_id": "...", "error": "..."}}'
+    )
+    
+    # Celery task ID
+    celery_task_id = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'bulk_recipe_generation_jobs'
+        verbose_name = 'Bulk Recipe Generation Job'
+        verbose_name_plural = 'Bulk Recipe Generation Jobs'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['created_by', '-created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Bulk Job #{self.id} - {self.status} ({self.completed_recipes}/{self.total_recipes})"
+    
+    def get_progress_percentage(self):
+        """Calculate progress percentage"""
+        if self.total_recipes == 0:
+            return 0
+        return int((self.completed_recipes / self.total_recipes) * 100)
+    
+    def get_recipe_names(self):
+        """Parse recipe list into individual names"""
+        lines = self.recipe_list.strip().split('\n')
+        return [line.strip() for line in lines if line.strip()]
+

@@ -44,12 +44,12 @@ const LanguageSwitcher: React.FC = () => {
         <select
             value={i18n.language}
             onChange={(e) => handleLanguageChange(e.target.value)}
-            className="bg-white bg-opacity-20 backdrop-blur-sm border border-white border-opacity-30 rounded-md px-3 py-2 text-sm text-white font-medium hover:bg-opacity-30 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 cursor-pointer transition-all"
+            className="bg-gray-50 border border-gray-300 rounded-md px-3 py-2 text-sm text-gray-700 font-medium hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer transition-all"
             aria-label="Select language"
-            style={{ minWidth: '140px' }}
+            style={{ minWidth: '120px' }}
         >
             {languages.map((lang) => (
-                <option key={lang.code} value={lang.code} className="bg-gray-800 text-white">
+                <option key={lang.code} value={lang.code} className="bg-white text-gray-800">
                     {lang.flag} {lang.label}
                 </option>
             ))}

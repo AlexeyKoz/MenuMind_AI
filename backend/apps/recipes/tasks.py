@@ -1107,3 +1107,191 @@ def cleanup_stale_discovery_cache():
     except Exception as e:
         logger.error(f"[AGENT] ❌ Cache cleanup failed: {e}")
         return {'success': False, 'error': str(e)}
+
+
+# ===================================================================
+# BULK RECIPE GENERATION (Developer Tool)
+# ===================================================================
+
+@shared_task(bind=True, max_retries=0)
+def process_bulk_recipe_generation(self, job_id: str):
+    """
+    Process bulk recipe generation job
+    
+    This task:
+    1. Takes a list of recipe names
+    2. Searches and scrapes each recipe from the internet
+    3. Creates canonical recipes in the database
+    4. Tracks progress in real-time
+    
+    Args:
+        job_id: UUID of BulkRecipeGenerationJob
+        
+    Returns:
+        Dict with job results
+    """
+    from apps.recipes.models import BulkRecipeGenerationJob
+    from apps.recipes.services import RecipeAgentService
+    from asgiref.sync import async_to_sync
+    from django.utils import timezone
+    
+    logger.info(f"[BULK GENERATION] Starting job {job_id}")
+    
+    try:
+        # Get job
+        job = BulkRecipeGenerationJob.objects.get(id=job_id)
+        
+        # Update status
+        job.status = 'in_progress'
+        job.started_at = timezone.now()
+        job.celery_task_id = self.request.id
+        job.save()
+        
+        # Parse recipe list
+        recipe_names = job.get_recipe_names()
+        job.total_recipes = len(recipe_names)
+        job.save()
+        
+        logger.info(f"[BULK GENERATION] Processing {job.total_recipes} recipes")
+        
+        # Initialize agent service
+        agent = RecipeAgentService()
+        
+        # Default user preferences (English, metric)
+        user_preferences = {
+            'dietary_restrictions': [],
+            'allergies': [],
+            'language': 'en',
+            'unit_system': 'metric'
+        }
+        
+        # Process each recipe
+        results = {}
+        completed_count = 0
+        failed_count = 0
+        
+        for idx, recipe_name in enumerate(recipe_names, 1):
+            logger.info(f"[BULK GENERATION] Processing {idx}/{job.total_recipes}: {recipe_name}")
+            
+            try:
+                # Process recipe query
+                success, result, message = async_to_sync(agent.process_recipe_query)(
+                    recipe_name,
+                    job.created_by,  # Use admin user
+                    user_preferences
+                )
+                
+                if success and result.get('canonical_recipe'):
+                    # Success
+                    canonical_recipe = result['canonical_recipe']
+                    recipe_id = canonical_recipe.get('id', '')
+                    
+                    results[recipe_name] = {
+                        'status': 'success',
+                        'recipe_id': str(recipe_id),
+                        'recipe_name': canonical_recipe.get('name', recipe_name),
+                        'message': 'Recipe generated successfully'
+                    }
+                    completed_count += 1
+                    logger.info(f"[BULK GENERATION] ✅ Success: {canonical_recipe.get('name')}")
+                    
+                    # CREATE DISCOVERY CACHE ENTRIES (so recipe appears in discovery page)
+                    try:
+                        from apps.recipes.models import CanonicalRecipe, DiscoveryCache
+                        
+                        recipe_obj = CanonicalRecipe.objects.get(id=recipe_id)
+                        
+                        # Create cache entry for each supported language
+                        for lang in ['en', 'he', 'ru']:
+                            cache_entry, created = DiscoveryCache.objects.get_or_create(
+                                canonical_recipe=recipe_obj,
+                                language=lang,
+                                defaults={
+                                    'title': recipe_obj.name,
+                                    'brief': (recipe_obj.description[:200] if recipe_obj.description else ''),
+                                    'image_url': recipe_obj.ai_source_url or '',
+                                    'tags': recipe_obj.diet_labels or []
+                                }
+                            )
+                            if created:
+                                logger.info(f"[BULK GENERATION] 📋 Created discovery cache entry for {lang}")
+                        
+                        results[recipe_name]['discovery_cache'] = 'created'
+                        logger.info(f"[BULK GENERATION] ✅ Recipe added to discovery page!")
+                        
+                    except Exception as cache_error:
+                        logger.error(f"[BULK GENERATION] ⚠️ Failed to create discovery cache: {cache_error}")
+                        results[recipe_name]['discovery_cache_error'] = str(cache_error)
+                else:
+                    # Failed
+                    results[recipe_name] = {
+                        'status': 'failed',
+                        'error': message or 'Unknown error',
+                        'message': f'Failed to generate: {message}'
+                    }
+                    failed_count += 1
+                    logger.warning(f"[BULK GENERATION] ❌ Failed: {recipe_name} - {message}")
+                
+            except Exception as e:
+                # Exception during processing
+                error_msg = str(e)
+                results[recipe_name] = {
+                    'status': 'failed',
+                    'error': error_msg,
+                    'message': f'Exception: {error_msg}'
+                }
+                failed_count += 1
+                logger.error(f"[BULK GENERATION] ❌ Exception for {recipe_name}: {e}")
+            
+            # Update progress
+            job.completed_recipes = completed_count
+            job.failed_recipes = failed_count
+            job.results = results
+            job.save()
+            
+            logger.info(f"[BULK GENERATION] Progress: {completed_count + failed_count}/{job.total_recipes}")
+        
+        # Mark job as completed
+        job.completed_at = timezone.now()
+        
+        if failed_count == 0:
+            job.status = 'completed'
+        elif completed_count == 0:
+            job.status = 'failed'
+        else:
+            job.status = 'partial'
+        
+        job.save()
+        
+        logger.info(f"[BULK GENERATION] ✅ Job {job_id} completed: {completed_count} success, {failed_count} failed")
+        
+        return {
+            'job_id': job_id,
+            'status': job.status,
+            'total': job.total_recipes,
+            'completed': completed_count,
+            'failed': failed_count
+        }
+        
+    except BulkRecipeGenerationJob.DoesNotExist:
+        logger.error(f"[BULK GENERATION] Job {job_id} not found")
+        return {'success': False, 'error': 'Job not found'}
+        
+    except Exception as e:
+        logger.error(f"[BULK GENERATION] ❌ Job {job_id} failed with exception: {e}")
+        
+        # Update job status
+        try:
+            job = BulkRecipeGenerationJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.completed_at = timezone.now()
+            job.results = {
+                'error': str(e),
+                'message': 'Job failed with exception'
+            }
+            job.save()
+        except:
+            pass
+        
+        return {'success': False, 'error': str(e)}
+

@@ -15,7 +15,7 @@ import { Package, X, Check } from 'lucide-react';
 const ShoppingList: React.FC = () => {
     const { t, i18n } = useTranslation();
     const { token, user, logout } = useAuth();
-    const { startGuide } = useUserGuide();
+    const { startGuide, isInitialized } = useUserGuide();
     const {
         connectToList,
         disconnect,
@@ -181,15 +181,19 @@ const ShoppingList: React.FC = () => {
         loadUserPreferences();
     }, [api, loadUserPreferences]);
 
-    // Start user guide on first visit
+    // Start user guide on first visit - wait for initialization
     useEffect(() => {
+        if (!isInitialized) {
+            return; // Wait for guide system to initialize
+        }
+
         // Delay guide start slightly to ensure UI is rendered
         const timer = setTimeout(() => {
             startGuide('shopping');
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, []); // Only run once on mount
+    }, [isInitialized, startGuide]); // Re-run when initialized
 
     // Save generated recipes to localStorage whenever they change
     // Load recipes specific to the active list (SHARED by all collaborators)
@@ -2259,7 +2263,6 @@ const ShoppingList: React.FC = () => {
                                                         <div className="flex items-center gap-2 flex-wrap ml-8">
                                                             {/* Main Quantity Counter */}
                                                             <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded px-1 py-1">
-                                                                <span className="text-xs text-gray-600 font-medium">#</span>
                                                                 <button
                                                                     onClick={() => handleQuantityChange(item.id, -1, item.name)}
                                                                     disabled={isUpdatingQuantity.has(item.id) || isDeleting.has(item.id) || isUpdatingWeight.has(item.id) || isUpdatingLiquid.has(item.id) || item.quantity <= 1}

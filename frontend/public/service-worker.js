@@ -1,4 +1,4 @@
-const CACHE_NAME = 'menumindai-v1';
+const CACHE_NAME = 'menumindai-v2'; // Updated to force new SW installation
 const urlsToCache = [
     '/',
     '/static/css/main.css',
@@ -48,8 +48,8 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             fetch(request)
                 .then((response) => {
-                    // Clone and cache successful responses
-                    if (response.ok) {
+                    // Only cache GET requests (POST/PUT/DELETE cannot be cached)
+                    if (response.ok && request.method === 'GET') {
                         const responseClone = response.clone();
                         caches.open(CACHE_NAME).then((cache) => {
                             cache.put(request, responseClone);
@@ -58,19 +58,23 @@ self.addEventListener('fetch', (event) => {
                     return response;
                 })
                 .catch(() => {
-                    // Offline - return cached response
-                    return caches.match(request).then((cachedResponse) => {
-                        if (cachedResponse) {
-                            return cachedResponse;
-                        }
-                        // Return offline fallback
-                        return new Response(
-                            JSON.stringify({ offline: true, message: 'You are offline' }),
-                            {
-                                headers: { 'Content-Type': 'application/json' }
+                    // Offline - return cached response (only for GET requests)
+                    if (request.method === 'GET') {
+                        return caches.match(request).then((cachedResponse) => {
+                            if (cachedResponse) {
+                                return cachedResponse;
                             }
-                        );
-                    });
+                            // Return offline fallback
+                            return new Response(
+                                JSON.stringify({ offline: true, message: 'You are offline' }),
+                                {
+                                    headers: { 'Content-Type': 'application/json' }
+                                }
+                            );
+                        });
+                    }
+                    // For non-GET requests, just reject
+                    return Promise.reject('Network error');
                 })
         );
     } else {
@@ -78,8 +82,8 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             caches.match(request).then((cachedResponse) => {
                 return cachedResponse || fetch(request).then((response) => {
-                    // Cache new static assets
-                    if (response.ok) {
+                    // Cache new static assets (only GET requests)
+                    if (response.ok && request.method === 'GET') {
                         const responseClone = response.clone();
                         caches.open(CACHE_NAME).then((cache) => {
                             cache.put(request, responseClone);

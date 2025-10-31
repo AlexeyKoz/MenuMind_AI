@@ -44,7 +44,7 @@ interface Recipe {
 const Recipes: React.FC = () => {
     const { t, i18n } = useTranslation();
     const { token, logout } = useAuth();
-    const { startGuide } = useUserGuide();
+    const { startGuide, isInitialized } = useUserGuide();
     const api = new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
         alert(t('recipes.sessionExpired'));
@@ -127,14 +127,18 @@ const Recipes: React.FC = () => {
         }
     }, [recipes, selectedRecipe]);
 
-    // Start user guide on first visit
+    // Start user guide on first visit - wait for initialization
     useEffect(() => {
+        if (!isInitialized) {
+            return; // Wait for guide system to initialize
+        }
+
         const timer = setTimeout(() => {
             startGuide('recipes');
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, []); // Only run once on mount
+    }, [isInitialized, startGuide]); // Re-run when initialized
 
     useEffect(() => {
         filterRecipes();

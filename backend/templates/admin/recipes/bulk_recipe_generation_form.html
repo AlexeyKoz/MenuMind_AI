@@ -1,0 +1,86 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Create Bulk Recipe Generation Job{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>🍳 Bulk Recipe Generation</h1>
+    <p style="margin-bottom: 20px; color: #666;">
+        This tool allows you to automatically generate multiple recipes from the internet. 
+        Enter recipe names (one per line) and the system will search, scrape, and create canonical recipes for each one.
+    </p>
+
+    <form method="post" action="">
+        {% csrf_token %}
+        
+        <div style="margin-bottom: 20px;">
+            <label for="recipe_list" style="display: block; font-weight: bold; margin-bottom: 8px;">
+                Recipe Names (one per line):
+            </label>
+            <textarea 
+                name="recipe_list" 
+                id="recipe_list" 
+                rows="15" 
+                style="width: 100%; max-width: 800px; padding: 10px; font-family: monospace; font-size: 14px; border: 1px solid #ddd; border-radius: 4px;"
+                placeholder="Example:
+Chicken Parmesan
+Beef Stroganoff
+Vegetarian Lasagna
+Classic Tiramisu
+Thai Green Curry
+Mediterranean Quinoa Salad"
+                required
+            ></textarea>
+            <p style="color: #666; font-size: 13px; margin-top: 5px;">
+                💡 Tip: Each recipe will be searched on the internet, scraped, and added to your database. 
+                This process runs in the background, so you can close this page and check the job status later.
+            </p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <h3>⚙️ How It Works:</h3>
+            <ol style="color: #666;">
+                <li>System searches for each recipe on the internet using DuckDuckGo</li>
+                <li>Scrapes recipe content from the best matching website</li>
+                <li>Uses AI to extract and structure ingredients and steps</li>
+                <li>Maps ingredients to the IML database for translations</li>
+                <li>Calculates nutrition information</li>
+                <li>Creates a canonical recipe in your database</li>
+                <li>Handles deduplication automatically</li>
+            </ol>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <button 
+                type="submit" 
+                class="button default" 
+                style="background-color: #417690; color: white; padding: 10px 20px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer;"
+            >
+                🚀 Start Bulk Generation
+            </button>
+            <a 
+                href="{% url 'admin:recipes_bulkrecipegenerationjob_changelist' %}" 
+                class="button" 
+                style="margin-left: 10px; padding: 10px 20px; text-decoration: none; display: inline-block;"
+            >
+                ← Back to Jobs List
+            </a>
+        </div>
+    </form>
+
+    <div style="margin-top: 40px; padding: 15px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+        <h4 style="margin-top: 0;">⚠️ Important Notes:</h4>
+        <ul style="margin-bottom: 0;">
+            <li>This tool is for <strong>developers only</strong> to populate the database</li>
+            <li>Regular users still get one recipe per request (as designed)</li>
+            <li>Processing time: ~30-60 seconds per recipe</li>
+            <li>Failed recipes will be logged with error details</li>
+            <li>Duplicate recipes are automatically detected and skipped</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+
+

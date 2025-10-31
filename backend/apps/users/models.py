@@ -113,6 +113,13 @@ class User(AbstractUser):
     ai_requests_today = models.IntegerField(default=0)
     ai_requests_reset_at = models.DateTimeField(default=timezone.now)
 
+    # User Guide Tracking (which pages the user has seen the guide for)
+    has_seen_guides = models.JSONField(
+        default=list, 
+        blank=True,
+        help_text='List of page guides the user has completed (e.g. ["dashboard", "shopping", "inventory"])'
+    )
+
     def generate_couple_code(self):
         """Generate unique couple code for partner linking"""
         import random

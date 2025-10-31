@@ -14,7 +14,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const [copiedUser, setCopiedUser] = useState<string | null>(null);
     const { login } = useAuth();
 
     // Update HTML dir attribute for RTL support (Hebrew)
@@ -40,13 +39,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
         }
     };
 
-    const handleTestUserClick = (testEmail: string, testPassword: string) => {
-        setEmail(testEmail);
-        setPassword(testPassword);
-        setCopiedUser(testEmail);
-        setTimeout(() => setCopiedUser(null), 2000); // Clear the copied state after 2 seconds
-    };
-
     return (
         <div className="min-h-screen bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center">
             <div className="bg-white rounded-lg shadow-xl p-8 w-96 relative">
@@ -55,7 +47,15 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                     <SimpleLanguageSwitcher />
                 </div>
 
-                <h2 className="text-3xl font-bold text-center mb-2 mt-8">{t('auth.welcomeMessage')}</h2>
+                {/* Logo */}
+                <div className="flex justify-center mb-8 mt-8">
+                    <img 
+                        src="/logo/menumindai-logo-compact.svg" 
+                        alt="MenuMind AI" 
+                        className="h-24"
+                    />
+                </div>
+
                 <p className="text-center text-gray-600 mb-6">{t('auth.loginSubtitle')}</p>
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
@@ -108,43 +108,6 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                     onSuccess={onLoginSuccess}
                     onError={(error) => setError(error)}
                 />
-
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 text-center">🧪 Test Accounts</h3>
-                    <div className="space-y-2">
-                        <div
-                            className={`flex justify-between items-center p-2 bg-white rounded border cursor-pointer hover:bg-blue-50 transition-colors ${copiedUser === 'testuser1' ? 'ring-2 ring-blue-400 bg-blue-50' : ''
-                                }`}
-                            onClick={() => handleTestUserClick('testuser1', 'password123')}
-                        >
-                            <span className="text-sm font-medium text-gray-600">User 1:</span>
-                            <div className="text-sm">
-                                <span className="font-mono text-blue-600">testuser1</span>
-                                <span className="text-gray-400 mx-1">/</span>
-                                <span className="font-mono text-green-600">password123</span>
-                            </div>
-                            {copiedUser === 'testuser1' && (
-                                <span className="text-xs text-blue-600 ml-2">✓ Filled</span>
-                            )}
-                        </div>
-                        <div
-                            className={`flex justify-between items-center p-2 bg-white rounded border cursor-pointer hover:bg-blue-50 transition-colors ${copiedUser === 'testuser2' ? 'ring-2 ring-blue-400 bg-blue-50' : ''
-                                }`}
-                            onClick={() => handleTestUserClick('testuser2', 'password123')}
-                        >
-                            <span className="text-sm font-medium text-gray-600">User 2:</span>
-                            <div className="text-sm">
-                                <span className="font-mono text-blue-600">testuser2</span>
-                                <span className="text-gray-400 mx-1">/</span>
-                                <span className="font-mono text-green-600">password123</span>
-                            </div>
-                            {copiedUser === 'testuser2' && (
-                                <span className="text-xs text-blue-600 ml-2">✓ Filled</span>
-                            )}
-                        </div>
-                    </div>
-                    <p className="text-xs text-gray-500 text-center mt-2">Click to fill login form</p>
-                </div>
 
                 {onSwitchToRegistration && (
                     <div className="mt-6 text-center">

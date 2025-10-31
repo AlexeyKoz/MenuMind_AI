@@ -39,9 +39,9 @@ class DiscoveryCacheService:
     REDIS_PREFIX = "discovery"
     REDIS_TTL = 3600  # 1 hour
 
-    # Pagination
-    DEFAULT_PAGE_SIZE = 20
-    MAX_PAGE_SIZE = 100
+    # Pagination (Increased for better UX with infinite scroll)
+    DEFAULT_PAGE_SIZE = 50  # Show more recipes per page
+    MAX_PAGE_SIZE = 200     # Allow up to 200 recipes per request
 
     def __init__(self):
         self._stats = {
@@ -55,7 +55,7 @@ class DiscoveryCacheService:
         self,
         language: str,
         page: int = 1,
-        page_size: int = 20,
+        page_size: int = 50,  # Increased default for better UX
         tags: Optional[List[str]] = None
     ) -> Dict:
         """
@@ -64,7 +64,7 @@ class DiscoveryCacheService:
         Args:
             language: Language code ('en', 'he', 'ru')
             page: Page number (1-based)
-            page_size: Items per page (max 100)
+            page_size: Items per page (default: 50, max: 200)
 
         Returns:
             Dict with recipes, pagination info, and cache stats

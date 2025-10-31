@@ -133,7 +133,7 @@ const clearRecipeHistoryFromStorage = () => {
 const Inventory: React.FC = () => {
     const { t } = useTranslation();
     const { token, logout } = useAuth();
-    const { startGuide } = useUserGuide();
+    const { startGuide, isInitialized } = useUserGuide();
     const [locationData, setLocationData] = useState<LocationGroup>({});
     const [loading, setLoading] = useState(true);
     const [expandedLocations, setExpandedLocations] = useState<Set<string>>(new Set(['fridge', 'freezer']));
@@ -266,15 +266,19 @@ const Inventory: React.FC = () => {
         loadInventory();
     }, [loadInventory]);
 
-    // Start user guide on first visit
+    // Start user guide on first visit - wait for initialization
     useEffect(() => {
+        if (!isInitialized) {
+            return; // Wait for guide system to initialize
+        }
+
         // Delay guide start slightly to ensure UI is rendered
         const timer = setTimeout(() => {
             startGuide('inventory');
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, []); // Only run once on mount
+    }, [isInitialized, startGuide]); // Re-run when initialized
 
     // Show notification if recipes were restored from storage on mount
     useEffect(() => {

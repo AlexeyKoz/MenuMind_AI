@@ -382,7 +382,7 @@ const toNumber = (value: any): number => {
 // Main Nutrition Tracker Component
 const NutritionTracker: React.FC = () => {
     const { t } = useTranslation();
-    const { startGuide } = useUserGuide();
+    const { startGuide, isInitialized } = useUserGuide();
     const { token, logout } = useAuth();
     const api = useMemo(() => new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
@@ -407,14 +407,18 @@ const NutritionTracker: React.FC = () => {
         loadData();
     }, [selectedDate]);
 
-    // Start user guide on first visit
+    // Start user guide on first visit - wait for initialization
     useEffect(() => {
+        if (!isInitialized) {
+            return; // Wait for guide system to initialize
+        }
+
         const timer = setTimeout(() => {
             startGuide('nutrition');
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, []); // Only run once on mount
+    }, [isInitialized, startGuide]); // Re-run when initialized
 
     const loadData = async () => {
         setLoading(true);

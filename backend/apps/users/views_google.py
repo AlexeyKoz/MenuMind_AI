@@ -172,9 +172,8 @@ def google_login(request):
     last_name = idinfo.get('family_name', '')
     google_sub = idinfo.get('sub', '')
 
+    # Create username from email (without Google sub ID for cleaner username)
     username_base = email.split('@')[0]
-    if google_sub:
-        username_base = f"{username_base}_{google_sub[:8]}"
 
     try:
         with transaction.atomic():

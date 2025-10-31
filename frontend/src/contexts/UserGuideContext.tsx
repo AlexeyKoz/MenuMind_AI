@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import axios from 'axios';
 
 interface GuideStep {
     id: string;
@@ -12,6 +13,7 @@ interface GuideStep {
 interface UserGuideContextType {
     currentStep: GuideStep | null;
     isGuideActive: boolean;
+    isInitialized: boolean;  // Add this so pages can wait for initialization
     startGuide: (page: string) => void;
     nextStep: () => void;
     skipGuide: () => void;
@@ -323,17 +325,70 @@ export const UserGuideProvider: React.FC<{ children: ReactNode }> = ({ children 
     const [currentStep, setCurrentStep] = useState<GuideStep | null>(null);
     const [isGuideActive, setIsGuideActive] = useState(false);
     const [completedGuides, setCompletedGuides] = useState<Set<string>>(new Set());
+    const [isInitialized, setIsInitialized] = useState(false);
 
-    // Load completed guides from localStorage
+    // Load completed guides from backend (or fallback to localStorage)
     useEffect(() => {
-        const stored = localStorage.getItem('menumine-completed-guides');
-        if (stored) {
+        const loadCompletedGuides = async () => {
+            console.log('🔍 [GUIDE DEBUG] Starting to load completed guides...');
+            
             try {
-                setCompletedGuides(new Set(JSON.parse(stored)));
-            } catch (e) {
-                console.error('Failed to load completed guides:', e);
+                // Check if user is authenticated
+                const token = localStorage.getItem('access_token');
+                console.log('🔍 [GUIDE DEBUG] Token present:', !!token);
+                
+                if (!token) {
+                    console.log('🔍 [GUIDE DEBUG] No token - using localStorage');
+                    // Not authenticated, use localStorage
+                    const stored = localStorage.getItem('menumine-completed-guides');
+                    if (stored) {
+                        const guides = JSON.parse(stored);
+                        console.log('🔍 [GUIDE DEBUG] Loaded from localStorage:', guides);
+                        setCompletedGuides(new Set(guides));
+                    }
+                    setIsInitialized(true);
+                    return;
+                }
+
+                // Fetch user data including has_seen_guides
+                console.log('🔍 [GUIDE DEBUG] Fetching from API...');
+                // Direct URL to backend (bypass proxy)
+                const response = await axios.get('http://localhost:8000/api/users/profile/user_settings/', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                console.log('🔍 [GUIDE DEBUG] API Response status:', response.status);
+                console.log('🔍 [GUIDE DEBUG] API Response has_seen_guides:', response.data.has_seen_guides);
+
+                const hasSeenGuides = response.data.has_seen_guides || [];
+                setCompletedGuides(new Set(hasSeenGuides));
+                
+                // Also sync to localStorage for offline access
+                localStorage.setItem('menumine-completed-guides', JSON.stringify(hasSeenGuides));
+                
+                console.log('✅ [GUIDE DEBUG] Successfully loaded guides from backend:', hasSeenGuides);
+            } catch (error) {
+                console.error('❌ [GUIDE DEBUG] Failed to load from backend:', error);
+                // Fallback to localStorage
+                const stored = localStorage.getItem('menumine-completed-guides');
+                if (stored) {
+                    try {
+                        const guides = JSON.parse(stored);
+                        console.log('🔍 [GUIDE DEBUG] Fallback to localStorage:', guides);
+                        setCompletedGuides(new Set(guides));
+                    } catch (e) {
+                        console.error('❌ [GUIDE DEBUG] Failed to parse localStorage:', e);
+                    }
+                }
+            } finally {
+                console.log('🔍 [GUIDE DEBUG] Initialization complete');
+                setIsInitialized(true);
             }
-        }
+        };
+
+        loadCompletedGuides();
     }, []);
 
     const hasSeenGuide = (page: string): boolean => {
@@ -341,15 +396,25 @@ export const UserGuideProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     const startGuide = (page: string) => {
+        console.log('🔍 [GUIDE DEBUG] startGuide called for page:', page);
+        console.log('🔍 [GUIDE DEBUG] isInitialized:', isInitialized);
+        console.log('🔍 [GUIDE DEBUG] completedGuides:', Array.from(completedGuides));
+        
+        // Wait for initialization before checking
+        if (!isInitialized) {
+            console.log('⏳ [GUIDE DEBUG] Not initialized yet, waiting...');
+            return;
+        }
+
         if (hasSeenGuide(page)) {
-            console.log(`📚 Guide for ${page} already completed`);
+            console.log('✅ [GUIDE DEBUG] Guide already completed for:', page);
             return;
         }
 
         const pageSteps = GUIDE_STEPS.filter(step => step.page === page).sort((a, b) => a.order - b.order);
         
         if (pageSteps.length > 0) {
-            console.log(`📚 Starting guide for ${page} with ${pageSteps.length} steps`);
+            console.log('🚀 [GUIDE DEBUG] Starting guide for', page, 'with', pageSteps.length, 'steps');
             setCurrentStep(pageSteps[0]);
             setIsGuideActive(true);
         }
@@ -378,23 +443,60 @@ export const UserGuideProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
     };
 
-    const completeGuide = (page: string) => {
+    const completeGuide = async (page: string) => {
         const newCompleted = new Set(completedGuides);
         newCompleted.add(page);
         setCompletedGuides(newCompleted);
+        
+        // Save to localStorage for immediate persistence
         localStorage.setItem('menumine-completed-guides', JSON.stringify([...newCompleted]));
         
         setCurrentStep(null);
         setIsGuideActive(false);
         console.log(`✅ Guide completed for ${page}`);
+
+        // Sync to backend
+        try {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                // Direct URL to backend (bypass proxy issues)
+                await axios.post('http://localhost:8000/api/users/profile/mark-guide-seen/', 
+                    { page },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    }
+                );
+                console.log(`✅ [GUIDE] Guide completion synced to backend for ${page}`);
+            }
+        } catch (error) {
+            console.error('[GUIDE] Failed to sync guide completion to backend:', error);
+            // Not critical - localStorage is already updated
+        }
     };
 
-    const resetGuide = (page: string) => {
+    const resetGuide = async (page: string) => {
         const newCompleted = new Set(completedGuides);
         newCompleted.delete(page);
         setCompletedGuides(newCompleted);
+        
+        // Update localStorage
         localStorage.setItem('menumine-completed-guides', JSON.stringify([...newCompleted]));
         console.log(`🔄 Guide reset for ${page}`);
+
+        // Sync to backend - reset by re-syncing the full list
+        try {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                // We'll need to handle reset separately or just don't sync here
+                // For now, just update localStorage
+                console.log(`🔄 Guide reset locally for ${page}`);
+            }
+        } catch (error) {
+            console.error('Failed to reset guide on backend:', error);
+        }
     };
 
     return (
@@ -402,6 +504,7 @@ export const UserGuideProvider: React.FC<{ children: ReactNode }> = ({ children 
             value={{
                 currentStep,
                 isGuideActive,
+                isInitialized,
                 startGuide,
                 nextStep,
                 skipGuide,

@@ -18,6 +18,37 @@ const Footer: React.FC = () => {
     return (
         <footer className={`footer ${isRTL ? 'footer--rtl' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
             <div className="footer__container">
+                {/* What's New Section - Subtle */}
+                <div style={{
+                    background: '#f3f4f6',
+                    padding: '16px',
+                    borderRadius: '8px',
+                    marginBottom: '24px',
+                    textAlign: 'center'
+                }}>
+                    <Link 
+                        to="/whats-new"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            color: '#6b7280',
+                            textDecoration: 'none',
+                            fontSize: '14px',
+                            transition: 'color 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.color = '#4b5563';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.color = '#6b7280';
+                        }}
+                    >
+                        <span>✨</span>
+                        <span>{t("What's New")}</span>
+                    </Link>
+                </div>
+
                 {/* Main Footer Content */}
                 <div className="footer__content">
                     {/* Company Info */}
@@ -26,6 +57,9 @@ const Footer: React.FC = () => {
                         <nav className="footer__nav">
                             <Link to="/about" className="footer__link">
                                 {t('footer.aboutUs')}
+                            </Link>
+                            <Link to="/whats-new" className="footer__link">
+                                {t("What's New")}
                             </Link>
                             <Link to="/blog" className="footer__link">
                                 {t('footer.blog')}

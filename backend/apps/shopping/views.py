@@ -603,7 +603,11 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         - Translate to remaining languages
         - Create canonical recipe
         - Notify user via WebSocket
+        
+        Security: Input is validated and sanitized
         """
+        from apps.core.security import AIInputValidator
+        
         print("[FAST AI RECIPE] ========== START ai_add_items ==========")
         shopping_list = self.get_object()
         query = request.data.get('text', '')
@@ -616,6 +620,20 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'message': 'Please describe what you want to cook'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 🔒 SECURITY: Validate and sanitize AI input
+        is_valid, error_message, sanitized_query = AIInputValidator.validate_description_input(
+            query, field_name="recipe request"
+        )
+        
+        if not is_valid:
+            print(f"[FAST AI RECIPE] ERROR: Validation failed - {error_message}")
+            return Response({
+                'success': False,
+                'message': f'Input validation failed: {error_message}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        query = sanitized_query
 
         # VALIDATION: Detect and translate keyboard layout issues (e.g., Russian layout typing English words)
         # Example: "ьфкпрфкшеу" (Russian layout) → "margharita" (English)

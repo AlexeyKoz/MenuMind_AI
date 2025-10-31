@@ -10,7 +10,7 @@ import CookieConsentBanner from './components/CookieConsentBanner';
 import { AIWarningBanner } from './components/WarningBanners';
 import { GuideTooltip } from './components/GuideTooltip';
 import Footer from './components/Footer';
-import { Dashboard, ShoppingList, NutritionTracker, Recipes, Login, Inventory, SettingsPage, CanonicalRecipesPage } from './pages';
+import { Dashboard, ShoppingList, NutritionTracker, Recipes, Login, Inventory, SettingsPage, CanonicalRecipesPage, WhatsNewPage } from './pages';
 import Registration from './pages/Registration';
 import ArchivePage from './pages/ArchivePage';
 import VerifyEmail from './pages/VerifyEmail';
@@ -107,6 +107,9 @@ const AppContent: React.FC = () => {
                     <Route path="/legal/cookies" element={<CookiePolicy />} />
                     <Route path="/legal/copyright" element={<CopyrightNotice />} />
                     <Route path="/legal/rcip" element={<RCIPLicense />} />
+                    
+                    {/* What's New Page - Public */}
+                    <Route path="/whats-new" element={<WhatsNewPage />} />
 
                     <Route
                         path="/verify-email/:key"
@@ -159,6 +162,9 @@ const AppContent: React.FC = () => {
 
                         {/* Privacy Settings Page */}
                         <Route path="/privacy-settings" element={<PrivacySettings />} />
+                        
+                        {/* What's New Page */}
+                        <Route path="/whats-new" element={<WhatsNewPage />} />
 
                         <Route path="/dashboard" element={<Dashboard />} />
                         <Route path="/shopping" element={<ShoppingList />} />

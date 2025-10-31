@@ -6,3 +6,4 @@ export { default as Login } from './Login';
 export { default as Inventory } from './Inventory';
 export { default as SettingsPage } from './SettingsPage';
 export { default as CanonicalRecipesPage } from './CanonicalRecipesPage';
+export { default as WhatsNewPage } from './WhatsNewPage';

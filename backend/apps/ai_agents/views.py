@@ -68,6 +68,39 @@ def generate_recipes_from_inventory(request):
     max_recipes = request.data.get('max_recipes', 3)
     cuisine = request.data.get('cuisine', '')
     difficulty = request.data.get('difficulty', '')
+    
+    # 🔒 SECURITY: Validate optional text inputs
+    from apps.core.security import AIInputValidator
+    
+    if cuisine:
+        is_valid, error_msg, cuisine = AIInputValidator.validate_search_input(
+            cuisine, field_name="cuisine"
+        )
+        if not is_valid:
+            return Response({
+                'error': f'Invalid cuisine: {error_msg}',
+                'recipes': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    if difficulty:
+        # Validate difficulty is one of allowed values
+        allowed_difficulties = ['easy', 'medium', 'hard', 'beginner', 'intermediate', 'advanced']
+        if difficulty.lower() not in allowed_difficulties:
+            return Response({
+                'error': f'Invalid difficulty. Allowed: {", ".join(allowed_difficulties)}',
+                'recipes': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Validate max_recipes range
+    try:
+        max_recipes = int(max_recipes)
+        if max_recipes < 1 or max_recipes > 10:
+            return Response({
+                'error': 'max_recipes must be between 1 and 10',
+                'recipes': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+    except (ValueError, TypeError):
+        max_recipes = 3
 
     # ⭐ CHECK RATE LIMIT BEFORE PROCESSING
     allowed, message, limit_type = AIRateLimiter.check_rate_limit(

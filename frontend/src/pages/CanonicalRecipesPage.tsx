@@ -25,7 +25,7 @@ import { convertTemperaturesInText, getUserTemperatureUnit } from '../utils/reci
 const CanonicalRecipesPage: React.FC = () => {
     const { t } = useTranslation();
     const { token, user, logout } = useAuth();
-    const { startGuide } = useUserGuide();
+    const { startGuide, isInitialized } = useUserGuide();
     const api = new ApiService(token, () => {
         console.log('🔐 Token expired - logging out user');
         alert(t('discover.sessionExpired'));
@@ -64,14 +64,18 @@ const CanonicalRecipesPage: React.FC = () => {
         loadRecipes();
     }, [search, cuisine, difficulty, dietLabels, sortBy]);
 
-    // Start user guide on first visit
+    // Start user guide on first visit - wait for initialization
     useEffect(() => {
+        if (!isInitialized) {
+            return; // Wait for guide system to initialize
+        }
+
         const timer = setTimeout(() => {
             startGuide('discover');
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, []); // Only run once on mount
+    }, [isInitialized, startGuide]); // Re-run when initialized
 
     // Reload recipe list when language changes
     useEffect(() => {

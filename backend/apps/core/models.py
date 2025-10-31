@@ -3,6 +3,18 @@ Core models for ingredient management and IML integration
 """
 from django.db import models
 
+# Import AppUpdate model
+from .models_updates import AppUpdate
+
+__all__ = [
+    'IngredientCache',
+    'IngredientTranslation',
+    'CookingTermCache',
+    'CookingTermTranslation',
+    'ImportHistory',
+    'AppUpdate',
+]
+
 
 class IngredientCache(models.Model):
     """Cached ingredients from IML SQLite"""

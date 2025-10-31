@@ -260,6 +260,31 @@ class UserProfileViewSet(viewsets.ModelViewSet):
             'unit_system': 'metric' if request.user.weight_unit == 'kg' else 'imperial'
         })
 
+    @action(detail=False, methods=['post'], url_path='mark-guide-seen')
+    def mark_guide_seen(self, request):
+        """Mark a guide page as seen/completed"""
+        page = request.data.get('page')
+        
+        if not page:
+            return Response({
+                'error': 'Page parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get current seen guides list
+        has_seen_guides = request.user.has_seen_guides or []
+        
+        # Add page if not already in list
+        if page not in has_seen_guides:
+            has_seen_guides.append(page)
+            request.user.has_seen_guides = has_seen_guides
+            request.user.save(update_fields=['has_seen_guides'])
+        
+        return Response({
+            'success': True,
+            'message': f'Guide for {page} marked as seen',
+            'has_seen_guides': has_seen_guides
+        })
+
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

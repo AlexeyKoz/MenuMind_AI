@@ -1198,6 +1198,8 @@ class AICategorizationView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        from apps.core.security import AIInputValidator
+        
         items = request.data.get('items', [])
 
         if not items:
@@ -1205,10 +1207,39 @@ class AICategorizationView(views.APIView):
                 {'error': 'items list is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # 🔒 SECURITY: Validate item count and names
+        if len(items) > 100:
+            return Response(
+                {'error': 'Too many items. Maximum 100 items per request'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        sanitized_items = []
+        for item in items:
+            if not isinstance(item, dict) or 'name' not in item:
+                continue
+            
+            # Validate item name
+            is_valid, error_msg, sanitized_name = AIInputValidator.validate_search_input(
+                item['name'], field_name="item name"
+            )
+            
+            if is_valid:
+                sanitized_items.append({
+                    'id': item.get('id', ''),
+                    'name': sanitized_name
+                })
+        
+        if not sanitized_items:
+            return Response(
+                {'error': 'No valid items provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Use AI service to categorize
         service = InventoryCategorizationService()
-        suggestions = service.categorize_items(items)
+        suggestions = service.categorize_items(sanitized_items)
 
         serializer = AICategorizationSuggestionSerializer(
             suggestions, many=True)

@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email',
-                  'first_name', 'last_name', 'email_verified', 'preferred_language']
+                  'first_name', 'last_name', 'email_verified', 'preferred_language', 'has_seen_guides']
 
     def get_email_verified(self, obj):
         """Check if user's email is verified via allauth"""
@@ -153,7 +153,8 @@ class UserSettingsSerializer(serializers.ModelSerializer):
             'daily_calories_goal', 'daily_protein_goal', 'daily_carbs_goal', 'daily_fat_goal',
             'dietary_restrictions', 'allergies',
             'preferred_language', 'weight_unit', 'volume_unit', 'time_format',
-            'personal_color', 'shopping_role'
+            'personal_color', 'shopping_role',
+            'has_seen_guides'  # ADD THIS - frontend needs it!
         ]
         read_only_fields = ['id', 'username']
 

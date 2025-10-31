@@ -43,27 +43,41 @@ class RecipeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """Get recipes - latest versions only by default"""
+        """Get recipes - latest versions only by default. Includes input validation."""
+        from apps.core.security import AIInputValidator
+        
         queryset = Recipe.objects.filter(is_latest_version=True)
 
         # Filter by search query
         search = self.request.query_params.get('search', None)
         if search:
-            queryset = queryset.filter(
-                Q(name__icontains=search) |
-                Q(description__icontains=search) |
-                Q(cuisine__icontains=search)
+            # 🔒 SECURITY: Validate search input
+            is_valid, error_msg, sanitized_search = AIInputValidator.validate_search_input(
+                search, field_name="search"
             )
+            if is_valid:
+                queryset = queryset.filter(
+                    Q(name__icontains=sanitized_search) |
+                    Q(description__icontains=sanitized_search) |
+                    Q(cuisine__icontains=sanitized_search)
+                )
 
         # Filter by difficulty
         difficulty = self.request.query_params.get('difficulty', None)
         if difficulty:
-            queryset = queryset.filter(difficulty=difficulty)
+            # Only allow valid difficulty values
+            if difficulty in ['beginner', 'intermediate', 'advanced']:
+                queryset = queryset.filter(difficulty=difficulty)
 
         # Filter by diet labels
         diet = self.request.query_params.get('diet', None)
         if diet:
-            queryset = queryset.filter(diet_labels__contains=[diet])
+            # Sanitize diet label
+            is_valid, error_msg, sanitized_diet = AIInputValidator.validate_search_input(
+                diet, field_name="diet"
+            )
+            if is_valid:
+                queryset = queryset.filter(diet_labels__contains=[sanitized_diet])
 
         return queryset.order_by('-created_at')
 
@@ -83,7 +97,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         Agent finds recipe, converts to RCIP, and optionally adds to shopping list
 
         Throttle: 20/hour, 100/day
+        Security: Input is validated and sanitized
         """
+        from apps.core.security import AIInputValidator
+        
         user_query = request.data.get('query', '')
         shopping_list_id = request.data.get('shopping_list_id', None)
         add_to_shopping_list = request.data.get('add_to_shopping_list', True)
@@ -93,6 +110,19 @@ class RecipeViewSet(viewsets.ModelViewSet):
                 {'error': 'Please describe what you want to cook'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # 🔒 SECURITY: Validate and sanitize AI input
+        is_valid, error_message, sanitized_query = AIInputValidator.validate_search_input(
+            user_query, field_name="recipe search"
+        )
+        
+        if not is_valid:
+            return Response(
+                {'error': f'Input validation failed: {error_message}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user_query = sanitized_query
 
         print(f"[RECIPE REQUEST] '{user_query}' from {request.user.username}")
 
@@ -772,7 +802,11 @@ class RecipeViewSet(viewsets.ModelViewSet):
             file: .rcip file
 
         Returns: Created recipe data
+        
+        Security: File is validated for size, type, structure, and malicious content
         """
+        from apps.core.security import FileUploadValidator
+        
         if 'file' not in request.FILES:
             return Response(
                 {'error': 'No file provided'},
@@ -781,18 +815,16 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
         uploaded_file = request.FILES['file']
 
-        # Check file extension
-        if not uploaded_file.name.endswith('.rcip'):
+        # 🔒 SECURITY: Validate file thoroughly
+        is_valid, error_message, rcip_data = FileUploadValidator.validate_file(uploaded_file)
+        
+        if not is_valid:
             return Response(
-                {'error': 'File must have .rcip extension'},
+                {'error': f'File validation failed: {error_message}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # Read and parse RCIP file
-            file_content = uploaded_file.read().decode('utf-8')
-            rcip_data = json.loads(file_content)
-
             # Validate required RCIP fields
             required_fields = ['rcip_version', 'meta', 'ingredients', 'steps']
             for field in required_fields:
