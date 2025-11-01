@@ -23,11 +23,11 @@ bleach==6.2.0
 blinker==1.9.0
 Brotli==1.1.0
 cachetools==5.5.2
-celery==5.3.4
+celery==5.4.0
 certifi==2025.10.5
 cffi==1.17.1
-channels==4.0.0
-channels-redis==4.1.0
+channels==4.1.0
+channels-redis==4.2.0
 chardet==3.0.4
 charset-normalizer==3.4.2
 click==8.1.8
@@ -49,8 +49,8 @@ deep-translator==1.11.4
 defusedxml==0.7.1
 distro==1.9.0
 dj-rest-auth==6.0.0
-Django==4.2.7
-django-allauth==0.63.0
+Django==4.2.16
+django-allauth==65.12.1
 django-axes==6.1.0
 django-channels==0.7.0
 django-cors-headers==4.3.1
@@ -59,10 +59,10 @@ django-environ==0.11.2
 django-extensions==3.2.3
 django-filter==23.2
 django-guardian==3.0.0
-django-redis==5.2.0
+django-redis==5.4.0
 django-storages==1.14.2
 django-taggit==6.1.0
-djangorestframework==3.14.0
+djangorestframework==3.15.2
 djangorestframework-simplejwt==5.3.0
 djoser==2.3.3
 drf-yasg==1.21.10
@@ -195,7 +195,7 @@ pyparsing==3.2.5
 pypdf==5.6.0
 PySocks==1.7.1
 pytest==7.4.3
-pytest-django==4.7.0
+pytest-django==4.9.0
 pytest-mock==3.15.1
 python-bidi==0.6.6
 python-dateutil==2.9.0.post0
@@ -210,7 +210,7 @@ PyYAML==6.0.2
 pyzmq==26.4.0
 qtconsole==5.6.1
 QtPy==2.4.3
-redis==5.0.1
+redis==5.0.8
 referencing==0.36.2
 reportlab==4.4.1
 requests==2.32.4
@@ -223,6 +223,7 @@ rpds-py==0.25.1
 rsa==4.9.1
 selenium==4.37.0
 Send2Trash==1.8.3
+sentry-sdk[django]==2.18.0
 service-identity==24.2.0
 setuptools==80.8.0
 sib-api-v3-sdk==7.6.0
