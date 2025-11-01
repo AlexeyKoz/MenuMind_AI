@@ -285,6 +285,12 @@ playwright/.cache/
 *.sqlite
 *.sqlite3
 db.sqlite3
+db.sqlite3.backup
+
+# Database exports/backups
+data_export.json
+backup_*.json
+*.sql.gz
 
 # PostgreSQL dumps
 *.sql
@@ -302,6 +308,12 @@ staticfiles/
 static_collected/
 backend/staticfiles/
 backend/media/
+
+# Keep data directory structure but ignore databases inside
+# (We'll add a .gitkeep separately)
+backend/data/*.db
+backend/data/*.sqlite
+backend/data/*.sqlite3
 
 # ==========================================
 # Docker & Deployment

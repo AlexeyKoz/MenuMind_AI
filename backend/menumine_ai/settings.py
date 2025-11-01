@@ -126,13 +126,17 @@ else:
         }
     }
 
-    # IML Integration
-IML_DB_PATH = os.getenv(
-    'IML_DB_PATH', r'C:\Users\al7ko\Desktop\ingredients-master-list-new\ingredient-master-list\data\iml.db')
+    # IML Integration - Use relative path for Docker compatibility
+IML_DB_PATH = env(
+    'IML_DB_PATH', 
+    default=os.path.join(BASE_DIR, 'data', 'iml.db')
+)
 
-# CookLingo Database Path
-COOKLINGO_DB_PATH = os.getenv(
-    'COOKLINGO_DB_PATH', os.path.join(BASE_DIR, 'cooklingo.db'))
+# CookLingo Database Path - Use relative path for Docker compatibility
+COOKLINGO_DB_PATH = env(
+    'COOKLINGO_DB_PATH',
+    default=os.path.join(BASE_DIR, 'data', 'cooklingo.db')
+)
 
 # Multilingual
 LANGUAGES = [
