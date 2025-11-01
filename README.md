@@ -3,11 +3,44 @@
 > Multi-tenant food intelligence platform combining collaborative shopping, inventory automation, personalized nutrition coaching, multilingual recipe discovery, and AI-powered assistance for households.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Django](https://img.shields.io/badge/Django-4.2-green.svg)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/Django-4.2.16-green.svg)](https://www.djangoproject.com/)
 [![React](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-4.9-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Sentry](https://img.shields.io/badge/Sentry-Monitoring-purple.svg)](https://sentry.io/)
 
 MenuMind AI orchestrates advanced recipe intelligence, family shopping collaboration, inventory automation, and rich nutrition analytics in a single product experience. The stack spans a Django/DRF backend, React 18 + TypeScript frontend, AI services (Groq, Gemini, Anthropic), and a multilingual pipeline covering English, Russian, and Hebrew.
+
+---
+
+## 🎉 Recent Updates (November 2025)
+
+### ✅ Latest Features & Fixes
+- **🐛 Recipe Encoding Fix** - Fixed critical bug where recipes with non-Latin characters (Japanese, etc.) caused page crashes
+- **📊 Sentry Integration** - Full-stack error tracking and performance monitoring
+  - Backend: Django + Celery integration
+  - Frontend: Browser tracing + session replay
+  - Automatic user context tracking
+- **📦 Dependencies Updated** - All packages synchronized with latest versions:
+  - Django 4.2.7 → 4.2.16 (security patches)
+  - django-allauth 0.63.0 → 65.12.1 (major update)
+  - Celery, Channels, Redis, DRF all updated
+  - **sentry-sdk[django]==2.18.0** added
+- **🎨 UI Improvements**
+  - New logo design (menumindai-logo-horizontal.svg)
+  - Redesigned navigation bar (white background, clean aesthetics)
+  - "What's New" page for app updates and announcements
+  - Multilingual support (EN/RU/HE) for all new features
+- **🔧 Quality of Life**
+  - Fixed Google login name import
+  - Removed quantity counter "#" symbol
+  - Improved navbar responsiveness
+  - Better active state indicators
+
+### 📈 System Health
+- ✅ All services running (Django:8000, React:3000, Redis:6379)
+- ✅ 38 recipes tested and working
+- ✅ Error tracking operational
+- ✅ Production ready
 
 ---
 
@@ -86,7 +119,8 @@ MenuMind AI is a full-stack food intelligence suite designed for coordinated hou
 
 ## Backend Architecture
 
-- **Frameworks**: Django 4.2, Django REST Framework, Channels 4.0, dj-rest-auth, django-allauth, celery 5.3, redis 5.
+- **Frameworks**: Django 4.2.16, Django REST Framework 3.15.2, Channels 4.1, dj-rest-auth, django-allauth 65.12.1, celery 5.4.0, redis 5.0.8.
+- **Monitoring**: Sentry SDK 2.18.0 with Django + Celery integrations for error tracking and performance monitoring.
 - **Auth**: SimpleJWT access/refresh tokens, email verification via dj-rest-auth registration, Google OAuth endpoint (`POST /api/users/auth/google/`) including code/ID token support, `verified_email_required` decorator for gated APIs.
 - **Email Verification**:
   - Required for account activation
@@ -227,6 +261,10 @@ GOOGLE_CLIENT_SECRET=...
 GROQ_API_KEY=...
 GEMINI_API_KEY=...
 ANTHROPIC_API_KEY=...
+
+# Error Tracking & Monitoring
+SENTRY_DSN=https://a286cf89396658abbc772704749dded4@o4510275117383680.ingest.de.sentry.io/4510275122823248
+SENTRY_ENVIRONMENT=development  # or production, staging, etc.
 ```
 
 > **Notes**: Configure SMTP credentials in production. `SOCIALACCOUNT_PROVIDERS['google']` reads from env. Update `SITE_ID=1` domain to match deployment.
@@ -235,7 +273,12 @@ ANTHROPIC_API_KEY=...
 
 ```
 REACT_APP_API_URL=http://localhost:8000
+
+# Google OAuth
 REACT_APP_GOOGLE_CLIENT_ID=...
+
+# Error Tracking (optional - enabled in production by default)
+REACT_APP_SENTRY_ENABLED=true  # Force enable in development
 ```
 
 Set production values per environment (e.g., Vite host/port if adapted, though current stack uses CRA).
@@ -320,6 +363,7 @@ Access the app at http://localhost:3000. Backend API lives at http://localhost:8
 
 ## Additional Documentation
 
+- `SENTRY_INTEGRATION_COMPLETE_V2.md` – Full-stack Sentry error tracking setup guide.
 - `GOOGLE_OAUTH_COMPLETE_SETUP_GUIDE.md` – Full OAuth rollout checklist.
 - `GOOGLE_OAUTH_IMPLEMENTATION_COMPLETE.md` – Implementation log for Sprints 1–4.
 - `EMAIL_VERIFICATION_COMPLETE_FINAL.md` – Email verification implementation guide.
@@ -330,6 +374,8 @@ Access the app at http://localhost:3000. Backend API lives at http://localhost:8
 - `NUTRITION_COACH_USER_GUIDE.md`, `AI_COACH_AGENT_TECHNICAL_BRIEF.md` – Feature-specific guides.
 - `docs/google_oauth_email_verification.md` – Consolidated OAuth + email verification timeline.
 - `docs/rate_limiting_quota_design.md` – Rate limiting and quota design documentation.
+- `SESSION_SUMMARY_2025_11_01.md` – Latest development session summary with bug fixes and Sentry integration.
+- `BUG_FIX_RECIPES_OSERROR.md` – Recipe encoding bug fix documentation (deleted after resolution).
 
 ---
 
@@ -892,14 +938,15 @@ def translate_recipe_to_language(self, recipe_id, language):
 ## 🚀 Tech Stack
 
 ### Backend
-- **Django 4.2** - Modern Python web framework
-- **Django REST Framework** - RESTful API development
-- **Django Channels** - WebSocket and real-time features
+- **Django 4.2.16** - Modern Python web framework
+- **Django REST Framework 3.15.2** - RESTful API development
+- **Django Channels 4.1** - WebSocket and real-time features
 - **Daphne** - ASGI HTTP/WebSocket server
 - **PostgreSQL 15** - Primary database (production)
 - **SQLite** - Development database
 - **Redis 7** - Caching and WebSocket backend
-- **Celery** - Background task processing for translations
+- **Celery 5.4.0** - Background task processing for translations
+- **Sentry SDK 2.18.0** - Error tracking and performance monitoring
 - **Groq AI (Llama 3.1 70B)** - Primary LLM for recipe generation and validation
 - **Google Gemini Flash 2.0 Lite** - Fallback translation service
 - **OpenAI GPT-4** - Legacy support (optional)
@@ -912,11 +959,13 @@ def translate_recipe_to_language(self, recipe_id, language):
 - **Tailwind CSS** - Utility-first styling
 - **i18next** - Internationalization framework
 - **react-i18next** - React bindings for i18next
+- **@sentry/react** - Error tracking and performance monitoring
 - **Zustand** - Lightweight state management
 - **React Router v6** - Client-side routing
 - **Recharts** - Data visualization
 - **React Hot Toast** - Beautiful notifications
 - **Lucide React** - Modern icon library
+- **@mui/material** - Material UI components
 
 ### Infrastructure
 - **Docker & Docker Compose** - Containerization
