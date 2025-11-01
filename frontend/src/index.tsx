@@ -4,6 +4,10 @@ import './index.css';
 import i18n from './i18n'; // Initialize i18n
 import AppWithProviders from './AppWithProviders';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
+import { initSentry } from './sentry';
+
+// Initialize Sentry for error tracking
+initSentry();
 
 const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement

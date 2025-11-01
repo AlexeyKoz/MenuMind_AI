@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { setSentryUser, clearSentryUser } from '../sentry';
 
 interface User {
     id: string;
@@ -104,12 +105,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     const prefsData = await prefsResponse.json();
 
                     // Merge preferences into user object
-                    setUser({
+                    const userData = {
                         ...profileData,
                         preferred_language: prefsData.preferred_language,
                         unit_system: prefsData.unit_system,
                         email_verified: profileData?.email_verified ?? prefsData?.email_verified,
-                    });
+                    };
+                    setUser(userData);
+                    
+                    // Track user in Sentry
+                    setSentryUser(userData);
 
                     console.log('✅ User preferences loaded:', {
                         language: prefsData.preferred_language,
@@ -117,16 +122,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     });
                 } else {
                     // If preferences don't exist yet, set user without them
-                    setUser({
+                    const userData = {
                         ...profileData,
                         email_verified: profileData?.email_verified,
-                    });
+                    };
+                    setUser(userData);
+                    
+                    // Track user in Sentry
+                    setSentryUser(userData);
+                    
                     console.log('⚠️ No preferences found, using defaults');
                 }
             } catch (prefsError) {
                 console.error('Failed to fetch preferences:', prefsError);
                 // Still set user even if preferences fail
                 setUser(profileData);
+                
+                // Track user in Sentry
+                setSentryUser(profileData);
             }
 
         } catch (error) {
@@ -155,11 +168,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 console.log('✅ Login successful, received data:', data);
                 console.log('🌐 User preferred_language:', data.user?.preferred_language);
                 setToken(data.access);
-                setUser({
+                const userData = {
                     ...data.user,
                     email_verified: data?.user?.email_verified,
                     preferred_language: data?.user?.preferred_language
-                });
+                };
+                setUser(userData);
+                
+                // Track user in Sentry
+                setSentryUser(userData);
+                
                 localStorage.setItem('token', data.access);
                 localStorage.setItem('refresh', data.refresh);
                 return { success: true };
@@ -197,10 +215,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 const data = await response.json();
                 console.log('✅ Registration successful, received data:', data);
                 setToken(data.access);
-                setUser({
+                const userData = {
                     ...data.user,
                     preferred_language: preferredLanguage || data.user?.preferred_language || 'en'
-                });
+                };
+                setUser(userData);
+                
+                // Track user in Sentry
+                setSentryUser(userData);
+                
                 localStorage.setItem('token', data.access);
                 localStorage.setItem('refresh', data.refresh);
                 return { success: true };
@@ -244,6 +267,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setToken(null);
         localStorage.removeItem('token');
         localStorage.removeItem('refresh');
+        
+        // Clear user from Sentry
+        clearSentryUser();
     };
 
     return (
