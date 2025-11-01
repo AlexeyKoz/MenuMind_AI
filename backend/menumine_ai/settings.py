@@ -3,6 +3,9 @@ import sys
 from pathlib import Path
 from datetime import timedelta, date
 import environ
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.celery import CeleryIntegration
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -453,3 +456,22 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Jerusalem'
 USE_I18N = True
 USE_TZ = True
+
+# ============================================
+# SENTRY ERROR TRACKING
+# ============================================
+SENTRY_DSN = env('SENTRY_DSN', default='https://a286cf89396658abbc772704749dded4@o4510275117383680.ingest.de.sentry.io/4510275122823248')
+SENTRY_ENVIRONMENT = env('SENTRY_ENVIRONMENT', default='development' if DEBUG else 'production')
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+        ],
+        environment=SENTRY_ENVIRONMENT,
+        traces_sample_rate=1.0 if DEBUG else 0.1,
+        profiles_sample_rate=1.0 if DEBUG else 0.1,
+        send_default_pii=True,
+    )
