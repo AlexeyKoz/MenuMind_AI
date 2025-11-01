@@ -48,7 +48,8 @@ class WebSocketService {
                 this.socket.close(1000, 'New connection requested');
             }
 
-            const wsUrl = `ws://localhost:8000/ws/shopping/${listId}/?token=${this.token}`;
+            const wsBaseUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8001';
+            const wsUrl = `${wsBaseUrl}/ws/shopping/${listId}/?token=${this.token}`;
             console.log(`🔌 Creating new WebSocket connection to: ${wsUrl.substring(0, 80)}...`);
             this.socket = new WebSocket(wsUrl);
 

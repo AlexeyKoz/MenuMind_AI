@@ -245,6 +245,10 @@ CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
     'http://127.0.0.1:8000',
     'http://localhost:8001',
     'http://127.0.0.1:8001',
+    'http://localhost',  # Frontend on port 80 (Docker)
+    'http://localhost:80',
+    'http://127.0.0.1',
+    'http://127.0.0.1:80',
 ])
 
 # Allow all origins in development (remove in production)
@@ -264,7 +268,9 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
-    'x-user-language',  # NEW: For multilingual dashboard (Sprint 9)
+    'x-user-language',  # For multilingual dashboard
+    'sentry-trace',  # For Sentry error tracking
+    'baggage',  # For Sentry distributed tracing
 ]
 
 # Allowed methods

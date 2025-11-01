@@ -1263,8 +1263,11 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         # Get user's preferred language from query param (overrides saved preference)
         user_language = self.request.query_params.get('lang', None)
         if not user_language:
-            # Fallback to saved preference
-            user_language = getattr(request.user, 'preferred_language', 'en')
+            # Fallback to saved preference (if user is authenticated)
+            if request.user.is_authenticated:
+                user_language = getattr(request.user, 'preferred_language', 'en')
+            else:
+                user_language = 'en'  # Default for anonymous users
 
         print(
             f"[LIST] User language: {user_language} (from query param: {self.request.query_params.get('lang')})")
@@ -1342,10 +1345,11 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         Checks user's preferred language and returns translated version
         """
         print(f"\n{'='*60}")
-        print(
-            f"[RETRIEVE] Starting retrieve for user: {request.user.username}")
-        print(
-            f"[RETRIEVE] User's preferred_language: {request.user.preferred_language}")
+        if request.user.is_authenticated:
+            print(f"[RETRIEVE] Starting retrieve for user: {request.user.username}")
+            print(f"[RETRIEVE] User's preferred_language: {request.user.preferred_language}")
+        else:
+            print("[RETRIEVE] Starting retrieve for anonymous user")
         print(f"{'='*60}\n")
 
         instance = self.get_object()
@@ -1355,8 +1359,11 @@ class CanonicalRecipeViewSet(viewsets.ReadOnlyModelViewSet):
         # Get user's preferred language from query param (overrides saved preference)
         user_language = self.request.query_params.get('lang', None)
         if not user_language:
-            # Fallback to saved preference
-            user_language = getattr(request.user, 'preferred_language', 'en')
+            # Fallback to saved preference (if user is authenticated)
+            if request.user.is_authenticated:
+                user_language = getattr(request.user, 'preferred_language', 'en')
+            else:
+                user_language = 'en'  # Default for anonymous users
 
         print(
             f"[RETRIEVE] Recipe {instance.id} requested in language: {user_language} (query param: {self.request.query_params.get('lang')})")

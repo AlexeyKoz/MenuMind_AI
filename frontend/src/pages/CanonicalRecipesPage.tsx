@@ -147,10 +147,14 @@ const CanonicalRecipesPage: React.FC = () => {
     }, [api]);
 
     const loadRecipes = async () => {
+        console.log('🔍 [DISCOVERY] loadRecipes() called');
+        console.log('🔍 [DISCOVERY] Current filters:', { search, cuisine, difficulty, dietLabels, sortBy });
+        
         setLoading(true);
         setError('');
 
         try {
+            console.log('🔍 [DISCOVERY] Calling API getCanonicalRecipes...');
             const result = await api.getCanonicalRecipes({
                 search: search || undefined,
                 cuisine: cuisine || undefined,
@@ -159,8 +163,10 @@ const CanonicalRecipesPage: React.FC = () => {
                 sort: sortBy  // Backend expects 'sort' parameter with values: popular, top_rated, most_cooked, recent
             });
 
+            console.log('✅ [DISCOVERY] API response received:', result);
             setRecipes(result.results || result);
         } catch (err: any) {
+            console.error('❌ [DISCOVERY] Failed to load recipes:', err);
             setError(err.message || 'Failed to load recipes');
         } finally {
             setLoading(false);

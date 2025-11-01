@@ -41,7 +41,8 @@ export class UserNotificationWebSocket {
             this.isConnected = false;
 
             try {
-                const wsUrl = `ws://localhost:8000/ws/user/notifications/?token=${token}`;
+                const wsBaseUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8001';
+                const wsUrl = `${wsBaseUrl}/ws/user/notifications/?token=${token}`;
                 console.log('🔌 Creating user notification WebSocket connection to:', wsUrl);
 
                 this.ws = new WebSocket(wsUrl);

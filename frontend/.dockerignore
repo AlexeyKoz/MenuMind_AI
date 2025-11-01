@@ -131,7 +131,7 @@ ehthumbs.db
 
 # Gatsby
 .cache/
-public/
+# public/ - COMMENTED OUT: We need public/ for React app (index.html, favicon, etc)
 
 # Storybook build outputs
 .out/
@@ -146,8 +146,8 @@ Dockerfile*
 docker-compose*.yml
 .dockerignore
 
-# nginx config (will be copied separately in production)
-nginx.conf
+# nginx config - COMMENTED OUT: Needed for production Docker build
+# nginx.conf
 
 # ==========================================
 # Documentation
