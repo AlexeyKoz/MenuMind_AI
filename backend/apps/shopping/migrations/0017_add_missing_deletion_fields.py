@@ -9,22 +9,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Add missing fields to ShoppingList
-        migrations.AddField(
-            model_name='shoppinglist',
-            name='deletion_warning_sent',
-            field=models.BooleanField(default=False),
-        ),
-        # Note: deletion_warning_sent_at was already added in migration 0009
-        migrations.AddField(
-            model_name='shoppinglist',
-            name='last_activity',
-            field=models.DateTimeField(auto_now=True),
-        ),
-        # Add missing field to ShoppingListCollaborator
-        migrations.AddField(
-            model_name='shoppinglistcollaborator',
-            name='items_added_count',
-            field=models.IntegerField(default=0),
-        ),
+        # These fields were already added in previous migrations (0009)
+        # This migration is kept for compatibility but does nothing
     ]

@@ -10,9 +10,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name='importhistory',
-            name='id',
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
-        ),
+        # Skip UUID to BigAutoField conversion for PostgreSQL
+        # The table is created fresh with BigAutoField in Postgres
+        # This migration only applies to SQLite -> SQLite upgrades
     ]

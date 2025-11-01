@@ -1,0 +1,60 @@
+# ============================================
+# PRODUCTION REQUIREMENTS - Django 4.2 + PostgreSQL
+# ============================================
+
+# Core Django
+Django==4.2.16
+django-environ==0.11.2
+
+# Database
+psycopg2-binary==2.9.10
+redis==5.0.8
+django-redis==5.4.0
+
+# REST API
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.0
+drf-yasg==1.21.10
+
+# Authentication
+django-allauth==65.12.1
+dj-rest-auth==6.0.0
+PyJWT==2.10.1
+python3-openid==3.2.0
+cryptography==45.0.3
+
+# Async/WebSockets
+channels==4.1.0
+channels-redis==4.2.0
+daphne==4.0.0
+
+# Celery
+celery==5.4.0
+
+# CORS
+django-cors-headers==4.3.1
+
+# Extensions
+django-extensions==3.2.3
+django-taggit==6.1.0
+django-filter==23.2
+django-guardian==3.0.0
+
+# File Processing
+Pillow==11.3.0
+pypdf==5.6.0
+
+# AI/ML
+groq==0.32.0
+google-generativeai==0.8.5
+anthropic==0.59.0
+openai==1.69.0
+
+# Monitoring
+sentry-sdk==2.18.0
+
+# Utilities
+requests==2.31.0
+python-dateutil==2.9.0.post0
+pytz==2025.2
+
