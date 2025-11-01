@@ -1,6 +1,11 @@
 # Production Dockerfile for React Frontend
 FROM node:18-alpine AS builder
 
+# Build arguments for production URLs
+ARG REACT_APP_API_URL=http://localhost:8000
+ARG REACT_APP_WS_URL=ws://localhost:8001
+ARG REACT_APP_GOOGLE_CLIENT_ID=819829561375-19d74oa53gsn83r0qaaavb0659hsegqo.apps.googleusercontent.com
+
 # Set working directory
 WORKDIR /app
 
@@ -13,10 +18,10 @@ RUN npm ci --legacy-peer-deps
 # Copy source code and config
 COPY . .
 
-# Override .env.production with localhost URLs for Docker
-RUN echo "REACT_APP_API_URL=http://localhost:8000" > .env.production && \
-    echo "REACT_APP_WS_URL=ws://localhost:8001" >> .env.production && \
-    echo "REACT_APP_GOOGLE_CLIENT_ID=819829561375-19d74oa53gsn83r0qaaavb0659hsegqo.apps.googleusercontent.com" >> .env.production && \
+# Create .env.production with build arguments
+RUN echo "REACT_APP_API_URL=${REACT_APP_API_URL}" > .env.production && \
+    echo "REACT_APP_WS_URL=${REACT_APP_WS_URL}" >> .env.production && \
+    echo "REACT_APP_GOOGLE_CLIENT_ID=${REACT_APP_GOOGLE_CLIENT_ID}" >> .env.production && \
     echo "GENERATE_SOURCEMAP=false" >> .env.production
 
 # Build the application
