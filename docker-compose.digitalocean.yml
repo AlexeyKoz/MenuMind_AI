@@ -1,11 +1,6 @@
-# DigitalOcean Production Configuration
-# Simplified setup without Nginx reverse proxy
-# Perfect for DigitalOcean Droplet deployment
-
 version: '3.8'
 
 services:
-  # PostgreSQL Database
   db:
     image: postgres:15-alpine
     container_name: menumine_db
@@ -26,7 +21,6 @@ services:
     networks:
       - menumine_network
 
-  # Redis Cache & Message Broker
   redis:
     image: redis:7-alpine
     container_name: menumine_redis
@@ -42,7 +36,6 @@ services:
     networks:
       - menumine_network
 
-  # Django Backend API
   backend:
     build:
       context: ./backend
@@ -64,6 +57,7 @@ services:
       - ./backend/data:/app/data
       - ./backend/media:/app/media
       - backend_static:/app/staticfiles
+      - ./backend/gen-lang-client-0598591486-ee1fab7d978e.json:/app/gen-lang-client-0598591486-ee1fab7d978e.json:ro
     depends_on:
       db:
         condition: service_healthy
@@ -78,7 +72,6 @@ services:
     networks:
       - menumine_network
 
-  # Celery Worker (Background Tasks)
   celery:
     build:
       context: ./backend
@@ -97,6 +90,7 @@ services:
     volumes:
       - ./backend/data:/app/data
       - ./backend/media:/app/media
+      - ./backend/gen-lang-client-0598591486-ee1fab7d978e.json:/app/gen-lang-client-0598591486-ee1fab7d978e.json:ro
     depends_on:
       db:
         condition: service_healthy
@@ -106,7 +100,6 @@ services:
     networks:
       - menumine_network
 
-  # Celery Beat (Scheduled Tasks)
   celery-beat:
     build:
       context: ./backend
@@ -124,6 +117,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/data:/app/data
+      - ./backend/gen-lang-client-0598591486-ee1fab7d978e.json:/app/gen-lang-client-0598591486-ee1fab7d978e.json:ro
     depends_on:
       db:
         condition: service_healthy
@@ -133,7 +127,6 @@ services:
     networks:
       - menumine_network
 
-  # Daphne (WebSocket Server)
   daphne:
     build:
       context: ./backend
@@ -153,6 +146,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/data:/app/data
+      - ./backend/gen-lang-client-0598591486-ee1fab7d978e.json:/app/gen-lang-client-0598591486-ee1fab7d978e.json:ro
     depends_on:
       db:
         condition: service_healthy
@@ -162,7 +156,6 @@ services:
     networks:
       - menumine_network
 
-  # React Frontend
   frontend:
     build:
       context: ./frontend
@@ -173,7 +166,7 @@ services:
     container_name: menumine_frontend
     restart: always
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
     healthcheck:
@@ -185,7 +178,6 @@ services:
     networks:
       - menumine_network
 
-# Volumes for persistent data
 volumes:
   postgres_data:
     driver: local
@@ -194,8 +186,6 @@ volumes:
   backend_static:
     driver: local
 
-# Networks
 networks:
   menumine_network:
     driver: bridge
-

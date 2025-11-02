@@ -1,0 +1,60 @@
+{
+    "name": "MenuMindAI - Smart Shopping Lists",
+    "short_name": "MenuMind",
+    "description": "AI-powered multilingual shopping lists and recipe management for Israeli market",
+    "start_url": "/shopping",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#2563eb",
+    "orientation": "portrait",
+    "scope": "/",
+    "lang": "en",
+    "dir": "ltr",
+    "icons": [
+        {
+            "src": "favicon.ico",
+            "sizes": "64x64 32x32 24x24 16x16",
+            "type": "image/x-icon",
+            "purpose": "any"
+        },
+        {
+            "src": "/logo192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/logo512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/logo512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "View Shopping List",
+            "short_name": "Shopping",
+            "description": "Open your current shopping list",
+            "url": "/shopping",
+            "icons": [
+                {
+                    "src": "/logo192.png",
+                    "sizes": "96x96",
+                    "type": "image/png"
+                }
+            ]
+        }
+    ],
+    "categories": [
+        "shopping",
+        "food",
+        "lifestyle",
+        "productivity"
+    ]
+}

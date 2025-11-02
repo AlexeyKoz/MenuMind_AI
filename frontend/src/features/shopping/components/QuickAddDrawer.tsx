@@ -3,7 +3,7 @@ import { Plus, MinusCircle, PlusCircle } from 'lucide-react';
 import { BottomSheet } from '../../../components/mobile/BottomSheet';
 import { TouchTarget } from '../../../components/mobile/TouchTarget';
 import { useTranslation } from 'react-i18next';
-import { cn } from '../../../lib/utils';
+import { cn } from '../../../utils';
 
 interface QuickAddDrawerProps {
     isOpen: boolean;

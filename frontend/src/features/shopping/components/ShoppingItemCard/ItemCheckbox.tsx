@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 import { TouchTarget } from '../../../../components/mobile/TouchTarget';
-import { cn } from '../../../../lib/utils';
+import { cn } from '../../../../utils';
 
 interface ItemCheckboxProps {
     checked: boolean;

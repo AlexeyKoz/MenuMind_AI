@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { ShoppingItem } from '../types/shopping.types';
 import { ShoppingItemCard } from './ShoppingItemCard';
-import { cn } from '../../../lib/utils';
+import { cn } from '../../../utils';
 
 interface CategorySectionProps {
     category: {

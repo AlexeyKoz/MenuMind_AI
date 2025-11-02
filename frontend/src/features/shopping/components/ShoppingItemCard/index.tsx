@@ -4,7 +4,7 @@ import { ItemCheckbox } from './ItemCheckbox';
 import { ItemName } from './ItemName';
 import { QuantityControls } from './QuantityControls';
 import { useSwipeGestures } from '../../hooks/useSwipeGestures';
-import { cn } from '../../../../lib/utils';
+import { cn } from '../../../../utils';
 
 interface ShoppingItemCardProps {
     item: ShoppingItem;

@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { cn } from '../../lib/utils';
+import { cn } from '../../utils';
 
 interface TouchTargetProps {
     size?: 44 | 48 | 56; // Standard touch sizes
