@@ -1,0 +1,128 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Upload Legal Document | {{ site_title }}{% endblock %}
+
+{% block extrahead %}
+<style>
+    .form-row {
+        margin-bottom: 20px;
+    }
+    .form-row label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .form-row input[type="text"],
+    .form-row input[type="date"],
+    .form-row select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .form-row input[type="file"] {
+        padding: 8px;
+    }
+    .form-row input[type="checkbox"] {
+        margin-right: 8px;
+    }
+    .helptext {
+        display: block;
+        color: #666;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+    .submit-row {
+        margin-top: 30px;
+        padding: 15px 0;
+        border-top: 1px solid #ddd;
+    }
+    .submit-row input[type="submit"] {
+        background-color: #417690;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .submit-row input[type="submit"]:hover {
+        background-color: #2b5669;
+    }
+    .cancel-link {
+        margin-left: 15px;
+        color: #666;
+        text-decoration: none;
+    }
+    .cancel-link:hover {
+        color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:legal_legaldocument_changelist' %}">Legal Documents</a>
+    &rsaquo; Upload Document
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>Upload Legal Document</h1>
+    
+    <p style="margin-bottom: 20px; color: #666;">
+        Upload a markdown (.md) file to create or update a legal document. 
+        If a document with the same type and language already exists, it will be updated.
+    </p>
+
+    <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        
+        {% if form.errors %}
+        <div class="errornote">
+            <strong>Please correct the errors below.</strong>
+            {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+        
+        <fieldset class="module aligned">
+            {% for field in form %}
+            <div class="form-row {% if field.errors %}errors{% endif %}">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                <span class="helptext">{{ field.help_text }}</span>
+                {% endif %}
+                {% if field.errors %}
+                <ul class="errorlist">
+                    {% for error in field.errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </fieldset>
+        
+        <div class="submit-row">
+            <input type="submit" value="Upload Document">
+            <a href="{% url 'admin:legal_legaldocument_changelist' %}" class="cancel-link">Cancel</a>
+        </div>
+    </form>
+    
+    <div style="margin-top: 40px; padding: 20px; background-color: #f9f9f9; border-left: 4px solid #417690;">
+        <h3>Tips for Uploading:</h3>
+        <ul>
+            <li>Use markdown (.md) files for best results</li>
+            <li>Files must be UTF-8 encoded</li>
+            <li>Maximum file size: 5MB</li>
+            <li>Uploading will replace existing content for the same document type + language</li>
+            <li>The "Set as Active Version" checkbox will automatically deactivate other versions</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+

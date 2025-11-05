@@ -47,7 +47,6 @@ services:
       - SECRET_KEY=django-insecure-dev-key-change-in-production
     volumes:
       - ./backend:/app
-      - ./config:/app/config
     depends_on:
       db:
         condition: service_healthy

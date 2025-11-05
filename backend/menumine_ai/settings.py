@@ -34,8 +34,7 @@ else:
 SECRET_KEY = env(
     'SECRET_KEY', default='django-insecure-dev-key-change-in-production')
 DEBUG = env.bool('DEBUG', default=True)
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[
-                         'localhost', '127.0.0.1', '0.0.0.0'])
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])  # Allow all for localhost development
 
 # Application definition
 INSTALLED_APPS = [
@@ -69,6 +68,7 @@ INSTALLED_APPS = [
     'apps.analytics',
     'apps.core.apps.CoreConfig',  # Use CoreConfig for service initialization
     'legal',  # Legal compliance framework
+    'branding',  # Site branding management
 ]
 
 MIDDLEWARE = [
@@ -283,6 +283,43 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 
+# ============================================
+# COOKIE & SESSION SETTINGS FOR LOCALHOST
+# ============================================
+# These settings are critical for cookies to work on localhost
+# For production with HTTPS, change SECURE settings to True
+
+# CSRF Cookie Settings
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)  # False for localhost (HTTP)
+CSRF_COOKIE_HTTPONLY = False  # Must be False so JavaScript can read CSRF token
+CSRF_COOKIE_SAMESITE = 'Lax'  # 'Lax' works for localhost, 'None' requires HTTPS
+CSRF_USE_SESSIONS = False  # Keep CSRF token in cookie, not session
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
+    'http://localhost',
+    'http://localhost:80',
+    'http://localhost:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1',
+    'http://127.0.0.1:80',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8000',
+])
+
+# Session Cookie Settings
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)  # False for localhost (HTTP)
+SESSION_COOKIE_HTTPONLY = True  # Recommended for security
+SESSION_COOKIE_SAMESITE = 'Lax'  # 'Lax' works for localhost
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
+SESSION_SAVE_EVERY_REQUEST = True  # Save session on every request
+
+# Cookie Domain (leave empty for localhost to work properly)
+SESSION_COOKIE_DOMAIN = env('SESSION_COOKIE_DOMAIN', default=None)
+CSRF_COOKIE_DOMAIN = env('CSRF_COOKIE_DOMAIN', default=None)
+
+# CORS - Allow all origins in development
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
+CORS_ALLOW_CREDENTIALS = True  # Allow cookies
+
 # Static files
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -393,15 +430,15 @@ EMAILJS_TEMPLATE_VERIFY_HE = env('EMAILJS_TEMPLATE_VERIFY_HE', default='')
 # ============================================
 # MAILJET CONFIGURATION - PRIMARY EMAIL SERVICE
 # ============================================
-MAILJET_API_KEY = env('MAILJET_API_KEY', default='')
+MAILJET_API_KEY = env('MAILJET_API_KEY', default='7fddcffd9c674043d468c076f6b3f399')
 MAILJET_SECRET_KEY = env('MAILJET_SECRET_KEY', default='')
-MAILJET_SENDER_EMAIL = env('MAILJET_SENDER_EMAIL', default='')
-MAILJET_SENDER_NAME = env('MAILJET_SENDER_NAME', default='MenuMind AI')
+MAILJET_SENDER_EMAIL = env('MAILJET_SENDER_EMAIL', default='bishulme@gmail.com')
+MAILJET_SENDER_NAME = env('MAILJET_SENDER_NAME', default='BishulSheli')
 
-# Email Verification Templates
-MAILJET_TEMPLATE_VERIFY_EN = env('MAILJET_TEMPLATE_VERIFY_EN', default='')
-MAILJET_TEMPLATE_VERIFY_RU = env('MAILJET_TEMPLATE_VERIFY_RU', default='')
-MAILJET_TEMPLATE_VERIFY_HE = env('MAILJET_TEMPLATE_VERIFY_HE', default='')
+# Email Verification Templates - Updated for BishulSheli
+MAILJET_TEMPLATE_VERIFY_EN = env('MAILJET_TEMPLATE_VERIFY_EN', default='7459709')
+MAILJET_TEMPLATE_VERIFY_RU = env('MAILJET_TEMPLATE_VERIFY_RU', default='7459713')
+MAILJET_TEMPLATE_VERIFY_HE = env('MAILJET_TEMPLATE_VERIFY_HE', default='7459704')
 
 # Welcome Email Templates (optional)
 MAILJET_TEMPLATE_WELCOME_EN = env('MAILJET_TEMPLATE_WELCOME_EN', default='')

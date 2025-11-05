@@ -27,6 +27,7 @@ urlpatterns = [
     path('api/recipes/', include('apps.recipes.urls')),
     path('api/analytics/', include('apps.analytics.urls')),
     path('api/', include('legal.urls')),  # Legal compliance endpoints
+    path('api/branding/', include('branding.urls')),  # Site branding endpoints
     # Django-allauth URLs (for email confirmation)
     path('accounts/', include('allauth.urls')),
 

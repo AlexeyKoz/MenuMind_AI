@@ -23,7 +23,7 @@ class SimpleMailjetService:
         self.api_key = getattr(settings, 'MAILJET_API_KEY', None)
         self.secret_key = getattr(settings, 'MAILJET_SECRET_KEY', None)
         self.sender_email = getattr(settings, 'MAILJET_SENDER_EMAIL', None)
-        self.sender_name = getattr(settings, 'MAILJET_SENDER_NAME', 'MenuMind AI')
+        self.sender_name = getattr(settings, 'MAILJET_SENDER_NAME', 'BishulSheli')
         
         self.enabled = all([self.api_key, self.secret_key, self.sender_email])
         
@@ -68,76 +68,79 @@ class SimpleMailjetService:
         """Get email subject and HTML content based on language"""
         
         if language == 'ru':
-            subject = "Подтвердите ваш email - MenuMind AI"
+            subject = "Подтвердите ваш email - bishul.me"
             html = f"""
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="margin: 0;">MenuMind AI</h1>
+    <div style="background: linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0;">bishul.me</h1>
+        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">Бишул Шели | Мои Рецепты</p>
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
         <h2>Здравствуйте, {user_name}! 👋</h2>
-        <p>Добро пожаловать в MenuMind AI! Мы рады приветствовать вас.</p>
+        <p>Добро пожаловать в bishul.me! Мы рады приветствовать вас.</p>
         <p>Чтобы начать использовать ваш аккаунт, пожалуйста, подтвердите ваш email адрес:</p>
         <div style="text-align: center; margin: 30px 0;">
-            <a href="{activate_url}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">Подтвердить Email</a>
+            <a href="{activate_url}" style="display: inline-block; background: linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%); color: white !important; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">Подтвердить Email</a>
         </div>
         <p style="color: #666; font-size: 14px;">Если кнопка не работает, скопируйте эту ссылку:</p>
-        <p style="color: #667eea; word-break: break-all; font-size: 13px;">{activate_url}</p>
+        <p style="color: #9B59B6; word-break: break-all; font-size: 13px;">{activate_url}</p>
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-        <p style="color: #999; font-size: 13px;">© 2025 MenuMind AI. Все права защищены.</p>
+        <p style="color: #999; font-size: 13px;">© 2025 bishul.me. Все права защищены.</p>
     </div>
 </body>
 </html>
 """
         elif language == 'he':
-            subject = "אמת את כתובת האימייל שלך - MenuMind AI"
+            subject = "אמת את כתובת האימייל שלך - bishul.me"
             html = f"""
 <!DOCTYPE html>
 <html dir="rtl">
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; direction: rtl;">
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="margin: 0;">MenuMind AI</h1>
+    <div style="background: linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0;">bishul.me</h1>
+        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">בישול שלי | המטבח שלי</p>
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
         <h2>שלום {user_name}! 👋</h2>
-        <p>ברוכים הבאים ל-MenuMind AI! אנחנו שמחים שהצטרפת אלינו.</p>
+        <p>ברוכים הבאים ל-bishul.me! אנחנו שמחים שהצטרפת אלינו.</p>
         <p>כדי להתחיל להשתמש בחשבון שלך, אנא אמת את כתובת האימייל שלך:</p>
         <div style="text-align: center; margin: 30px 0;">
-            <a href="{activate_url}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">אמת כתובת אימייל</a>
+            <a href="{activate_url}" style="display: inline-block; background: linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%); color: white !important; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">אמת כתובת אימייל</a>
         </div>
         <p style="color: #666; font-size: 14px;">אם הכפתור לא עובד, העתק קישור זה:</p>
-        <p style="color: #667eea; word-break: break-all; font-size: 13px; direction: ltr; display: inline-block;">{activate_url}</p>
+        <p style="color: #9B59B6; word-break: break-all; font-size: 13px; direction: ltr; display: inline-block;">{activate_url}</p>
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-        <p style="color: #999; font-size: 13px;">© 2025 MenuMind AI. כל הזכויות שמורות.</p>
+        <p style="color: #999; font-size: 13px;">© 2025 bishul.me. כל הזכויות שמורות.</p>
     </div>
 </body>
 </html>
 """
         else:  # English (default)
-            subject = "Verify your email address - MenuMind AI"
+            subject = "Verify your email address - bishul.me"
             html = f"""
 <!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-        <h1 style="margin: 0;">MenuMind AI</h1>
+    <div style="background: linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="margin: 0;">bishul.me</h1>
+        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">My Cooking Platform</p>
     </div>
     <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
         <h2>Hello {user_name}! 👋</h2>
-        <p>Welcome to MenuMind AI! We're excited to have you on board.</p>
+        <p>Welcome to bishul.me! We're excited to have you on board.</p>
         <p>To start using your account, please verify your email address by clicking the button below:</p>
         <div style="text-align: center; margin: 30px 0;">
-            <a href="{activate_url}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white !important; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">Verify Email Address</a>
+            <a href="{activate_url}" style="display: inline-block; background: linear-gradient(135deg, #9B59B6 0%, #8E44AD 100%); color: white !important; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">Verify Email Address</a>
         </div>
         <p style="color: #666; font-size: 14px;">If the button doesn't work, copy and paste this link:</p>
-        <p style="color: #667eea; word-break: break-all; font-size: 13px;">{activate_url}</p>
+        <p style="color: #9B59B6; word-break: break-all; font-size: 13px;">{activate_url}</p>
         <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-        <p style="color: #999; font-size: 13px;">© 2025 MenuMind AI. All rights reserved.</p>
+        <p style="color: #999; font-size: 13px;">© 2025 bishul.me. All rights reserved.</p>
     </div>
 </body>
 </html>

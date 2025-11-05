@@ -8,14 +8,8 @@ from django.db import transaction
 
 # Set up Django environment for PostgreSQL
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'menumine_ai.settings')
-os.environ['USE_POSTGRES'] = 'True'  # Use PostgreSQL
-os.environ['DB_NAME'] = 'menumine_ai'
-os.environ['DB_USER'] = 'postgres'
-os.environ['DB_PASSWORD'] = 'password'
-os.environ['DB_HOST'] = 'db'
-os.environ['DB_PORT'] = '5432'
-os.environ['SECRET_KEY'] = 'temp'
-os.environ['DEBUG'] = 'True'
+# Django will use the settings from backend/.env automatically
+# No need to override credentials here
 
 django.setup()
 

@@ -1,0 +1,226 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Quick Logo Setup | {{ site_title }}{% endblock %}
+
+{% block extrahead %}
+<style>
+    .upload-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin: 20px 0;
+    }
+    .upload-card {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 20px;
+    }
+    .upload-card h3 {
+        margin: 0 0 15px 0;
+        color: #417690;
+        font-size: 16px;
+        font-weight: 600;
+    }
+    .upload-row {
+        margin-bottom: 15px;
+        padding: 12px;
+        background: #f9f9f9;
+        border-radius: 4px;
+    }
+    .upload-row label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 5px;
+        color: #333;
+    }
+    .upload-row input[type="file"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    .help-text {
+        display: block;
+        color: #666;
+        font-size: 12px;
+        margin-top: 5px;
+        font-style: italic;
+    }
+    .submit-row {
+        margin-top: 30px;
+        padding: 20px;
+        background: #f5f5f5;
+        border-top: 1px solid #ddd;
+        text-align: center;
+    }
+    .submit-row input[type="submit"] {
+        background-color: #417690;
+        color: white;
+        padding: 12px 30px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+    }
+    .submit-row input[type="submit"]:hover {
+        background-color: #2b5669;
+    }
+    .cancel-link {
+        margin-left: 20px;
+        color: #666;
+        text-decoration: none;
+    }
+    .info-box {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+    .info-box h4 {
+        margin: 0 0 10px 0;
+        color: #1976d2;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:branding_sitelogo_changelist' %}">Site Logos</a>
+    &rsaquo; Quick Setup
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>Quick Logo Setup</h1>
+    
+    <div class="info-box">
+        <h4>📋 Instructions</h4>
+        <ul style="margin: 0; padding-left: 20px;">
+            <li>Upload logos for each position and language</li>
+            <li>SVG format is recommended for best quality</li>
+            <li>Logos will be automatically activated after upload</li>
+            <li>You can leave fields empty if you want to use default logos</li>
+            <li>Existing logos will be replaced if you upload new ones</li>
+        </ul>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        <div class="upload-grid">
+            <!-- Navbar Desktop -->
+            <div class="upload-card">
+                <h3>🖥️ Navbar Logo (Desktop)</h3>
+                <div class="upload-row">
+                    <label>English</label>
+                    <input type="file" name="navbar_desktop_en" accept=".svg,.png,.jpg,.jpeg,.webp">
+                    <span class="help-text">Displayed in navigation bar on desktop</span>
+                </div>
+                <div class="upload-row">
+                    <label>Russian</label>
+                    <input type="file" name="navbar_desktop_ru" accept=".svg,.png,.jpg,.jpeg,.webp">
+                </div>
+                <div class="upload-row">
+                    <label>Hebrew</label>
+                    <input type="file" name="navbar_desktop_he" accept=".svg,.png,.jpg,.jpeg,.webp">
+                </div>
+            </div>
+
+            <!-- Navbar Mobile -->
+            <div class="upload-card">
+                <h3>📱 Navbar Logo (Mobile)</h3>
+                <div class="upload-row">
+                    <label>English</label>
+                    <input type="file" name="navbar_mobile_en" accept=".svg,.png,.jpg,.jpeg,.webp">
+                    <span class="help-text">Displayed in navigation bar on mobile devices</span>
+                </div>
+                <div class="upload-row">
+                    <label>Russian</label>
+                    <input type="file" name="navbar_mobile_ru" accept=".svg,.png,.jpg,.jpeg,.webp">
+                </div>
+                <div class="upload-row">
+                    <label>Hebrew</label>
+                    <input type="file" name="navbar_mobile_he" accept=".svg,.png,.jpg,.jpeg,.webp">
+                </div>
+            </div>
+
+            <!-- Login Page -->
+            <div class="upload-card">
+                <h3>🔐 Login Page Logo</h3>
+                <div class="upload-row">
+                    <label>English</label>
+                    <input type="file" name="login_page_en" accept=".svg,.png,.jpg,.jpeg,.webp">
+                    <span class="help-text">Displayed on the login page</span>
+                </div>
+                <div class="upload-row">
+                    <label>Russian</label>
+                    <input type="file" name="login_page_ru" accept=".svg,.png,.jpg,.jpeg,.webp">
+                </div>
+                <div class="upload-row">
+                    <label>Hebrew</label>
+                    <input type="file" name="login_page_he" accept=".svg,.png,.jpg,.jpeg,.webp">
+                </div>
+            </div>
+
+            <!-- Favicon -->
+            <div class="upload-card">
+                <h3>🔖 Favicon (Browser Tab)</h3>
+                <div class="upload-row">
+                    <label>English</label>
+                    <input type="file" name="favicon_en" accept=".svg,.png,.ico">
+                    <span class="help-text">Small icon in browser tab (32x32 px recommended)</span>
+                </div>
+                <div class="upload-row">
+                    <label>Russian</label>
+                    <input type="file" name="favicon_ru" accept=".svg,.png,.ico">
+                </div>
+                <div class="upload-row">
+                    <label>Hebrew</label>
+                    <input type="file" name="favicon_he" accept=".svg,.png,.ico">
+                </div>
+            </div>
+
+            <!-- App Icon -->
+            <div class="upload-card">
+                <h3>📲 App Icon (PWA)</h3>
+                <div class="upload-row">
+                    <label>English</label>
+                    <input type="file" name="app_icon_en" accept=".svg,.png">
+                    <span class="help-text">Icon for Progressive Web App (512x512 px recommended)</span>
+                </div>
+                <div class="upload-row">
+                    <label>Russian</label>
+                    <input type="file" name="app_icon_ru" accept=".svg,.png">
+                </div>
+                <div class="upload-row">
+                    <label>Hebrew</label>
+                    <input type="file" name="app_icon_he" accept=".svg,.png">
+                </div>
+            </div>
+        </div>
+
+        <div class="submit-row">
+            <input type="submit" value="Upload All Logos">
+            <a href="{% url 'admin:branding_sitelogo_changelist' %}" class="cancel-link">Cancel</a>
+        </div>
+    </form>
+
+    <div style="margin-top: 30px; padding: 20px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+        <h4 style="margin: 0 0 10px 0; color: #856404;">💡 Tips</h4>
+        <ul style="margin: 0; padding-left: 20px; color: #856404;">
+            <li><strong>Navbar Desktop:</strong> Horizontal logo, ~200x50 px</li>
+            <li><strong>Navbar Mobile:</strong> Compact logo, ~40x40 px square</li>
+            <li><strong>Login Page:</strong> Full logo, ~300x100 px</li>
+            <li><strong>Favicon:</strong> Small square icon, 32x32 px</li>
+            <li><strong>App Icon:</strong> Large square icon, 512x512 px</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
+

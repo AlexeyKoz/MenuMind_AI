@@ -96,20 +96,22 @@ const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({ onSuccess, onEr
     };
 
     return (
-        <div className="w-full">
+        <div className="w-full flex items-center justify-center">
             {mounted ? (
-                <GoogleLogin
-                    key={currentLocale}  // Force re-render when locale changes
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => {
-                        console.error('Google OAuth error');
-                        handleError(t('auth.googleLoginFailed'));
-                    }}
-                    theme="outline"
-                    size="large"
-                    text="continue_with"
-                    locale={getGoogleLocale()}
-                />
+                <div className="inline-block">
+                    <GoogleLogin
+                        key={currentLocale}  // Force re-render when locale changes
+                        onSuccess={handleGoogleSuccess}
+                        onError={() => {
+                            console.error('Google OAuth error');
+                            handleError(t('auth.googleLoginFailed'));
+                        }}
+                        theme="outline"
+                        size="large"
+                        text="continue_with"
+                        locale={getGoogleLocale()}
+                    />
+                </div>
             ) : (
                 <div className="w-full h-12 bg-gray-100 animate-pulse rounded-lg flex items-center justify-center">
                     <span className="text-gray-400 text-sm">Loading...</span>

@@ -57,9 +57,9 @@ const useCurrentPage = (isAuthenticated: boolean) => {
             archive: 'Archive',
             settings: 'Settings'
         };
-        
+
         const pageTitle = pageTitles[currentPage] || 'Shopping List';
-        document.title = `${pageTitle} - MenuMind AI`;
+        document.title = `${pageTitle} - BishulMe`;
     }, [currentPage]);
 
     const handleSetPage = (page: string) => {
@@ -107,7 +107,7 @@ const AppContent: React.FC = () => {
                     <Route path="/legal/cookies" element={<CookiePolicy />} />
                     <Route path="/legal/copyright" element={<CopyrightNotice />} />
                     <Route path="/legal/rcip" element={<RCIPLicense />} />
-                    
+
                     {/* What's New Page - Public */}
                     <Route path="/whats-new" element={<WhatsNewPage />} />
 
@@ -152,42 +152,42 @@ const AppContent: React.FC = () => {
                     <AIWarningBanner />
                     <GuideTooltip />
                     <div className="flex-1">
-                    <Routes>
-                        {/* Legal Routes - Accessible to authenticated users too */}
-                        <Route path="/legal/terms" element={<TermsOfService />} />
-                        <Route path="/legal/privacy" element={<PrivacyPolicy />} />
-                        <Route path="/legal/cookies" element={<CookiePolicy />} />
-                        <Route path="/legal/copyright" element={<CopyrightNotice />} />
-                        <Route path="/legal/rcip" element={<RCIPLicense />} />
+                        <Routes>
+                            {/* Legal Routes - Accessible to authenticated users too */}
+                            <Route path="/legal/terms" element={<TermsOfService />} />
+                            <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+                            <Route path="/legal/cookies" element={<CookiePolicy />} />
+                            <Route path="/legal/copyright" element={<CopyrightNotice />} />
+                            <Route path="/legal/rcip" element={<RCIPLicense />} />
 
-                        {/* Privacy Settings Page */}
-                        <Route path="/privacy-settings" element={<PrivacySettings />} />
-                        
-                        {/* What's New Page */}
-                        <Route path="/whats-new" element={<WhatsNewPage />} />
+                            {/* Privacy Settings Page */}
+                            <Route path="/privacy-settings" element={<PrivacySettings />} />
 
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/shopping" element={<ShoppingList />} />
-                        <Route path="/shopping-mobile" element={<ShoppingListContainer />} />
-                        <Route path="/shopping-mobile/:listId" element={<ShoppingListContainer />} />
-                        <Route path="/nutrition" element={<NutritionTracker />} />
-                        <Route path="/recipes" element={<Recipes />} />
-                        <Route path="/discover" element={<CanonicalRecipesPage />} />
-                        <Route path="/inventory" element={<Inventory />} />
-                        <Route path="/archive" element={<ArchivePage />} />
-                        <Route path="/settings" element={<SettingsPage />} />
-                        <Route path="/about" element={<About />} />
-                        <Route path="/app-settings" element={<Settings />} />
-                        <Route path="/verify-email" element={<VerifyEmail />} />
-                        <Route path="/verify-email/:key" element={<VerifyEmail />} />
-                        <Route path="/" element={<CurrentPageComponent />} />
-                        <Route path="*" element={<CurrentPageComponent />} />
-                    </Routes>
+                            {/* What's New Page */}
+                            <Route path="/whats-new" element={<WhatsNewPage />} />
+
+                            <Route path="/dashboard" element={<Dashboard />} />
+                            <Route path="/shopping" element={<ShoppingList />} />
+                            <Route path="/shopping-mobile" element={<ShoppingListContainer />} />
+                            <Route path="/shopping-mobile/:listId" element={<ShoppingListContainer />} />
+                            <Route path="/nutrition" element={<NutritionTracker />} />
+                            <Route path="/recipes" element={<Recipes />} />
+                            <Route path="/discover" element={<CanonicalRecipesPage />} />
+                            <Route path="/inventory" element={<Inventory />} />
+                            <Route path="/archive" element={<ArchivePage />} />
+                            <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/about" element={<About />} />
+                            <Route path="/app-settings" element={<Settings />} />
+                            <Route path="/verify-email" element={<VerifyEmail />} />
+                            <Route path="/verify-email/:key" element={<VerifyEmail />} />
+                            <Route path="/" element={<CurrentPageComponent />} />
+                            <Route path="*" element={<CurrentPageComponent />} />
+                        </Routes>
+                    </div>
+                    <Footer />
+                    <Toaster position="top-right" />
                 </div>
-                <Footer />
-                <Toaster position="top-right" />
-            </div>
-        </UserGuideProvider>
+            </UserGuideProvider>
         </CollaborationProvider>
     );
 };

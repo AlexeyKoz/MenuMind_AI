@@ -8,6 +8,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
 from datetime import timedelta
 from django.http import JsonResponse, FileResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 import json
 import os
 
@@ -361,6 +363,7 @@ class LegalViewSet(viewsets.ViewSet):
             'created': created
         })
 
+    @method_decorator(csrf_exempt)
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def get_cookie_consent(self, request):
         """
@@ -368,6 +371,10 @@ class LegalViewSet(viewsets.ViewSet):
 
         GET /api/legal/get_cookie_consent/
         """
+        # Ensure session exists
+        if not request.session.session_key:
+            request.session.create()
+        
         session_id = request.session.session_key
 
         try:

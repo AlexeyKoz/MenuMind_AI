@@ -7,12 +7,12 @@ Supports multilingual templates and proper error handling.
 
 Environment Variables Required:
 - MAILJET_API_KEY: Your Mailjet API key (public key)
-- MAILJET_SECRET_KEY: Your Mailjet secret key
-- MAILJET_SENDER_EMAIL: Verified sender email address
-- MAILJET_SENDER_NAME: Sender name (e.g., "MenuMind AI")
-- MAILJET_TEMPLATE_VERIFY_EN: Template ID for English verification
-- MAILJET_TEMPLATE_VERIFY_RU: Template ID for Russian verification
-- MAILJET_TEMPLATE_VERIFY_HE: Template ID for Hebrew verification
+- MAILJET_SECRET_KEY: Your Mailjet secret key  
+- MAILJET_SENDER_EMAIL: Verified sender email address (support@bishul.me)
+- MAILJET_SENDER_NAME: Sender name (e.g., "BishulSheli")
+- MAILJET_TEMPLATE_VERIFY_EN: Template ID for English verification (7459709)
+- MAILJET_TEMPLATE_VERIFY_RU: Template ID for Russian verification (7459713)
+- MAILJET_TEMPLATE_VERIFY_HE: Template ID for Hebrew verification (7459704)
 """
 
 import logging
@@ -50,7 +50,7 @@ class MailjetEmailService:
         self.secret_key = getattr(settings, 'MAILJET_SECRET_KEY', None)
         self.sender_email = getattr(settings, 'MAILJET_SENDER_EMAIL', None)
         self.sender_name = getattr(
-            settings, 'MAILJET_SENDER_NAME', 'MenuMind AI')
+            settings, 'MAILJET_SENDER_NAME', 'BishulSheli')
 
         # Template IDs for different email types and languages
         self.templates = {
@@ -182,7 +182,7 @@ class MailjetEmailService:
         template_vars = {
             'user_name': user_name or 'there',
             'activate_url': activate_url,
-            'site_name': 'MenuMind AI',
+            'site_name': 'bishul.me',
             'user_email': to_email,
         }
 
@@ -211,7 +211,7 @@ class MailjetEmailService:
 
         template_vars = {
             'user_name': user_name or 'there',
-            'site_name': 'MenuMind AI',
+            'site_name': 'bishul.me',
             'dashboard_url': f"{settings.FRONTEND_URL}/dashboard",
         }
 
@@ -242,7 +242,7 @@ class MailjetEmailService:
         template_vars = {
             'user_name': user_name or 'there',
             'reset_url': reset_url,
-            'site_name': 'MenuMind AI',
+            'site_name': 'bishul.me',
         }
 
         return self._send_transactional_email(
@@ -276,7 +276,7 @@ class MailjetEmailService:
             'user_name': user_name or 'there',
             'subject': subject,
             'message': message,
-            'site_name': 'MenuMind AI',
+            'site_name': 'bishul.me',
         }
 
         if action_url:

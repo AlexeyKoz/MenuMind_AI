@@ -50,8 +50,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                 {/* Logo */}
                 <div className="flex justify-center mb-8 mt-8">
                     <img 
-                        src="/logo/menumindai-logo-compact.svg" 
-                        alt="MenuMind AI" 
+                        src={i18n.language === 'he' ? '/logo/bishulsheli-logo-compact-he.svg' : '/logo/bishulsheli-logo-compact-en.svg'}
+                        alt={i18n.language === 'he' ? 'בישול שלי' : 'BishulSheli'}
                         className="h-24"
                     />
                 </div>

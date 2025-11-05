@@ -1,15 +1,15 @@
 {
-    "name": "MenuMindAI - Smart Shopping Lists",
-    "short_name": "MenuMind",
-    "description": "AI-powered multilingual shopping lists and recipe management for Israeli market",
+    "name": "BishulSheli - Your Smart Kitchen | בישול שלי",
+    "short_name": "BishulSheli",
+    "description": "AI-powered multilingual cooking platform with smart shopping lists, recipe management, and meal planning for Hebrew, English, and Russian speakers (bishul.me)",
     "start_url": "/shopping",
     "display": "standalone",
     "background_color": "#ffffff",
-    "theme_color": "#2563eb",
+    "theme_color": "#9B59B6",
     "orientation": "portrait",
     "scope": "/",
-    "lang": "en",
-    "dir": "ltr",
+    "lang": "he",
+    "dir": "rtl",
     "icons": [
         {
             "src": "favicon.ico",
@@ -18,35 +18,41 @@
             "purpose": "any"
         },
         {
-            "src": "/logo192.png",
+            "src": "/logo/bishulsheli-favicon.svg",
+            "sizes": "32x32",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "/logo/bishulsheli-icon.svg",
             "sizes": "192x192",
-            "type": "image/png",
+            "type": "image/svg+xml",
             "purpose": "any"
         },
         {
-            "src": "/logo512.png",
+            "src": "/logo/bishulsheli-icon.svg",
             "sizes": "512x512",
-            "type": "image/png",
+            "type": "image/svg+xml",
             "purpose": "any"
         },
         {
-            "src": "/logo512.png",
+            "src": "/logo/bishulsheli-icon.svg",
             "sizes": "512x512",
-            "type": "image/png",
+            "type": "image/svg+xml",
             "purpose": "maskable"
         }
     ],
     "shortcuts": [
         {
-            "name": "View Shopping List",
-            "short_name": "Shopping",
+            "name": "View Shopping List | רשימת קניות",
+            "short_name": "Shopping | קניות",
             "description": "Open your current shopping list",
             "url": "/shopping",
             "icons": [
                 {
-                    "src": "/logo192.png",
+                    "src": "/logo/bishulsheli-icon.svg",
                     "sizes": "96x96",
-                    "type": "image/png"
+                    "type": "image/svg+xml"
                 }
             ]
         }
@@ -55,6 +61,7 @@
         "shopping",
         "food",
         "lifestyle",
-        "productivity"
+        "productivity",
+        "cooking"
     ]
 }

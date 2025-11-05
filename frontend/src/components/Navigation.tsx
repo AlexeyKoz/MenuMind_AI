@@ -13,6 +13,17 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) => {
     const { user, logout } = useAuth();
     const { t, i18n } = useTranslation();
+    
+    // Language-specific logo selection
+    const getLogoPath = (type: 'horizontal' | 'mobile') => {
+        const isHebrew = i18n.language === 'he';
+        const suffix = isHebrew ? 'he' : 'en';
+        return `/logo/bishulsheli-logo-${type}-${suffix}.svg`;
+    };
+    
+    const getLogoAlt = () => {
+        return i18n.language === 'he' ? 'בישול שלי' : 'BishulSheli';
+    };
     const navigate = useNavigate();
     const location = useLocation();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -81,8 +92,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 className="flex items-center gap-2 hover:opacity-80 transition"
                             >
                                 <img 
-                                    src="/logo/menumindai-logo-horizontal.svg?v=6" 
-                                    alt="MenuMind AI" 
+                                    src={getLogoPath('horizontal')}
+                                    alt={getLogoAlt()}
                                     className="h-10"
                                     onError={(e) => {
                                         console.error('Failed to load horizontal logo');
@@ -99,8 +110,8 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 className="hover:opacity-80 transition"
                             >
                                 <img 
-                                    src="/logo/menumindai-logo-mobile.svg?v=6" 
-                                    alt="MenuMind AI" 
+                                    src={getLogoPath('mobile')}
+                                    alt={getLogoAlt()}
                                     className="h-10"
                                     onError={(e) => {
                                         console.error('Failed to load mobile logo');

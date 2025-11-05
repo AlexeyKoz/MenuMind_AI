@@ -3,6 +3,9 @@ Django Admin configuration for Legal Compliance app.
 """
 from django.contrib import admin
 from django.utils.html import format_html
+from django.urls import path
+from django.shortcuts import render, redirect
+from django.contrib import messages
 from .models import (
     LegalAcceptance,
     CookieConsent,
@@ -10,6 +13,7 @@ from .models import (
     DataExportRequest,
     AccountDeletionRequest
 )
+from .forms import LegalDocumentAdminForm, LegalDocumentUploadForm
 
 
 @admin.register(LegalAcceptance)
@@ -111,9 +115,12 @@ class CookieConsentAdmin(admin.ModelAdmin):
 
 @admin.register(LegalDocument)
 class LegalDocumentAdmin(admin.ModelAdmin):
-    """Admin interface for legal documents"""
+    """Admin interface for legal documents with file upload support"""
+    form = LegalDocumentAdminForm
+    
     list_display = [
         'document_type',
+        'language_code',
         'version',
         'effective_date',
         'is_active',
@@ -123,6 +130,7 @@ class LegalDocumentAdmin(admin.ModelAdmin):
     ]
     list_filter = [
         'document_type',
+        'language_code',
         'is_active',
         'effective_date'
     ]
@@ -133,31 +141,96 @@ class LegalDocumentAdmin(admin.ModelAdmin):
     ]
     readonly_fields = [
         'created_at',
-        'updated_at'
+        'updated_at',
+        'word_count'
     ]
     fieldsets = (
         ('Document Information', {
-            'fields': ('document_type', 'version', 'effective_date', 'is_active')
+            'fields': ('document_type', 'language_code', 'version', 'effective_date', 'is_active')
+        }),
+        ('Upload File (Optional)', {
+            'fields': ('markdown_file',),
+            'description': 'Upload a .md file to replace the content below, or edit the content directly.'
         }),
         ('Content', {
             'fields': ('content',),
-            'classes': ('wide',)
+            'classes': ('wide',),
+            'description': 'Markdown content - will be replaced if you upload a file above'
         }),
         ('Metadata', {
-            'fields': ('updated_by', 'created_at', 'updated_at'),
+            'fields': ('updated_by', 'created_at', 'updated_at', 'word_count'),
             'classes': ('collapse',)
         }),
     )
 
+    def get_urls(self):
+        """Add custom URL for bulk upload"""
+        urls = super().get_urls()
+        custom_urls = [
+            path('upload/', self.admin_site.admin_view(self.upload_view), name='legal_legaldocument_upload'),
+        ]
+        return custom_urls + urls
+
+    def upload_view(self, request):
+        """Custom view for uploading legal documents"""
+        if request.method == 'POST':
+            form = LegalDocumentUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                try:
+                    # Read the uploaded file
+                    markdown_file = form.cleaned_data['markdown_file']
+                    content = markdown_file.read().decode('utf-8')
+                    
+                    # Create or update the document
+                    doc, created = LegalDocument.objects.update_or_create(
+                        document_type=form.cleaned_data['document_type'],
+                        language_code=form.cleaned_data['language_code'],
+                        defaults={
+                            'content': content,
+                            'version': form.cleaned_data['version'],
+                            'effective_date': form.cleaned_data['effective_date'],
+                            'is_active': form.cleaned_data['is_active'],
+                            'updated_by': request.user.username
+                        }
+                    )
+                    
+                    action = 'created' if created else 'updated'
+                    messages.success(
+                        request,
+                        f'Legal document {doc.get_document_type_display()} '
+                        f'({doc.get_language_code_display()}) was {action} successfully!'
+                    )
+                    return redirect('admin:legal_legaldocument_changelist')
+                    
+                except Exception as e:
+                    messages.error(request, f'Error uploading document: {str(e)}')
+        else:
+            form = LegalDocumentUploadForm()
+        
+        context = {
+            'form': form,
+            'title': 'Upload Legal Document',
+            'site_title': 'BishulSheli Admin',
+            'site_header': 'BishulSheli Administration',
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/legal/upload_document.html', context)
+
     def word_count(self, obj):
+        """Display word count"""
         return len(obj.content.split())
     word_count.short_description = 'Word Count'
 
     def save_model(self, request, obj, form, change):
         """Track who updated the document"""
-        if change:
-            obj.updated_by = request.user.username
+        obj.updated_by = request.user.username
         super().save_model(request, obj, form, change)
+
+    def changelist_view(self, request, extra_context=None):
+        """Add upload button to the changelist"""
+        extra_context = extra_context or {}
+        extra_context['show_upload_button'] = True
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 @admin.register(DataExportRequest)
