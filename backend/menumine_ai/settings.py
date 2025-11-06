@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'channels',
     'django_extensions',
+    'django_celery_beat',  # Celery Beat periodic tasks
 
     # Local apps
     'apps.users',
@@ -522,3 +523,15 @@ if SENTRY_DSN:
         profiles_sample_rate=1.0 if DEBUG else 0.1,
         send_default_pii=True,
     )
+
+# ============================================
+# CELERY BEAT SCHEDULE - Periodic Tasks
+# ============================================
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'reset-daily-quotas': {
+        'task': 'apps.users.tasks.reset_daily_quotas',
+        'schedule': crontab(hour=0, minute=0),  # Every day at midnight
+    },
+}

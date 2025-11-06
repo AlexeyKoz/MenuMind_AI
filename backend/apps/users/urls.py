@@ -38,6 +38,11 @@ urlpatterns = [
     path('delete-account/', views.delete_account, name='delete_account'),
     path('cancel-deletion/', views.cancel_account_deletion,
          name='cancel_account_deletion'),
+    
+    # AI Quota & Feature Access
+    path('quota-status/', views.quota_status, name='quota_status'),
+    path('dashboard-status/', views.dashboard_status, name='dashboard_status'),
+    path('shopping-access-status/', views.shopping_access_status, name='shopping_access_status'),
 
     # User profile endpoints
     path('', include(router.urls)),

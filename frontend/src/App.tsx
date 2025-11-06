@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { CollaborationProvider } from './contexts/CollaborationContext';
 import { UserGuideProvider } from './contexts/UserGuideContext';
@@ -23,6 +24,7 @@ import CookiePolicy from './pages/CookiePolicy';
 import CopyrightNotice from './pages/CopyrightNotice';
 import RCIPLicense from './pages/RCIPLicense';
 import { ShoppingListContainer } from './features/shopping/ShoppingListContainer';
+import logoService from './services/logoService';
 import './App.css';
 
 const useCurrentPage = (isAuthenticated: boolean) => {
@@ -74,6 +76,20 @@ const AppContent: React.FC = () => {
     const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
     const { user, loading } = useAuth();
     const { currentPage, setCurrentPage } = useCurrentPage(Boolean(user));
+    const { i18n } = useTranslation();
+
+    // Update favicon when language changes
+    useEffect(() => {
+        const updateFavicon = async () => {
+            try {
+                await logoService.updateFavicon(i18n.language);
+                console.log('[App] Favicon updated for language:', i18n.language);
+            } catch (error) {
+                console.error('[App] Error updating favicon:', error);
+            }
+        };
+        updateFavicon();
+    }, [i18n.language]);
 
     // Page component mapping
     const pageComponents: { [key: string]: React.ComponentType } = {

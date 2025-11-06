@@ -1175,6 +1175,11 @@ class RecipeAgentService:
         """
         Search and scrape recipes using Brave Search API + Firecrawl
         Falls back to DuckDuckGo + BeautifulSoup if Brave is unavailable
+        
+        STRATEGY:
+        1. Try Brave Search + Firecrawl (PREFERRED)
+        2. If Brave fails/unavailable → Fallback to DuckDuckGo + BeautifulSoup
+        
         Returns list of dicts with 'url' and 'content'
         """
         import logging
@@ -1182,7 +1187,7 @@ class RecipeAgentService:
 
         logger.info(f"[SEARCH+SCRAPE] Starting for query: '{query}'")
 
-        # Try Brave + Firecrawl first
+        # STEP 1: Try Brave + Firecrawl first (PREFERRED)
         try:
             from apps.recipes.brave_firecrawl_scraper import BraveFirecrawlScraper
 
@@ -1191,6 +1196,8 @@ class RecipeAgentService:
 
             # Check if Brave API is available
             if scraper.brave_api_key:
+                logger.info("[SEARCH+SCRAPE] Using Brave Search + Firecrawl (PRIMARY)")
+                
                 recipes = await loop.run_in_executor(
                     None,
                     lambda: scraper.search_and_scrape(query, max_results)
@@ -1202,15 +1209,15 @@ class RecipeAgentService:
                     return recipes
                 else:
                     logger.warning(
-                        "[SEARCH+SCRAPE] Brave+Firecrawl returned no results, falling back to DuckDuckGo")
+                        "[SEARCH+SCRAPE] ⚠️ Brave+Firecrawl returned no results, falling back to DuckDuckGo")
             else:
                 logger.warning(
-                    "[SEARCH+SCRAPE] Brave API key not configured, using DuckDuckGo fallback")
+                    "[SEARCH+SCRAPE] ⚠️ Brave API key not configured, using DuckDuckGo fallback")
         except Exception as e:
             logger.error(
-                f"[SEARCH+SCRAPE] Brave+Firecrawl failed: {e}, falling back to DuckDuckGo")
+                f"[SEARCH+SCRAPE] ❌ Brave+Firecrawl failed: {e}, falling back to DuckDuckGo")
 
-        # Fallback: Use old DuckDuckGo + BeautifulSoup method
+        # STEP 2: Fallback to DuckDuckGo + BeautifulSoup
         logger.info(
             "[SEARCH+SCRAPE] Using DuckDuckGo + BeautifulSoup fallback")
 

@@ -339,3 +339,97 @@ class AccountDeletionRequest(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.status} - {self.requested_at.strftime('%Y-%m-%d')}"
+
+
+class AboutPage(models.Model):
+    """
+    Store About Us page content with multi-language support.
+
+    Similar to LegalDocument but for About page content.
+    Content stored in Markdown format for easy rendering.
+    Supports English, Russian, and Hebrew translations.
+    """
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('ru', 'Russian'),
+        ('he', 'Hebrew'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    language_code = models.CharField(
+        max_length=5,
+        choices=LANGUAGE_CHOICES,
+        unique=True,
+        help_text='Language of the content (en, ru, he)'
+    )
+    title = models.CharField(
+        max_length=200,
+        help_text='Page title (e.g., "About Us", "О нас", "אודותינו")'
+    )
+    content = models.TextField(help_text='Markdown content of the page')
+    version = models.CharField(
+        max_length=20,
+        default='1.0',
+        help_text='Content version (e.g., 1.0, 1.1)'
+    )
+
+    # SEO and Metadata
+    meta_description = models.TextField(
+        blank=True,
+        max_length=300,
+        help_text='SEO meta description'
+    )
+    meta_keywords = models.CharField(
+        blank=True,
+        max_length=200,
+        help_text='SEO keywords (comma-separated)'
+    )
+
+    # Tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Is this version currently active?'
+    )
+    updated_by = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text='Admin username who updated the content'
+    )
+
+    # Analytics
+    word_count = models.IntegerField(
+        default=0,
+        help_text='Approximate word count (auto-calculated)'
+    )
+
+    class Meta:
+        db_table = 'about_pages'
+        ordering = ['language_code', '-updated_at']
+        indexes = [
+            models.Index(fields=['language_code', 'is_active']),
+            models.Index(fields=['-updated_at']),
+        ]
+        verbose_name = 'About Page'
+        verbose_name_plural = 'About Pages'
+
+    def __str__(self):
+        lang_display = dict(self.LANGUAGE_CHOICES).get(
+            self.language_code, self.language_code)
+        return f"About Us ({lang_display}) v{self.version}"
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate word count and ensure only one active version per language"""
+        # Calculate word count
+        if self.content:
+            self.word_count = len(self.content.split())
+
+        # Ensure only one active version per language
+        if self.is_active:
+            AboutPage.objects.filter(
+                language_code=self.language_code,
+                is_active=True
+            ).exclude(id=self.id).update(is_active=False)
+
+        super().save(*args, **kwargs)

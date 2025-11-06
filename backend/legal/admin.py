@@ -11,9 +11,10 @@ from .models import (
     CookieConsent,
     LegalDocument,
     DataExportRequest,
-    AccountDeletionRequest
+    AccountDeletionRequest,
+    AboutPage
 )
-from .forms import LegalDocumentAdminForm, LegalDocumentUploadForm
+from .forms import LegalDocumentAdminForm, LegalDocumentUploadForm, AboutPageAdminForm
 
 
 @admin.register(LegalAcceptance)
@@ -338,3 +339,63 @@ class AccountDeletionRequestAdmin(admin.ModelAdmin):
                 return format_html('<span style="color: red;">Overdue</span>')
         return 'N/A'
     days_until_deletion.short_description = 'Days Until Deletion'
+
+
+@admin.register(AboutPage)
+class AboutPageAdmin(admin.ModelAdmin):
+    """Admin interface for About page content with file upload support"""
+    form = AboutPageAdminForm
+    
+    list_display = [
+        'language_code',
+        'title',
+        'version',
+        'word_count',
+        'is_active',
+        'updated_at',
+        'updated_by'
+    ]
+    list_filter = [
+        'language_code',
+        'is_active',
+        'updated_at'
+    ]
+    search_fields = [
+        'title',
+        'content',
+        'meta_description'
+    ]
+    readonly_fields = [
+        'created_at',
+        'updated_at',
+        'word_count'
+    ]
+    fieldsets = (
+        ('Page Information', {
+            'fields': ('language_code', 'title', 'version', 'is_active')
+        }),
+        ('Upload File (Optional)', {
+            'fields': ('markdown_file',),
+            'description': 'Upload a .md file to replace the content below, or edit the content directly.'
+        }),
+        ('Content', {
+            'fields': ('content',),
+            'classes': ('wide',),
+            'description': 'Markdown content - will be replaced if you upload a file above'
+        }),
+        ('SEO & Metadata', {
+            'fields': ('meta_description', 'meta_keywords'),
+            'classes': ('collapse',),
+            'description': 'Optional SEO fields for search engine optimization'
+        }),
+        ('Tracking', {
+            'fields': ('updated_by', 'created_at', 'updated_at', 'word_count'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        """Track who updated the content"""
+        obj.updated_by = request.user.username
+        super().save_model(request, obj, form, change)
+

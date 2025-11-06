@@ -2,7 +2,7 @@
 Forms for Legal Compliance app.
 """
 from django import forms
-from .models import LegalDocument
+from .models import LegalDocument, AboutPage
 
 
 class LegalDocumentUploadForm(forms.Form):
@@ -96,21 +96,93 @@ class LegalDocumentAdminForm(forms.ModelForm):
             })
         }
 
+    def __init__(self, *args, **kwargs):
+        """Make content field not required initially"""
+        super().__init__(*args, **kwargs)
+        # Make content not required (we'll validate in clean())
+        self.fields['content'].required = False
+
     def clean(self):
-        """Process the uploaded file if provided"""
+        """Process the uploaded file if provided and validate content"""
         cleaned_data = super().clean()
         markdown_file = cleaned_data.get('markdown_file')
+        content = cleaned_data.get('content')
         
         if markdown_file:
             try:
                 # Read the file content
-                content = markdown_file.read().decode('utf-8')
+                file_content = markdown_file.read().decode('utf-8')
                 
-                # Replace the content field
-                cleaned_data['content'] = content
+                # Validate file is not empty
+                if not file_content.strip():
+                    raise forms.ValidationError('Uploaded file is empty')
+                
+                # Replace the content field with file content
+                cleaned_data['content'] = file_content
                 
             except UnicodeDecodeError:
                 raise forms.ValidationError('File must be UTF-8 encoded')
+        elif not content or not content.strip():
+            # If no file and no content, raise error
+            raise forms.ValidationError('Either upload a file or provide content in the text area')
+        
+        return cleaned_data
+
+
+class AboutPageAdminForm(forms.ModelForm):
+    """
+    Enhanced admin form for About page content with optional file upload.
+    """
+    markdown_file = forms.FileField(
+        label='Upload Markdown File (Optional)',
+        required=False,
+        help_text='Upload a .md file to replace the content below',
+        widget=forms.FileInput(attrs={'accept': '.md,.markdown,.txt'})
+    )
+
+    class Meta:
+        model = AboutPage
+        fields = '__all__'
+        widgets = {
+            'content': forms.Textarea(attrs={
+                'rows': 30,
+                'style': 'font-family: monospace; font-size: 13px;'
+            }),
+            'meta_description': forms.Textarea(attrs={
+                'rows': 3,
+                'style': 'font-size: 13px;'
+            })
+        }
+
+    def __init__(self, *args, **kwargs):
+        """Make content field not required initially"""
+        super().__init__(*args, **kwargs)
+        # Make content not required (we'll validate in clean())
+        self.fields['content'].required = False
+
+    def clean(self):
+        """Process the uploaded file if provided and validate content"""
+        cleaned_data = super().clean()
+        markdown_file = cleaned_data.get('markdown_file')
+        content = cleaned_data.get('content')
+        
+        if markdown_file:
+            try:
+                # Read the file content
+                file_content = markdown_file.read().decode('utf-8')
+                
+                # Validate file is not empty
+                if not file_content.strip():
+                    raise forms.ValidationError('Uploaded file is empty')
+                
+                # Replace the content field with file content
+                cleaned_data['content'] = file_content
+                
+            except UnicodeDecodeError:
+                raise forms.ValidationError('File must be UTF-8 encoded')
+        elif not content or not content.strip():
+            # If no file and no content, raise error
+            raise forms.ValidationError('Either upload a file or provide content in the text area')
         
         return cleaned_data
 

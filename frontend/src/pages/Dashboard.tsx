@@ -15,6 +15,7 @@ import {
     ShoppingCart, UtensilsCrossed, AlertTriangle, Flame, Trophy, Sparkles,
     Calendar, RefreshCw
 } from 'lucide-react';
+import { LockedFeature } from '../components/LockedFeature';  // NEW: Import LockedFeature
 
 interface AIInsight {
     text: string;
@@ -71,6 +72,10 @@ const Dashboard: React.FC = () => {
     const [period, setPeriod] = useState<'7days' | '30days' | '90days' | '1year'>('30days');
     const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview']));
     const [currentLanguage, setCurrentLanguage] = useState(i18n.language);
+    
+    // NEW: Check dashboard access status
+    const [dashboardStatus, setDashboardStatus] = useState<any>(null);
+    const [statusLoading, setStatusLoading] = useState(true);
 
     const loadDashboard = useCallback(async () => {
         try {
@@ -97,6 +102,26 @@ const Dashboard: React.FC = () => {
             setLoading(false);
         }
     }, [api, period, i18n.language, t]);
+    
+    // NEW: Check dashboard access on mount
+    useEffect(() => {
+        const checkDashboardStatus = async () => {
+            try {
+                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+                const response = await fetch(`${apiUrl}/api/users/dashboard-status/`, {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                const data = await response.json();
+                setDashboardStatus(data);
+            } catch (error) {
+                console.error('Failed to check dashboard status:', error);
+                setDashboardStatus({ available: false });
+            } finally {
+                setStatusLoading(false);
+            }
+        };
+        checkDashboardStatus();
+    }, [token]);
 
     // NEW: Detect language changes and reload dashboard
     useEffect(() => {
@@ -161,6 +186,57 @@ const Dashboard: React.FC = () => {
     const getPeriodLabel = () => {
         return t(`dashboard.periods.${period}`);
     };
+
+    // NEW: Show loading or limited dashboard for unverified users
+    if (statusLoading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600 font-medium">Checking access...</p>
+                </div>
+            </div>
+        );
+    }
+    
+    if (dashboardStatus && !dashboardStatus.available) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="bg-white rounded-lg shadow p-6 mb-6">
+                        <h2 className="text-xl font-semibold mb-4">Basic Stats</h2>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="text-center p-4 bg-gray-50 rounded">
+                                <div className="text-3xl font-bold text-indigo-600">
+                                    {dashboardStatus.basic_stats?.recipes_saved || 0}
+                                </div>
+                                <div className="text-sm text-gray-600">Recipes Saved</div>
+                            </div>
+                            <div className="text-center p-4 bg-gray-50 rounded">
+                                <div className="text-3xl font-bold text-indigo-600">
+                                    {dashboardStatus.basic_stats?.shopping_lists || 0}
+                                </div>
+                                <div className="text-sm text-gray-600">Shopping Lists</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <LockedFeature
+                        featureName="Full Dashboard Analytics"
+                        description="Verify your email to unlock detailed statistics"
+                        benefits={[
+                            'Comprehensive nutrition analytics',
+                            'Recipe cooking statistics',
+                            'Achievement badges',
+                            'Activity trends',
+                            'AI usage insights',
+                            'Shopping spending analytics'
+                        ]}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     if (loading && !data) {
         return (

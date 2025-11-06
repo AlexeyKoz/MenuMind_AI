@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LanguageSwitcher from './LanguageSwitcher';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Lock } from 'lucide-react';  // NEW: Added Lock icon
+import logoService, { LogoData } from '../services/logoService';
 
 interface NavigationProps {
     currentPage: string;
@@ -13,8 +14,19 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) => {
     const { user, logout } = useAuth();
     const { t, i18n } = useTranslation();
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [navbarDesktopLogo, setNavbarDesktopLogo] = useState<LogoData | null>(null);
+    const [navbarMobileLogo, setNavbarMobileLogo] = useState<LogoData | null>(null);
     
-    // Language-specific logo selection
+    // NEW: Check email verification status
+    const emailVerified = user?.email_verified || false;
+    
+    // Check if we're on the What's New page
+    const isWhatsNewActive = location.pathname === '/whats-new';
+    
+    // Fallback logo paths
     const getLogoPath = (type: 'horizontal' | 'mobile') => {
         const isHebrew = i18n.language === 'he';
         const suffix = isHebrew ? 'he' : 'en';
@@ -24,12 +36,26 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
     const getLogoAlt = () => {
         return i18n.language === 'he' ? 'בישול שלי' : 'BishulSheli';
     };
-    const navigate = useNavigate();
-    const location = useLocation();
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    
-    // Check if we're on the What's New page
-    const isWhatsNewActive = location.pathname === '/whats-new';
+
+    // Load logos from API
+    useEffect(() => {
+        const loadLogos = async () => {
+            try {
+                console.log('[Navigation] Loading logos for language:', i18n.language);
+                const desktopLogo = await logoService.getNavbarLogo(false, i18n.language);
+                const mobileLogo = await logoService.getNavbarLogo(true, i18n.language);
+                
+                setNavbarDesktopLogo(desktopLogo);
+                setNavbarMobileLogo(mobileLogo);
+                
+                console.log('[Navigation] Desktop logo:', desktopLogo);
+                console.log('[Navigation] Mobile logo:', mobileLogo);
+            } catch (error) {
+                console.error('[Navigation] Error loading logos:', error);
+            }
+        };
+        loadLogos();
+    }, [i18n.language]);
 
     // Update HTML dir attribute for RTL support
     useEffect(() => {
@@ -49,14 +75,14 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
     }, [isMobileMenuOpen]);
 
     const navItems = [
-        { id: 'shopping', translationKey: 'nav.shopping', icon: '🛒' },
-        { id: 'dashboard', translationKey: 'nav.dashboard', icon: '📊' },
-        { id: 'nutrition', translationKey: 'nav.nutrition', icon: '🥗' },
-        { id: 'recipes', translationKey: 'nav.recipes', icon: '👨‍🍳' },
-        { id: 'discover', translationKey: 'nav.discover', icon: '🌟' },
-        { id: 'inventory', translationKey: 'nav.inventory', icon: '📦' },
-        { id: 'archive', translationKey: 'nav.archive', icon: '🗃️' },
-        { id: 'settings', translationKey: 'nav.settings', icon: '⚙️' }
+        { id: 'shopping', translationKey: 'nav.shopping', icon: '🛒', requiresVerification: true },  // NEW: requires verification
+        { id: 'dashboard', translationKey: 'nav.dashboard', icon: '📊', requiresVerification: false },  // Limited version available
+        { id: 'nutrition', translationKey: 'nav.nutrition', icon: '🥗', requiresVerification: false },
+        { id: 'recipes', translationKey: 'nav.recipes', icon: '👨‍🍳', requiresVerification: false },
+        { id: 'discover', translationKey: 'nav.discover', icon: '🌟', requiresVerification: false },
+        { id: 'inventory', translationKey: 'nav.inventory', icon: '📦', requiresVerification: false },
+        { id: 'archive', translationKey: 'nav.archive', icon: '🗃️', requiresVerification: false },
+        { id: 'settings', translationKey: 'nav.settings', icon: '⚙️', requiresVerification: false }
     ];
 
     const handleNavigation = (page: string) => {
@@ -92,12 +118,12 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 className="flex items-center gap-2 hover:opacity-80 transition"
                             >
                                 <img 
-                                    src={getLogoPath('horizontal')}
-                                    alt={getLogoAlt()}
+                                    src={navbarDesktopLogo?.file_url || getLogoPath('horizontal')}
+                                    alt={navbarDesktopLogo?.alt_text || getLogoAlt()}
                                     className="h-10"
                                     onError={(e) => {
-                                        console.error('Failed to load horizontal logo');
-                                        e.currentTarget.style.display = 'none';
+                                        console.error('Failed to load desktop navbar logo');
+                                        e.currentTarget.src = getLogoPath('horizontal');
                                     }}
                                 />
                             </button>
@@ -110,12 +136,12 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 className="hover:opacity-80 transition"
                             >
                                 <img 
-                                    src={getLogoPath('mobile')}
-                                    alt={getLogoAlt()}
+                                    src={navbarMobileLogo?.file_url || getLogoPath('mobile')}
+                                    alt={navbarMobileLogo?.alt_text || getLogoAlt()}
                                     className="h-10"
                                     onError={(e) => {
-                                        console.error('Failed to load mobile logo');
-                                        e.currentTarget.style.display = 'none';
+                                        console.error('Failed to load mobile navbar logo');
+                                        e.currentTarget.src = getLogoPath('mobile');
                                     }}
                                 />
                             </button>
@@ -133,6 +159,13 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 >
                                     <span>{item.icon}</span>
                                     <span className="hidden xl:inline">{t(item.translationKey)}</span>
+                                    {/* NEW: Lock badge for unverified users */}
+                                    {item.requiresVerification && !emailVerified && (
+                                        <span className="bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded-full flex items-center gap-1 ml-1">
+                                            <Lock className="w-3 h-3" />
+                                            <span className="hidden xl:inline">Locked</span>
+                                        </span>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -245,7 +278,14 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                     }`}
                                 >
                                     <span className="text-2xl">{item.icon}</span>
-                                    <span>{t(item.translationKey)}</span>
+                                    <span className="flex-1">{t(item.translationKey)}</span>
+                                    {/* NEW: Lock badge for unverified users */}
+                                    {item.requiresVerification && !emailVerified && (
+                                        <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                                            <Lock className="w-3 h-3" />
+                                            Locked
+                                        </span>
+                                    )}
                                 </button>
                             ))}
 

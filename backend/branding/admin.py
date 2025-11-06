@@ -1,5 +1,5 @@
 """
-Django Admin configuration for Site Branding app.
+Django Admin configuration for Site Branding app with SVG support.
 """
 from django.contrib import admin
 from django.utils.html import format_html
@@ -7,11 +7,13 @@ from django.urls import path
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import SiteLogo, SiteSettings
+from .forms import SiteLogoAdminForm, BulkLogoUploadForm
 
 
 @admin.register(SiteLogo)
 class SiteLogoAdmin(admin.ModelAdmin):
-    """Admin interface for managing site logos"""
+    """Admin interface for managing site logos with SVG support"""
+    form = SiteLogoAdminForm
     
     list_display = [
         'logo_preview',
@@ -106,38 +108,57 @@ class SiteLogoAdmin(admin.ModelAdmin):
         return custom_urls + urls
     
     def quick_setup_view(self, request):
-        """Quick setup view for uploading multiple logos at once"""
+        """Quick setup view for uploading multiple logos at once with SVG validation"""
         if request.method == 'POST':
-            # Handle bulk upload
-            uploaded_count = 0
+            form = BulkLogoUploadForm(request.POST, request.FILES)
             
-            for logo_type in ['navbar_desktop', 'navbar_mobile', 'login_page', 'favicon', 'app_icon']:
-                for lang in ['en', 'ru', 'he']:
-                    file_key = f"{logo_type}_{lang}"
-                    if file_key in request.FILES:
-                        try:
-                            logo, created = SiteLogo.objects.update_or_create(
-                                logo_type=logo_type,
-                                language_code=lang,
-                                defaults={
-                                    'image_file': request.FILES[file_key],
-                                    'is_active': True,
-                                    'uploaded_by': request.user.username
-                                }
-                            )
-                            uploaded_count += 1
-                        except Exception as e:
-                            messages.error(request, f'Error uploading {file_key}: {str(e)}')
-            
-            if uploaded_count > 0:
-                messages.success(request, f'Successfully uploaded {uploaded_count} logo(s)!')
-            return redirect('admin:branding_sitelogo_changelist')
+            if form.is_valid():
+                uploaded_count = 0
+                errors = []
+                
+                for logo_type in ['navbar_desktop', 'navbar_mobile', 'login_page', 'favicon', 'app_icon']:
+                    for lang in ['en', 'ru', 'he']:
+                        file_key = f"{logo_type}_{lang}"
+                        if file_key in request.FILES:
+                            try:
+                                logo, created = SiteLogo.objects.update_or_create(
+                                    logo_type=logo_type,
+                                    language_code=lang,
+                                    defaults={
+                                        'image_file': request.FILES[file_key],
+                                        'is_active': True,
+                                        'uploaded_by': request.user.username
+                                    }
+                                )
+                                uploaded_count += 1
+                            except Exception as e:
+                                errors.append(f'{file_key}: {str(e)}')
+                
+                if uploaded_count > 0:
+                    messages.success(
+                        request, 
+                        f'Successfully uploaded {uploaded_count} logo(s)!'
+                    )
+                
+                if errors:
+                    for error in errors:
+                        messages.error(request, f'Error: {error}')
+                
+                return redirect('admin:branding_sitelogo_changelist')
+            else:
+                # Form has validation errors
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, f'{field}: {error}')
+        else:
+            form = BulkLogoUploadForm()
         
         context = {
             'title': 'Quick Logo Setup',
             'site_title': 'BishulSheli Admin',
             'site_header': 'BishulSheli Administration',
             'opts': self.model._meta,
+            'form': form,
         }
         return render(request, 'admin/branding/quick_setup.html', context)
     

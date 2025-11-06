@@ -9,6 +9,7 @@ from decimal import Decimal
 from datetime import datetime
 import uuid
 import sys
+from apps.users.decorators import email_verified_required  # NEW: Email verification protection
 
 # Fix for Windows console Unicode/emoji encoding issues
 if sys.platform == 'win32':
@@ -74,6 +75,16 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return CreateShoppingListSerializer
         return ShoppingListSerializer
+    
+    @email_verified_required('Shopping Lists')
+    def list(self, request, *args, **kwargs):
+        """Override list to require email verification"""
+        return super().list(request, *args, **kwargs)
+    
+    @email_verified_required('Shopping Lists')
+    def create(self, request, *args, **kwargs):
+        """Override create to require email verification"""
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         """Create new collaborative list"""
@@ -159,7 +170,11 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
 
             # NEW: Translate manually-added item to all languages
             item_name = item_data.get('name', '')
+            
+            # FIX: Detect source language from user preference
+            source_language = getattr(request.user, 'preferred_language', 'en')
             print(f"[MANUAL ITEM MULTILANG] Translating item: {item_name}")
+            print(f"[MANUAL ITEM MULTILANG] Source language: {source_language} (user: {request.user.username})")
 
             # Get multilang translator
             from apps.shopping.multilang_translator import get_multilang_translator
@@ -175,15 +190,15 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             try:
                 translated = translator.translate_ingredients_batch(
                     temp_ingredient,
-                    source_language='en'
+                    source_language=source_language  # FIX: Use user's language!
                 )
                 name_translations = translated[0].get('name_translations', {})
                 print(
                     f"[MANUAL ITEM MULTILANG] ✅ Translations: {name_translations}")
             except Exception as e:
                 print(f"[MANUAL ITEM MULTILANG] ⚠️ Translation failed: {e}")
-                # Fallback: just use English
-                name_translations = {'en': item_name}
+                # Fallback: store in source language
+                name_translations = {source_language: item_name}
 
             # Import Decimal for proper number handling
             from decimal import Decimal
@@ -194,7 +209,7 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 added_by=request.user,
                 name=item_data.get('name', ''),
                 name_translations=name_translations,  # NEW!
-                original_language='en',  # NEW!
+                original_language=source_language,  # FIX: Use user's language!
                 quantity=Decimal(str(item_data.get('quantity', 1))),
                 unit=item_data.get('unit', 'unit'),
                 weight_quantity=Decimal(str(weight_qty)),  # NEW: From recipe
@@ -635,18 +650,31 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         
         query = sanitized_query
 
-        # VALIDATION: Detect and translate keyboard layout issues (e.g., Russian layout typing English words)
-        # Example: "ьфкпрфкшеу" (Russian layout) → "margharita" (English)
-        if self._is_wrong_keyboard_layout(query):
-            print(
-                f"[FAST AI RECIPE] ⚠️ Detected wrong keyboard layout: '{query}'")
-            translated_query = self._translate_keyboard_layout(query)
-            if translated_query and translated_query != query:
-                print(
-                    f"[FAST AI RECIPE] ✅ Translated to: '{translated_query}'")
-                query = translated_query
+        # DISABLED: Keyboard layout detection is broken for multilingual apps
+        # The app SHOULD receive queries in user's native language (ru, he, en)
+        # Translation to English happens later via GoogleTranslateService
+        # 
+        # OLD BROKEN LOGIC:
+        # - Detected ANY non-Latin text as "wrong keyboard"
+        # - Transliterated Russian "карбонара" to garbage "rfh,jyfhf"
+        # - This prevented legitimate Russian/Hebrew queries
+        #
+        # CORRECT FLOW:
+        # 1. User types "карбонара" (Russian for carbonara) ✅
+        # 2. System recognizes user language is Russian ✅
+        # 3. GoogleTranslateService translates "карбонара" → "carbonara" ✅
+        # 4. Search for "carbonara" recipes ✅
+        # 5. Translate results back to Russian ✅
+        
+        # if self._is_wrong_keyboard_layout(query):
+        #     print(f"[FAST AI RECIPE] ⚠️ Detected wrong keyboard layout: '{query}'")
+        #     translated_query = self._translate_keyboard_layout(query)
+        #     if translated_query and translated_query != query:
+        #         print(f"[FAST AI RECIPE] ✅ Translated to: '{translated_query}'")
+        #         query = translated_query
 
         print(f"[FAST AI RECIPE] Final query for processing: '{query}'")
+
 
         # Import services
         try:
@@ -655,7 +683,6 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             from apps.recipes.models import CanonicalRecipe, Recipe
             from apps.shopping.fast_recipe_service import FastRecipeIngredientService
             from apps.shopping.tasks import complete_shopping_list_recipe
-            from apps.recipes.brave_firecrawl_scraper import BraveFirecrawlScraper
             print("[FAST AI RECIPE] ✅ Services imported successfully")
         except ImportError as e:
             print(f"[ERROR] Required service not available: {e}")
@@ -749,9 +776,17 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                 print(
                     f"[FAST AI RECIPE] Recipe not found, starting fast extraction...")
 
-                # Search and scrape (Brave + Firecrawl)
-                scraper = BraveFirecrawlScraper()
-                scraped_recipes = scraper.search_and_scrape(
+                # Search and scrape using RecipeAgentService (has fallback to DuckDuckGo)
+                print("[FAST AI RECIPE] Using RecipeAgentService for search (with DuckDuckGo fallback)")
+                
+                # Use the service that has fallback strategy
+                recipe_service = RecipeAgentService(
+                    user_language=user_language,
+                    user_preferences=user_preferences
+                )
+                
+                # Search and scrape with fallback
+                scraped_recipes = async_to_sync(recipe_service._search_and_scrape_recipes)(
                     query, max_results=1)
 
                 if not scraped_recipes:

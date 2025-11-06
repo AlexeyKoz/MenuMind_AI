@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 import SimpleLanguageSwitcher from '../components/SimpleLanguageSwitcher';
+import logoService, { LogoData } from '../services/logoService';
 
 interface LoginProps {
     onLoginSuccess: () => void;
@@ -14,7 +15,21 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [loginLogo, setLoginLogo] = useState<LogoData | null>(null);
     const { login } = useAuth();
+
+    // Load login page logo from API
+    useEffect(() => {
+        const loadLogo = async () => {
+            try {
+                const logo = await logoService.getLoginLogo(i18n.language);
+                setLoginLogo(logo);
+            } catch (error) {
+                console.error('[Login] Error loading logo:', error);
+            }
+        };
+        loadLogo();
+    }, [i18n.language]);
 
     // Update HTML dir attribute for RTL support (Hebrew)
     useEffect(() => {
@@ -50,8 +65,8 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess, onSwitchToRegistration })
                 {/* Logo */}
                 <div className="flex justify-center mb-8 mt-8">
                     <img 
-                        src={i18n.language === 'he' ? '/logo/bishulsheli-logo-compact-he.svg' : '/logo/bishulsheli-logo-compact-en.svg'}
-                        alt={i18n.language === 'he' ? 'בישול שלי' : 'BishulSheli'}
+                        src={loginLogo?.file_url || (i18n.language === 'he' ? '/logo/bishulsheli-logo-compact-he.svg' : '/logo/bishulsheli-logo-compact-en.svg')}
+                        alt={loginLogo?.alt_text || (i18n.language === 'he' ? 'בישול שלי' : 'BishulSheli')}
                         className="h-24"
                     />
                 </div>

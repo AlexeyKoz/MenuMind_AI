@@ -753,6 +753,7 @@
         "mustAcceptLegal": "You must accept the Terms of Service and Privacy Policy to register"
     },
     "footer": {
+        "brandName": "BishulMe",
         "company": "COMPANY",
         "support": "SUPPORT",
         "legal": "LEGAL",
@@ -776,7 +777,12 @@
         "complianceText": "We are committed to protecting your privacy and complying with global data protection regulations.",
         "licensing": "Licensing",
         "cookiePreferences": "Cookie Preferences",
-        "copyrightText": "© {{year}} MenuMindAI. All rights reserved."
+        "copyrightText": "© {{year}} BishulMe. All rights reserved."
+    },
+    "legalDocument": {
+        "questionsAbout": "Questions about this document?",
+        "contactUs": "Contact us at",
+        "lastUpdated": "Last updated:"
     },
     "about": {
         "title": "About MenuMineAI",

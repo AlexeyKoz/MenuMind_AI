@@ -753,6 +753,7 @@
         "mustAcceptLegal": "Вы должны принять Условия использования и Политику конфиденциальности для регистрации"
     },
     "footer": {
+        "brandName": "BishulMe",
         "company": "КОМПАНИЯ",
         "support": "ПОДДЕРЖКА",
         "legal": "ПРАВОВАЯ ИНФОРМАЦИЯ",
@@ -776,7 +777,12 @@
         "complianceText": "Мы стремимся защищать вашу конфиденциальность и соблюдать глобальные нормы защиты данных.",
         "licensing": "Лицензирование",
         "cookiePreferences": "Настройки cookies",
-        "copyrightText": "© {{year}} MenuMindAI. Все права защищены."
+        "copyrightText": "© {{year}} BishulMe. Все права защищены."
+    },
+    "legalDocument": {
+        "questionsAbout": "Вопросы по этому документу?",
+        "contactUs": "Свяжитесь с нами:",
+        "lastUpdated": "Последнее обновление:"
     },
     "about": {
         "title": "О MenuMineAI",

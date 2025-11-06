@@ -753,6 +753,7 @@
         "mustAcceptLegal": "עליך לקבל את תנאי השימוש ומדיניות הפרטיות כדי להירשם"
     },
     "footer": {
+        "brandName": "בישול שלי",
         "company": "חברה",
         "support": "תמיכה",
         "legal": "משפטי",
@@ -776,7 +777,12 @@
         "complianceText": "אנו מחויבים להגן על פרטיותכם ולעמוד בתקנות גלובליות להגנת מידע.",
         "licensing": "רישוי",
         "cookiePreferences": "העדפות עוגיות",
-        "copyrightText": "© {{year}} MenuMindAI. כל הזכויות שמורות."
+        "copyrightText": "© {{year}} בישול שלי. כל הזכויות שמורות."
+    },
+    "legalDocument": {
+        "questionsAbout": "שאלות לגבי מסמך זה?",
+        "contactUs": "צרו איתנו קשר בכתובת:",
+        "lastUpdated": "עודכן לאחרונה:"
     },
     "about": {
         "title": "אודות MenuMineAI",

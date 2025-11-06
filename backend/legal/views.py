@@ -18,7 +18,8 @@ from .models import (
     LegalAcceptance,
     CookieConsent,
     DataExportRequest,
-    AccountDeletionRequest
+    AccountDeletionRequest,
+    AboutPage
 )
 from .serializers import (
     LegalDocumentSerializer,
@@ -198,48 +199,92 @@ class LegalViewSet(viewsets.ViewSet):
         """
         Get Copyright Notice.
 
-        GET /api/legal/copyright/
+        GET /api/legal/copyright/?lang=en|ru|he
         """
+        language = request.GET.get('lang', 'en')
+        if language not in ['en', 'ru', 'he']:
+            language = 'en'
+
         try:
             doc = LegalDocument.objects.get(
                 document_type='copyright',
-                language_code='en',
-                is_active=True)
+                language_code=language,
+                is_active=True
+            )
             return Response({
                 'content': doc.content,
                 'version': doc.version,
                 'effective_date': doc.effective_date,
-                'document_type': 'copyright'
+                'document_type': 'copyright',
+                'language': doc.language_code
             })
         except LegalDocument.DoesNotExist:
-            return Response(
-                {'error': 'Copyright Notice not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            # Fallback to English if translation not found
+            try:
+                doc = LegalDocument.objects.get(
+                    document_type='copyright',
+                    language_code='en',
+                    is_active=True
+                )
+                return Response({
+                    'content': doc.content,
+                    'version': doc.version,
+                    'effective_date': doc.effective_date,
+                    'document_type': 'copyright',
+                    'language': 'en',
+                    'fallback': True  # Indicate fallback to English
+                })
+            except LegalDocument.DoesNotExist:
+                return Response(
+                    {'error': 'Copyright Notice not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def rcip(self, request):
         """
         Get RCIP License.
 
-        GET /api/legal/rcip/
+        GET /api/legal/rcip/?lang=en|ru|he
         """
+        language = request.GET.get('lang', 'en')
+        if language not in ['en', 'ru', 'he']:
+            language = 'en'
+
         try:
             doc = LegalDocument.objects.get(
                 document_type='rcip',
-                language_code='en',
-                is_active=True)
+                language_code=language,
+                is_active=True
+            )
             return Response({
                 'content': doc.content,
                 'version': doc.version,
                 'effective_date': doc.effective_date,
-                'document_type': 'rcip'
+                'document_type': 'rcip',
+                'language': doc.language_code
             })
         except LegalDocument.DoesNotExist:
-            return Response(
-                {'error': 'RCIP License not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            # Fallback to English if translation not found
+            try:
+                doc = LegalDocument.objects.get(
+                    document_type='rcip',
+                    language_code='en',
+                    is_active=True
+                )
+                return Response({
+                    'content': doc.content,
+                    'version': doc.version,
+                    'effective_date': doc.effective_date,
+                    'document_type': 'rcip',
+                    'language': 'en',
+                    'fallback': True  # Indicate fallback to English
+                })
+            except LegalDocument.DoesNotExist:
+                return Response(
+                    {'error': 'RCIP License not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def accept(self, request):
@@ -408,6 +453,54 @@ class LegalViewSet(viewsets.ViewSet):
                 'has_consent': False,
                 'gpc_detected': detect_gpc_signal(request)
             })
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def about(self, request):
+        """
+        Get About Us page content.
+
+        GET /api/legal/about/?lang=en|ru|he
+        """
+        language = request.GET.get('lang', 'en')
+        if language not in ['en', 'ru', 'he']:
+            language = 'en'
+
+        try:
+            page = AboutPage.objects.get(
+                language_code=language,
+                is_active=True
+            )
+            return Response({
+                'title': page.title,
+                'content': page.content,
+                'version': page.version,
+                'language': page.language_code,
+                'meta_description': page.meta_description,
+                'meta_keywords': page.meta_keywords,
+                'updated_at': page.updated_at
+            })
+        except AboutPage.DoesNotExist:
+            # Fallback to English if translation not found
+            try:
+                page = AboutPage.objects.get(
+                    language_code='en',
+                    is_active=True
+                )
+                return Response({
+                    'title': page.title,
+                    'content': page.content,
+                    'version': page.version,
+                    'language': 'en',
+                    'meta_description': page.meta_description,
+                    'meta_keywords': page.meta_keywords,
+                    'updated_at': page.updated_at,
+                    'fallback': True  # Indicate fallback to English
+                })
+            except AboutPage.DoesNotExist:
+                return Response(
+                    {'error': 'About page not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
 
 class PrivacyViewSet(viewsets.ViewSet):

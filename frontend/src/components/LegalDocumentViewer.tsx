@@ -27,7 +27,7 @@ const LegalDocumentViewer: React.FC<LegalDocumentViewerProps> = ({
     documentType,
     title
 }) => {
-    const { i18n } = useTranslation();
+    const { i18n, t } = useTranslation();
     const [document, setDocument] = useState<DocumentData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -211,13 +211,13 @@ const LegalDocumentViewer: React.FC<LegalDocumentViewerProps> = ({
 
             <div className="legal-document__footer">
                 <p className="legal-document__footer-text">
-                    Questions about this document?{' '}
-                    <a href="mailto:legal@menumindai.com" className="legal-document__link">
-                        Contact us at legal@menumindai.com
+                    {t('legalDocument.questionsAbout')}{' '}
+                    <a href="mailto:Bishulme@gmail.com" className="legal-document__link">
+                        {t('legalDocument.contactUs')} Bishulme@gmail.com
                     </a>
                 </p>
                 <p className="legal-document__footer-text legal-document__footer-text--small">
-                    Last updated: {new Date(document.effective_date).toLocaleDateString()}
+                    {t('legalDocument.lastUpdated')} {new Date(document.effective_date).toLocaleDateString()}
                 </p>
             </div>
         </div>

@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 import { formatWeight, formatVolume, parseWeightInput, parseVolumeInput } from '../utils/unitConversion';
 import { getUserFriendlyError } from '../utils/errorHandler';
 import { Package, X, Check } from 'lucide-react';
+import { LockedFeature } from '../components/LockedFeature';  // NEW: Import LockedFeature
 
 const ShoppingList: React.FC = () => {
     const { t, i18n } = useTranslation();
@@ -35,6 +36,11 @@ const ShoppingList: React.FC = () => {
         loadCollaborators,
         collaborators
     } = useCollaboration();
+    
+    // NEW: Check shopping access status
+    const [accessStatus, setAccessStatus] = useState<any>(null);
+    const [accessLoading, setAccessLoading] = useState(true);
+    
     const [lists, setLists] = useState<any[]>([]);
     const [activeList, setActiveList] = useState<any>(null);
     const [items, setItems] = useState<any[]>([]);
@@ -164,6 +170,26 @@ const ShoppingList: React.FC = () => {
             // Use defaults if loading fails
         }
     }, [api]);
+
+    // NEW: Check shopping access on mount
+    useEffect(() => {
+        const checkAccess = async () => {
+            try {
+                const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+                const response = await fetch(`${apiUrl}/api/users/shopping-access-status/`, {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                const data = await response.json();
+                setAccessStatus(data);
+            } catch (error) {
+                console.error('Failed to check shopping access:', error);
+                setAccessStatus({ available: false, message: 'Failed to check access' });
+            } finally {
+                setAccessLoading(false);
+            }
+        };
+        checkAccess();
+    }, [token]);
 
     // Load lists and user preferences on initial mount
     useEffect(() => {
@@ -1840,6 +1866,26 @@ const ShoppingList: React.FC = () => {
 
     return (
         <div className="max-w-7xl mx-auto p-6">
+            {/* NEW: Show loading or lock screen if email not verified */}
+            {accessLoading ? (
+                <div className="flex justify-center items-center min-h-[60vh]">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                </div>
+            ) : !accessStatus?.available ? (
+                <LockedFeature
+                    featureName="Shopping Lists"
+                    description="Please verify your email to use Shopping Lists"
+                    benefits={[
+                        'Create and manage shopping lists',
+                        'Real-time collaboration with family',
+                        'Share lists with others',
+                        'Inventory management',
+                        'Smart recipe-to-list conversion'
+                    ]}
+                />
+            ) : (
+            <>
+            {/* Original content starts here */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold">🛒 {t('shopping.title')}</h2>
                 {isConnected && (
@@ -2636,6 +2682,9 @@ const ShoppingList: React.FC = () => {
                     </div>
                 </div>
             )}
+            </>
+            )}
+            {/* End of conditional render */}
         </div>
     );
 };

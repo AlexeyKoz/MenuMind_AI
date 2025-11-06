@@ -789,3 +789,59 @@ def cancel_account_deletion(request):
             {'detail': f'Failed to cancel deletion request: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def quota_status(request):
+    """
+    Get current AI quota status for the authenticated user.
+    Returns usage and limits for each AI feature.
+    """
+    user = request.user
+    user.reset_daily_quotas()
+    limits = user.get_quota_limits()
+    
+    return Response({
+        'email_verified': user.emailaddress_set.filter(verified=True).exists(),
+        'quota_resets_at': user.ai_requests_reset_at.isoformat(),
+        'recipe_generations': {'used': user.recipe_generations_today, 'limit': limits['recipe_generation']},
+        'translations': {'used': user.translations_today, 'limit': limits['translation']},
+        'nutrition_logs': {'used': user.nutrition_logs_today, 'limit': limits['nutrition_log']},
+        'url_scrapes': {'used': user.url_scrapes_today, 'limit': limits['url_scrape']},
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_status(request):
+    """
+    Check if user has access to full dashboard features.
+    Unverified users get basic stats only.
+    """
+    email_verified = request.user.emailaddress_set.filter(verified=True).exists()
+    if not email_verified:
+        from apps.shopping.models import ShoppingList
+        return Response({
+            'available': False,
+            'basic_stats': {
+                'recipes_saved': request.user.saved_recipes.count() if hasattr(request.user, 'saved_recipes') else 0,
+                'shopping_lists': ShoppingList.objects.filter(creator=request.user, is_archived=False).count(),
+            },
+            'message': 'Verify your email to see full analytics'
+        })
+    return Response({'available': True})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def shopping_access_status(request):
+    """
+    Check if user has access to shopping lists.
+    Shopping lists are completely blocked for unverified users.
+    """
+    email_verified = request.user.emailaddress_set.filter(verified=True).exists()
+    return Response({
+        'available': email_verified,
+        'message': 'Please verify your email to use Shopping Lists' if not email_verified else 'Access granted'
+    })

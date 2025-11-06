@@ -47,6 +47,21 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
             print("❌ WebSocket connection rejected: No authenticated user")
             await self.close(code=4001)  # Unauthorized
             return
+        
+        # NEW: Check email verification
+        from channels.db import database_sync_to_async
+        email_verified = await database_sync_to_async(
+            lambda: self.user.emailaddress_set.filter(verified=True).exists()
+        )()
+        
+        if not email_verified:
+            print(f"❌ WebSocket connection rejected: Email not verified for user {self.user.username}")
+            await self.send(text_data=json.dumps({
+                'error': 'Please verify your email to use Shopping Lists',
+                'verification_required': True
+            }))
+            await self.close(code=4002)  # Email not verified
+            return
 
         # Check if user has access to this shopping list
         has_access = await self.check_list_access()
@@ -622,7 +637,11 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
 
             # NEW: Translate manually-added item to all languages
             item_name = item_data.get('name', '')
+            
+            # FIX: Detect source language from user preference
+            source_language = getattr(self.user, 'preferred_language', 'en')
             print(f"[WEBSOCKET MULTILANG] Translating item: {item_name}")
+            print(f"[WEBSOCKET MULTILANG] Source language: {source_language} (user: {self.user.username})")
 
             # Get multilang translator
             from apps.shopping.multilang_translator import get_multilang_translator
@@ -638,7 +657,7 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
             try:
                 translated = translator.translate_ingredients_batch(
                     temp_ingredient,
-                    source_language='en'
+                    source_language=source_language  # FIX: Use user's language!
                 )
                 name_translations = translated[0].get('name_translations', {})
                 print(
@@ -647,8 +666,8 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
                 print(f"[WEBSOCKET MULTILANG] ⚠️ Translation failed: {e}")
                 import traceback
                 traceback.print_exc()
-                # Fallback: just use English
-                name_translations = {'en': item_name}
+                # Fallback: store in source language
+                name_translations = {source_language: item_name}
 
             item = ShoppingItem.objects.create(
                 shopping_list=shopping_list,
@@ -657,7 +676,7 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
                 priority=priority,
                 name=item_data.get('name', ''),
                 name_translations=name_translations,  # NEW!
-                original_language='en',  # NEW!
+                original_language=source_language,  # FIX: Use user's language!
                 quantity=item_data.get('quantity', 1),
                 unit=item_data.get('unit', 'unit'),
                 category=item_data.get('category', 'other'),

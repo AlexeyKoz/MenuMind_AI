@@ -34,6 +34,7 @@ from .throttles import (
 from .tasks import update_canonical_recipe_statistics
 from apps.shopping.models import ShoppingList, ShoppingItem
 from django.shortcuts import get_object_or_404
+from apps.users.decorators import ai_quota_required  # NEW: AI quota protection
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -91,6 +92,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 
     @action(detail=False, methods=['post'], throttle_classes=[RecipeSearchThrottle, RecipeSearchDailyThrottle])
+    @ai_quota_required('recipe_generation')  # NEW: AI quota protection
     def find_recipe(self, request):
         """
         AI Agent endpoint: User describes what they want to cook

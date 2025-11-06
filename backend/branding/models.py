@@ -51,8 +51,8 @@ class SiteLogo(models.Model):
         help_text='Language for this logo (use "All Languages" for universal logos)'
     )
     
-    # File upload
-    image_file = models.ImageField(
+    # File upload - Using FileField instead of ImageField to properly support SVG
+    image_file = models.FileField(
         upload_to=logo_upload_path,
         validators=[FileExtensionValidator(allowed_extensions=['svg', 'png', 'jpg', 'jpeg', 'webp', 'ico'])],
         help_text='Upload logo file (SVG recommended for best quality)'
@@ -120,12 +120,57 @@ class SiteLogo(models.Model):
             self.file_size = self.image_file.size
             
             # Try to get image dimensions
-            try:
-                from PIL import Image
-                img = Image.open(self.image_file)
-                self.width, self.height = img.size
-            except Exception:
-                pass
+            # For SVG files, we need to parse the XML
+            if self.image_file.name.lower().endswith('.svg'):
+                try:
+                    import xml.etree.ElementTree as ET
+                    # Reset file pointer to beginning
+                    self.image_file.seek(0)
+                    content = self.image_file.read()
+                    if isinstance(content, bytes):
+                        content = content.decode('utf-8')
+                    
+                    root = ET.fromstring(content)
+                    
+                    # Try to get width and height from SVG attributes
+                    width_attr = root.get('width')
+                    height_attr = root.get('height')
+                    
+                    if width_attr and height_attr:
+                        # Remove 'px' or other units
+                        width_str = ''.join(filter(str.isdigit, width_attr))
+                        height_str = ''.join(filter(str.isdigit, height_attr))
+                        
+                        if width_str and height_str:
+                            self.width = int(width_str)
+                            self.height = int(height_str)
+                    
+                    # If no dimensions found, try viewBox
+                    if not (self.width and self.height):
+                        viewbox = root.get('viewBox')
+                        if viewbox:
+                            parts = viewbox.split()
+                            if len(parts) == 4:
+                                self.width = int(float(parts[2]))
+                                self.height = int(float(parts[3]))
+                    
+                    # Reset file pointer again
+                    self.image_file.seek(0)
+                except Exception as e:
+                    print(f"[SVG Parse Warning] Could not parse SVG dimensions: {e}")
+                    # Set default dimensions for SVG if parsing fails
+                    if not self.width:
+                        self.width = 100
+                    if not self.height:
+                        self.height = 100
+            else:
+                # For raster images (PNG, JPG, etc.), use PIL
+                try:
+                    from PIL import Image
+                    img = Image.open(self.image_file)
+                    self.width, self.height = img.size
+                except Exception as e:
+                    print(f"[Image Parse Warning] Could not detect image dimensions: {e}")
         
         # Ensure only one active logo per type and language
         if self.is_active:

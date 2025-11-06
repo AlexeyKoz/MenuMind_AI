@@ -58,6 +58,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
     volumes:
       - backend_static:/app/staticfiles
+      - backend_media:/app/media
     depends_on:
       db:
         condition: service_healthy
@@ -196,6 +197,8 @@ volumes:
   redis_data:
     driver: local
   backend_static:
+    driver: local
+  backend_media:
     driver: local
 
 # Networks

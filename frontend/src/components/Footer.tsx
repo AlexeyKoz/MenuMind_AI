@@ -74,10 +74,10 @@ const Footer: React.FC = () => {
                     <div className="footer__section">
                         <h4 className="footer__heading">{t('footer.support')}</h4>
                         <nav className="footer__nav">
-                            <a href="mailto:support@menumindai.com" className="footer__link">
+                            <a href="mailto:Bishulme@gmail.com" className="footer__link">
                                 {t('footer.contactSupport')}
                             </a>
-                            <a href="mailto:legal@menumindai.com" className="footer__link">
+                            <a href="mailto:Bishulme@gmail.com" className="footer__link">
                                 {t('footer.legalInquiries')}
                             </a>
                             <Link to="/settings" className="footer__link">
@@ -110,7 +110,7 @@ const Footer: React.FC = () => {
 
                     {/* Brand Section */}
                     <div className="footer__section footer__section--brand">
-                        <h3 className="footer__title">MenuMindAI</h3>
+                        <h3 className="footer__title">{t('footer.brandName')}</h3>
                         <p className="footer__description">
                             {t('footer.description')}
                         </p>

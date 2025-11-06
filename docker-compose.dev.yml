@@ -1,0 +1,208 @@
+# Docker Compose for Development with Hot Reload
+# This version uses volume mounts so code changes apply instantly without rebuild
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: menumine_db_dev
+    environment:
+      POSTGRES_DB: ${DB_NAME:-menumindai}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-MenuMind2025!SecureDB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - menumine_network_dev
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: menumine_redis_dev
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - menumine_network_dev
+
+  # Django Backend (Development Mode with Hot Reload)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: menumine_backend_dev
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      # Mount source code for hot reload
+      - ./backend:/app
+      # Persist media files
+      - media_dev:/app/media
+      # Don't mount these (use container versions)
+      - /app/__pycache__
+      - /app/.pytest_cache
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=True
+      - USE_POSTGRES=True
+      - DB_NAME=${DB_NAME:-menumindai}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-MenuMind2025!SecureDB}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,backend
+      - CORS_ALLOWED_ORIGINS=http://localhost,http://localhost:3000,http://localhost:80
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - menumine_network_dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Daphne (Django Channels / WebSockets)
+  daphne:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: menumine_daphne_dev
+    command: daphne -b 0.0.0.0 -p 8001 menumine_ai.asgi:application
+    volumes:
+      - ./backend:/app
+      - media_dev:/app/media
+      - /app/__pycache__
+    ports:
+      - "8001:8001"
+    environment:
+      - DEBUG=True
+      - USE_POSTGRES=True
+      - DB_NAME=${DB_NAME:-menumindai}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-MenuMind2025!SecureDB}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - menumine_network_dev
+
+  # Celery Worker
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: menumine_celery_dev
+    command: celery -A menumine_ai worker -l info
+    volumes:
+      - ./backend:/app
+      - media_dev:/app/media
+      - /app/__pycache__
+    environment:
+      - DEBUG=True
+      - USE_POSTGRES=True
+      - DB_NAME=${DB_NAME:-menumindai}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-MenuMind2025!SecureDB}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - menumine_network_dev
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: menumine_celery_beat_dev
+    command: celery -A menumine_ai beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+      - media_dev:/app/media
+      - /app/__pycache__
+    environment:
+      - DEBUG=True
+      - USE_POSTGRES=True
+      - DB_NAME=${DB_NAME:-menumindai}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-MenuMind2025!SecureDB}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - menumine_network_dev
+
+  # React Frontend (Development Mode with Hot Reload)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: menumine_frontend_dev
+    command: npm start
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend:/app
+      # Use named volumes for node_modules (don't sync from host)
+      - /app/node_modules
+      - /app/build
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8001
+      - REACT_APP_GOOGLE_CLIENT_ID=819829561375-19d74oa53gsn83r0qaaavb0659hsegqo.apps.googleusercontent.com
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+      - WDS_SOCKET_PORT=3000
+    stdin_open: true
+    tty: true
+    networks:
+      - menumine_network_dev
+
+networks:
+  menumine_network_dev:
+    driver: bridge
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:
+  media_dev:
+
+

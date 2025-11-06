@@ -399,7 +399,7 @@ const PrivacySettings: React.FC = () => {
                         <a href="/legal/cookies" target="_blank" rel="noopener noreferrer">
                             Cookie Policy
                         </a>
-                        <a href="mailto:privacy@menumindai.com">
+                        <a href="mailto:Bishulme@gmail.com">
                             Contact Privacy Team
                         </a>
                     </div>

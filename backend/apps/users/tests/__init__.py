@@ -1,6 +1,1 @@
-# Users app tests package
-
-
-
-
-
+# Users app tests
