@@ -39,25 +39,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 class RecipeAgentService:
     """Service for searching, scraping, and converting recipes using AI with deduplication"""
 
-    def __init__(self):
-        groq_api_key = os.getenv('GROQ_API_KEY') or settings.GROQ_API_KEY if hasattr(
-            settings, 'GROQ_API_KEY') else None
-        if not groq_api_key:
-            print("[WARNING] GROQ_API_KEY not found. AI conversion will be limited.")
-            self.groq_client = None
-        else:
-            self.groq_client = Groq(api_key=groq_api_key)
-
-        self.rcip_converter = RCIPConverter()
-        self.recipe_analyzer = RecipeAnalyzer()
-        self.model = "llama-3.1-8b-instant"
-
-        # NEW: Initialize new services
-        self.ingredient_mapper = IngredientMapper()
-        self.unit_converter = UnitConverter()
-        self.nutrition_calculator = NutritionCalculator()
-        self.translation_service = TranslationService()
-        self.cooking_terms_service = CookingTermsTranslationService()
+    def __init__(self, user_language='en', user_preferences=None):
+    	groq_api_key = os.getenv('GROQ_API_KEY') or settings.GROQ_API_KEY if hasattr(
+        	settings, 'GROQ_API_KEY') else None
+    	if not groq_api_key:
+        	print("[WARNING] GROQ_API_KEY not found. AI conversion will be limited.")
+        	self.groq_client = None
+    	else:
+        	self.groq_client = Groq(api_key=groq_api_key)
+    	self.rcip_converter = RCIPConverter()
+    	self.recipe_analyzer = RecipeAnalyzer()
+    	self.model = "llama-3.1-8b-instant"
+    	# NEW: Initialize new services
+    	self.ingredient_mapper = IngredientMapper()
+    	self.unit_converter = UnitConverter()
+    	self.nutrition_calculator = NutritionCalculator()
+    	self.translation_service = TranslationService()
+    	self.cooking_terms_service = CookingTermsTranslationService()
+   	# Store user preferences
+    	self.user_language = user_language
+    	self.user_preferences = user_preferences or {}
 
     async def _enrich_recipe_with_iml(
         self,

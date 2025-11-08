@@ -155,10 +155,18 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: https://bishul.me
+        REACT_APP_WS_URL: wss://bishul.me:8001
+        REACT_APP_GOOGLE_CLIENT_ID: 819829561375-19d74oa53gsn83r0qaaavb0659hsegqo.apps.googleusercontent.com
     container_name: menumine_frontend_prod
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
     depends_on:
       - backend
     healthcheck:
@@ -169,7 +177,6 @@ services:
       start_period: 10s
     networks:
       - menumine_network
-
   # Nginx Reverse Proxy (optional - for SSL/load balancing)
   nginx:
     image: nginx:alpine

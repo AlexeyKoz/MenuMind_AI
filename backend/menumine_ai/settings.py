@@ -296,6 +296,8 @@ CSRF_COOKIE_HTTPONLY = False  # Must be False so JavaScript can read CSRF token
 CSRF_COOKIE_SAMESITE = 'Lax'  # 'Lax' works for localhost, 'None' requires HTTPS
 CSRF_USE_SESSIONS = False  # Keep CSRF token in cookie, not session
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
+    'https://bishul.me',
+    'https://www.bishul.me',
     'http://localhost',
     'http://localhost:80',
     'http://localhost:3000',
@@ -309,6 +311,8 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
 # Session Cookie Settings
 SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=False)  # False for localhost (HTTP)
 SESSION_COOKIE_HTTPONLY = True  # Recommended for security
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=False)  # False for localhost, True for HTTPS
+CSRF_COOKIE_HTTPONLY = False  # Must be False for frontend to read CSRF token
 SESSION_COOKIE_SAMESITE = 'Lax'  # 'Lax' works for localhost
 SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
 SESSION_SAVE_EVERY_REQUEST = True  # Save session on every request
