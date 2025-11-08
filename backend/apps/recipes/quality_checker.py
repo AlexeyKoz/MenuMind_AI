@@ -174,7 +174,7 @@ class RecipeValidator:
             # Check for suspicious units
             suspicious_units = ['as', 'needed', 'taste',
                                 'optional', 'quantity', 'amount', 'servings']
-            if unit.lower() in suspicious_units:
+            if unit and unit.lower() in suspicious_units:
                 issues.append({
                     'type': 'quantity',
                     'severity': 'warning',

@@ -59,6 +59,7 @@ services:
     volumes:
       - backend_static:/app/staticfiles
       - backend_media:/app/media
+      - ./backend/gen-lang-client-0598591486-ee1fab7d978e.json:/app/gen-lang-client-0598591486-ee1fab7d978e.json
     depends_on:
       db:
         condition: service_healthy

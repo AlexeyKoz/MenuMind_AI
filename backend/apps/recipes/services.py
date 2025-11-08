@@ -243,7 +243,7 @@ class RecipeAgentService:
             unit = ing.get('unit', '')
 
             # Skip if unit contains "as" or "needed" (from "as needed")
-            unit_lower = unit.lower().strip()
+            unit_lower = unit.lower().strip() if unit else ''
             invalid_units = [
                 'as', 'needed', 'taste', 'quantity', 'optional'
             ]

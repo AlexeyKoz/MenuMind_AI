@@ -275,3 +275,6 @@ wsproto==1.2.0
 xhtml2pdf==0.2.17
 yarl==1.20.1
 zope.interface==7.2
+google-cloud-translate==3.15.0
+google-cloud-translate==3.15.0
+google-cloud-translate==3.15.0
