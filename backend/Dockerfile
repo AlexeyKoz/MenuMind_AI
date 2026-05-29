@@ -26,10 +26,9 @@ RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r requirements.
 # Copy project files
 COPY . .
 
-# Copy Google File 
-COPY gen-lang-client-0598591486-ee1fab7d978e.json /app/
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# Create necessary directories
 RUN mkdir -p /app/data /app/staticfiles /app/media
 
 # Note: collectstatic will be run during deployment after migrations
@@ -50,5 +49,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 
 # Default command (can be overridden in docker-compose)
+ENTRYPOINT ["/app/entrypoint.sh"]
+
 CMD ["gunicorn", "menumine_ai.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]
 
