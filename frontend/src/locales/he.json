@@ -750,7 +750,9 @@
         "termsOfService": "תנאי השימוש",
         "privacyPolicy": "מדיניות הפרטיות",
         "cookiePolicy": "מדיניות קובצי העוגיות",
-        "mustAcceptLegal": "עליך לקבל את תנאי השימוש ומדיניות הפרטיות כדי להירשם"
+        "mustAcceptLegal": "עליך לקבל את תנאי השימוש ומדיניות הפרטיות כדי להירשם",
+        "legalModalTitle": "שלב אחרון",
+        "legalModalSubtitle": "יש לעיין ולאשר את המדיניות שלנו כדי להמשיך."
     },
     "footer": {
         "brandName": "בישול שלי",

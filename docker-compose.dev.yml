@@ -187,7 +187,7 @@ services:
     environment:
       - REACT_APP_API_URL=http://localhost:8000
       - REACT_APP_WS_URL=ws://localhost:8001
-      - REACT_APP_GOOGLE_CLIENT_ID=819829561375-19d74oa53gsn83r0qaaavb0659hsegqo.apps.googleusercontent.com
+      - REACT_APP_GOOGLE_CLIENT_ID=819829561375-0defs4nf7svc25a6tvfr1bkep6n3od47.apps.googleusercontent.com
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
       - WDS_SOCKET_PORT=3000

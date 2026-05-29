@@ -2,7 +2,6 @@
 # Import History tracking for IML and CookLingo data imports
 
 from django.db import migrations, models
-import uuid
 
 
 class Migration(migrations.Migration):
@@ -15,8 +14,8 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='ImportHistory',
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4,
-                 editable=False, primary_key=True, serialize=False)),
+                ('id', models.BigAutoField(auto_created=True,
+                 primary_key=True, serialize=False, verbose_name='ID')),
                 ('import_type', models.CharField(
                     choices=[
                         ('iml', 'IML Ingredients'),

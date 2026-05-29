@@ -750,7 +750,9 @@
         "termsOfService": "Terms of Service",
         "privacyPolicy": "Privacy Policy",
         "cookiePolicy": "Cookie Policy",
-        "mustAcceptLegal": "You must accept the Terms of Service and Privacy Policy to register"
+        "mustAcceptLegal": "You must accept the Terms of Service and Privacy Policy to register",
+        "legalModalTitle": "One last step",
+        "legalModalSubtitle": "Please review and accept our policies to continue."
     },
     "footer": {
         "brandName": "BishulMe",

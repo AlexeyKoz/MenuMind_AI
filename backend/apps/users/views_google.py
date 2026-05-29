@@ -205,6 +205,15 @@ def google_login(request):
 
     _ensure_email_verified(user)
 
+    # Determine whether the user still needs to accept the legal documents.
+    # Manual registration collects this via a checkbox; Google sign-in must too.
+    requires_legal_acceptance = True
+    try:
+        from legal.models import LegalAcceptance
+        requires_legal_acceptance = not LegalAcceptance.objects.filter(user=user).exists()
+    except Exception as exc:  # pragma: no cover - legal app should be installed
+        logger.warning("Could not check legal acceptance for %s: %s", email, exc)
+
     refresh = RefreshToken.for_user(user)
 
     logger.info("=" * 80)
@@ -216,6 +225,8 @@ def google_login(request):
             'user': UserSerializer(user).data,
             'refresh': str(refresh),
             'access': str(refresh.access_token),
+            'created': created,
+            'requires_legal_acceptance': requires_legal_acceptance,
         },
         status=status.HTTP_200_OK,
     )

@@ -8,7 +8,7 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0005_alter_importhistory_id'),
+        ('core', '0004_add_validation_fields_to_ingredientcache'),
     ]
 
     operations = [

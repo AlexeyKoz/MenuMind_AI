@@ -486,3 +486,7 @@ create_test_*.py
 # ==========================================
 *.dmg
 *.iso
+.env.production.backup
+.env.*.backup
+backend/google-translate-sa.json
+backend/gen-lang-client-*.json
