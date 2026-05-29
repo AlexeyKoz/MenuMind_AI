@@ -10,7 +10,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-menumine_ai}
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -57,8 +57,6 @@ services:
       - REDIS_PORT=6379
       - REDIS_URL=redis://redis:6379/0
   # Mailjet Configuration
-      - MAILJET_API_KEY=7fddcffd9c674043d468c076f6b3f399
-      - MAILJET_SECRET_KEY=63cad8b87cd6be051280f3fa1e5c3c41
       - MAILJET_SENDER_EMAIL=bishulme@gmail.com
       - MAILJET_SENDER_NAME=BishulSheli
       - MAILJET_TEMPLATE_VERIFY_EN=7459709
@@ -70,7 +68,6 @@ services:
       - EMAIL_PORT=587
       - EMAIL_USE_TLS=True
       - EMAIL_HOST_USER=7fddcffd9c674043d468c076f6b3f399
-      - EMAIL_HOST_PASSWORD=63cad8b87cd6be051280f3fa1e5c3c41
       - DEFAULT_FROM_EMAIL=bishulme@gmail.com
     volumes:
       - backend_static:/app/staticfiles
@@ -175,7 +172,7 @@ services:
       args:
         REACT_APP_API_URL: https://bishul.me
         REACT_APP_WS_URL: wss://bishul.me:8001
-        REACT_APP_GOOGLE_CLIENT_ID: 819829561375-19d74oa53gsn83r0qaaavb0659hsegqo.apps.googleusercontent.com
+        REACT_APP_GOOGLE_CLIENT_ID: 819829561375-0defs4nf7svc25a6tvfr1bkep6n3od47.apps.googleusercontent.com
     container_name: menumine_frontend_prod
     restart: unless-stopped
     ports:
