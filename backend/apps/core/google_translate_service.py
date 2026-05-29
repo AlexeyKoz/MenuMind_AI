@@ -15,6 +15,42 @@ print("[DEBUG] google_translate_service.py module loaded")
 logger.info("[DEBUG] google_translate_service.py module loaded")
 
 
+class _ApiKeyTranslateClient:
+    """Adapter exposing the same .translate() interface as
+    google.cloud.translate_v2.Client, authenticating with an API key over REST.
+
+    The v2 Client object cannot authenticate via API key (verified against
+    google-cloud-translate 3.15.0), so the GOOGLE_TRANSLATE_KEY path must go
+    through the public REST endpoint instead of the client library.
+    """
+
+    ENDPOINT = 'https://translation.googleapis.com/language/translate/v2'
+
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+
+    def translate(self, values, target_language=None, source_language=None,
+                  format_='text', **kwargs):
+        import requests
+        is_single = isinstance(values, str)
+        q = [values] if is_single else list(values)
+        payload = [('q', v) for v in q]
+        payload += [('target', target_language), ('format', format_)]
+        if source_language:
+            payload.append(('source', source_language))
+        resp = requests.post(self.ENDPOINT, params={'key': self._api_key},
+                             data=payload, timeout=20)
+        resp.raise_for_status()
+        translations = resp.json()['data']['translations']
+        results = [
+            {'translatedText': t['translatedText'],
+             'detectedSourceLanguage': t.get('detectedSourceLanguage'),
+             'input': original}
+            for t, original in zip(translations, q)
+        ]
+        return results[0] if is_single else results
+
+
 class GoogleTranslateService:
     """
     Google Translate API as primary translator with fallback chain:
@@ -31,43 +67,55 @@ class GoogleTranslateService:
         self.gemini_client = None
         self.groq_client = None
 
-        # Initialize Google Translate
+        # Initialize Google Translate (primary).
+        # Credential order: API key (REST) -> service account JSON -> ADC.
         try:
             from google.cloud import translate_v2 as translate
             import os
 
-            # Try service account JSON file first (most reliable)
-            json_key_path = os.path.join(os.path.dirname(os.path.dirname(
-                os.path.dirname(__file__))), 'gen-lang-client-0598591486-a22cb0b49217.json')
+            credentials_loaded = False
 
-            logger.info(
-                f"[GOOGLE_TRANSLATE] Looking for JSON key at: {json_key_path}")
-            logger.info(
-                f"[GOOGLE_TRANSLATE] File exists: {os.path.exists(json_key_path)}")
-
-            if os.path.exists(json_key_path):
+            # Tier 1: API key authentication via REST.
+            # The v2 Client cannot authenticate with an API key (verified),
+            # so the key is routed through a REST adapter.
+            api_key = getattr(settings, 'GOOGLE_TRANSLATE_KEY', None) or \
+                os.environ.get('GOOGLE_TRANSLATE_KEY')
+            if api_key:
                 logger.info(
-                    "[GOOGLE_TRANSLATE] Using service account JSON file")
-                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = json_key_path
-                self.google_client = translate.Client()
-            else:
-                # Try API key from settings
-                api_key = getattr(settings, 'GOOGLE_CLOUD_API_KEY', None)
-                if api_key:
-                    logger.info(
-                        "[GOOGLE_TRANSLATE] Using API key authentication")
-                    os.environ['GOOGLE_API_KEY'] = api_key
-                    self.google_client = translate.Client()
-                else:
-                    logger.info("[GOOGLE_TRANSLATE] Using default credentials")
-                    self.google_client = translate.Client()
+                    "[GOOGLE_TRANSLATE] Using API key authentication (REST)")
+                self.google_client = _ApiKeyTranslateClient(api_key)
+                credentials_loaded = True
 
-            logger.info(
-                "[GOOGLE_TRANSLATE] ✅ Initialized Google Translate API")
+            # Tier 2: service account JSON via GOOGLE_APPLICATION_CREDENTIALS.
+            if not credentials_loaded:
+                sa_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+                if sa_path and os.path.exists(sa_path):
+                    logger.info(
+                        f"[GOOGLE_TRANSLATE] Using service account JSON: {sa_path}")
+                    self.google_client = translate.Client.from_service_account_json(
+                        sa_path)
+                    credentials_loaded = True
+                elif sa_path:
+                    logger.warning(
+                        f"[GOOGLE_TRANSLATE] GOOGLE_APPLICATION_CREDENTIALS set "
+                        f"but file not found: {sa_path}")
+
+            # Tier 3: application default credentials (last resort).
+            if not credentials_loaded:
+                logger.info(
+                    "[GOOGLE_TRANSLATE] Trying application default credentials")
+                self.google_client = translate.Client()
+                credentials_loaded = True
+
+            if self.google_client:
+                logger.info(
+                    "[GOOGLE_TRANSLATE] ✅ Initialized Google Translate API")
         except ImportError:
+            self.google_client = None
             logger.warning(
                 "[GOOGLE_TRANSLATE] ⚠️ google-cloud-translate not installed")
         except Exception as e:
+            self.google_client = None
             logger.error(
                 f"[GOOGLE_TRANSLATE] ❌ Google Translate init failed: {e}")
             import traceback
@@ -96,6 +144,10 @@ class GoogleTranslateService:
         except Exception as e:
             logger.warning(
                 f"[GOOGLE_TRANSLATE] ⚠️ Groq fallback unavailable: {e}")
+
+    def is_google_available(self) -> bool:
+        """Return True if a Google Translate client was successfully initialized."""
+        return self.google_client is not None
 
     def translate_text(
         self,

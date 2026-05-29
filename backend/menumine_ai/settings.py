@@ -349,7 +349,9 @@ GROQ_API_KEY = env('GROQ_API_KEY', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 GEMINI_API_KEY = env('GEMINI_API_KEY', default='')  # Gemini Flash 2.5
 GOOGLE_CLOUD_API_KEY = env('GOOGLE_CLOUD_API_KEY',
-                           default='')  # Google Translate API
+                           default='')  # Google Translate API (service-account / unused)
+GOOGLE_TRANSLATE_KEY = env('GOOGLE_TRANSLATE_KEY',
+                           default='')  # Google Translate REST API key
 
 # ============================================
 # SITE CONFIGURATION
