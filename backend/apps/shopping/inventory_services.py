@@ -426,7 +426,7 @@ class InventoryRecipeGenerator:
             if gemini_key:
                 genai.configure(api_key=gemini_key)
                 self.gemini_client = genai.GenerativeModel(
-                    'gemini-2.0-flash-lite')
+                    'gemini-2.5-flash-lite')
                 print("[INVENTORY AI] Initialized Gemini 2.0 Flash Lite (PRIMARY)")
             else:
                 print("[WARNING] GEMINI_API_KEY not found. Gemini unavailable.")

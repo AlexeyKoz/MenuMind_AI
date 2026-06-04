@@ -442,7 +442,7 @@ Keep it brief and practical. Only report real issues."""
                     return None
                 genai.configure(api_key=api_key)
                 self._gemini_client = genai.GenerativeModel(
-                    'gemini-2.0-flash-lite')
+                    'gemini-2.5-flash-lite')
 
             response = self._gemini_client.generate_content(
                 prompt,

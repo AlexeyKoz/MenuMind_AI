@@ -3,6 +3,9 @@
         "name": "MenuMind AI"
     },
     "common": {
+        "comingSoonBadge": "בקרוב",
+        "comingSoonTitle": "התכונה הזו תהיה זמינה בקרוב",
+        "comingSoonSubtitle": "אנחנו מוסיפים את הגימור האחרון. חזרו לבדוק בקרוב!",
         "save": "שמור",
         "cancel": "ביטול",
         "delete": "מחק",
@@ -87,6 +90,11 @@
         "completedBy": "הושלם על ידי",
         "new": "חדש",
         "aiSuggested": "AI",
+        "itemNumber": "מספר פריט",
+        "clearCompleted": "הסר מסומנים",
+        "clearCompletedConfirm": "להסיר את כל {{count}} הפריטים המסומנים מהרשימה?",
+        "clearCompletedSuccess": "הוסרו {{count}} פריטים מסומנים",
+        "clearCompletedPartial": "{{failed}} פריטים לא ניתנו להסרה",
         "removeItem": "הסר פריט מהרשימה",
         "quantity": "כמות",
         "decreaseQuantity": "הפחת כמות",

@@ -1190,7 +1190,7 @@ Return JSON only:
 
             # Configure Gemini
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.0-flash-lite')
+            model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
             lang_names = {
                 'en': 'English',

@@ -3,6 +3,9 @@
         "name": "MenuMind AI"
     },
     "common": {
+        "comingSoonBadge": "Coming soon",
+        "comingSoonTitle": "This feature will be available soon",
+        "comingSoonSubtitle": "We're putting the finishing touches on it. Check back shortly!",
         "save": "Save",
         "cancel": "Cancel",
         "delete": "Delete",
@@ -87,6 +90,11 @@
         "completedBy": "Completed by",
         "new": "New",
         "aiSuggested": "AI",
+        "itemNumber": "Item number",
+        "clearCompleted": "Remove checked",
+        "clearCompletedConfirm": "Remove all {{count}} checked items from this list?",
+        "clearCompletedSuccess": "Removed {{count}} checked items",
+        "clearCompletedPartial": "{{failed}} item(s) could not be removed",
         "removeItem": "Remove item from list",
         "quantity": "Quantity",
         "decreaseQuantity": "Decrease quantity",

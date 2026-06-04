@@ -39,7 +39,7 @@ class InventoryRecipeAgent:
         gemini_api_key = getattr(settings, 'GEMINI_API_KEY', None)
         if gemini_api_key:
             genai.configure(api_key=gemini_api_key)
-            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+            self.gemini_model = genai.GenerativeModel('gemini-2.5-flash-lite')
             logger.info("✅ Gemini initialized as primary AI")
         else:
             self.gemini_model = None

@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
+import ComingSoon from '../components/ComingSoon';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
@@ -57,7 +58,7 @@ interface DashboardData {
     cached_at?: string;
 }
 
-const Dashboard: React.FC = () => {
+const DashboardContent: React.FC = () => {
     const { t } = useTranslation();
     const { user, token, logout } = useAuth();
     const { startGuide, isInitialized } = useUserGuide();
@@ -970,6 +971,18 @@ const AchievementsSection: React.FC<{
             )}
         </div>
     );
+};
+
+// TEMPORARY: the Dashboard page is not fully finished yet. We show a "coming soon"
+// placeholder for a cleaner interface. The full implementation above (DashboardContent)
+// is intentionally kept intact — flip COMING_SOON to false to re-enable it.
+const COMING_SOON: boolean = true;
+
+const Dashboard: React.FC = () => {
+    if (COMING_SOON) {
+        return <ComingSoon titleKey="nav.dashboard" title="Dashboard" />;
+    }
+    return <DashboardContent />;
 };
 
 export default Dashboard;

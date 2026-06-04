@@ -1769,7 +1769,7 @@ REMEMBER: ALL OUTPUT MUST BE IN ENGLISH LANGUAGE ONLY!"""
                     raise ImportError("No Gemini API key")
 
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-2.0-flash-lite')
+                model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
                 # Run in executor
                 loop = asyncio.get_event_loop()

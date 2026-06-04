@@ -785,9 +785,11 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     user_preferences=user_preferences
                 )
                 
-                # Search and scrape with fallback
+                # Search and scrape with fallback. Fetch multiple candidates (like the
+                # Discovery agent) so we can skip non-recipe "guide/listicle" pages and
+                # try the next real recipe instead of failing or extracting garbage.
                 scraped_recipes = async_to_sync(recipe_service._search_and_scrape_recipes)(
-                    query, max_results=1)
+                    query, max_results=3)
 
                 if not scraped_recipes:
                     return Response({
@@ -795,24 +797,31 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         'message': 'Could not find recipe online'
                     }, status=status.HTTP_404_NOT_FOUND)
 
-                scraped_data = scraped_recipes[0]
-                print(
-                    f"[FAST AI RECIPE] ✅ Scraped from: {scraped_data['url']}")
-
-                # FAST EXTRACTION: Ingredients only + user language translation
+                # FAST EXTRACTION: try each scraped candidate until one passes validation
                 fast_service = FastRecipeIngredientService()
+                fast_result = None
+                scraped_data = None
 
-                fast_result = async_to_sync(fast_service.extract_ingredients_fast)(
-                    scraped_data=scraped_data,
-                    recipe_name=query,
-                    user_language=user_language,
-                    user_unit_system=user_unit_system
-                )
+                for idx, candidate in enumerate(scraped_recipes, 1):
+                    print(
+                        f"[FAST AI RECIPE] Trying candidate {idx}/{len(scraped_recipes)}: {candidate.get('url')}")
 
-                print(
-                    f"[FAST AI RECIPE] 📊 fast_result type: {type(fast_result)}")
-                print(
-                    f"[FAST AI RECIPE] 📊 fast_result keys: {fast_result.keys() if fast_result else 'None'}")
+                    candidate_result = async_to_sync(fast_service.extract_ingredients_fast)(
+                        scraped_data=candidate,
+                        recipe_name=query,
+                        user_language=user_language,
+                        user_unit_system=user_unit_system
+                    )
+
+                    if candidate_result and candidate_result.get('ingredients'):
+                        fast_result = candidate_result
+                        scraped_data = candidate
+                        print(
+                            f"[FAST AI RECIPE] ✅ Candidate {idx} passed validation: {candidate.get('url')}")
+                        break
+
+                    print(
+                        f"[FAST AI RECIPE] ⚠️ Candidate {idx} failed validation (not a usable recipe), trying next...")
 
                 if not fast_result or not fast_result.get('ingredients'):
                     # Generate helpful suggestions based on the query
@@ -863,6 +872,11 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
             items_updated = []
             user_color = getattr(request.user, 'personal_color', '#4F46E5')
 
+            # In-batch dedup guards: prevent the same ingredient being added multiple
+            # times within a single recipe (by normalized name AND by IML ingredient_key)
+            seen_names = set()
+            seen_ingredient_keys = set()
+
             print(
                 f"[FAST AI RECIPE] Adding {len(ingredients_data)} ingredients to shopping list...")
 
@@ -904,11 +918,47 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                         f"[FAST AI RECIPE] Skipping long text: {ingredient_name[:50]}...")
                     continue
 
+                # Backstop: skip recipe metadata that may have leaked from any extraction path
+                # (e.g. "Cook Time: 20 mins", "Servings: 4", "Total Time", "mins")
+                if FastRecipeIngredientService._is_recipe_metadata(ingredient_name):
+                    print(
+                        f"[FAST AI RECIPE] Skipping recipe metadata: {ingredient_name}")
+                    continue
+
+                # Backstop: skip non-ingredient junk (markdown links, headings, comments, UI)
+                if FastRecipeIngredientService._is_non_ingredient_line(ingredient_name):
+                    print(
+                        f"[FAST AI RECIPE] Skipping non-ingredient line: {ingredient_name}")
+                    continue
+
                 # Get quantity and unit from IML mapping
                 quantity = ing_data.get('quantity', 1)
                 unit = ing_data.get('unit', 'pieces')
                 unit_type = ing_data.get('unit_type', 'none')
                 ingredient_key = ing_data.get('ingredient_key')
+
+                # In-batch dedup: skip if this ingredient was already processed in THIS
+                # request (same normalized name, or same IML ingredient_key). Prevents the
+                # agent adding the same ingredient (or its variants) multiple times.
+                # Strip any leading quantity/unit so "butter" and "1/2 cup butter" collapse
+                # to the same key (matters when IML mapping is unavailable).
+                import re as _re
+                _base = str(ingredient_name).lower().strip()
+                _base = _re.sub(r'^[\d\s/.,½¼¾⅓⅔⅛-]+', '', _base)
+                _base = _re.sub(
+                    r'^(cups?|tbsps?|tablespoons?|tsps?|teaspoons?|g|grams?|kg|ml|l|oz|ounces?|'
+                    r'lbs?|pounds?|cloves?|pieces?|slices?|cans?|packs?|sticks?|pinch(?:es)?|'
+                    r'handfuls?|sprigs?|bunch(?:es)?)\b\.?\s+', '', _base)
+                normalized_name = ' '.join(_base.split()) or ' '.join(
+                    str(ingredient_name).lower().split())
+                if normalized_name in seen_names or (
+                        ingredient_key and ingredient_key in seen_ingredient_keys):
+                    print(
+                        f"[FAST AI RECIPE] Skipping duplicate ingredient: {ingredient_name}")
+                    continue
+                seen_names.add(normalized_name)
+                if ingredient_key:
+                    seen_ingredient_keys.add(ingredient_key)
 
                 # Determine counter type from unit_type
                 if unit_type == 'weight':

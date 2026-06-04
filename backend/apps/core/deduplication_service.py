@@ -34,8 +34,8 @@ class RecipeDeduplicationService:
         gemini_api_key = getattr(settings, 'GEMINI_API_KEY', None)
         if gemini_api_key:
             genai.configure(api_key=gemini_api_key)
-            # Use gemini-2.0-flash-lite for better compatibility
-            self.gemini_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+            # Use gemini-2.5-flash-lite for better compatibility
+            self.gemini_model = genai.GenerativeModel('gemini-2.5-flash-lite')
         else:
             self.gemini_model = None
 

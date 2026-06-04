@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import ComingSoon from '../components/ComingSoon';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserGuide } from '../contexts/UserGuideContext';
 import ApiService from '../services/api';
@@ -380,7 +381,7 @@ const toNumber = (value: any): number => {
 };
 
 // Main Nutrition Tracker Component
-const NutritionTracker: React.FC = () => {
+const NutritionTrackerContent: React.FC = () => {
     const { t } = useTranslation();
     const { startGuide, isInitialized } = useUserGuide();
     const { token, logout } = useAuth();
@@ -830,6 +831,18 @@ const NutritionTracker: React.FC = () => {
             />
         </div>
     );
+};
+
+// TEMPORARY: the Nutrition page is not fully finished yet. We show a "coming soon"
+// placeholder for a cleaner interface. The full implementation above
+// (NutritionTrackerContent) is intentionally kept intact — flip COMING_SOON to false.
+const COMING_SOON: boolean = true;
+
+const NutritionTracker: React.FC = () => {
+    if (COMING_SOON) {
+        return <ComingSoon titleKey="nav.nutrition" title="Nutrition" />;
+    }
+    return <NutritionTrackerContent />;
 };
 
 export default NutritionTracker;

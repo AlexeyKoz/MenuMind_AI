@@ -735,7 +735,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
             "recipe_count": 5,
             "recipes": [...],
             "generation_info": {
-                "ai_model": "gemini-2.0-flash-lite",
+                "ai_model": "gemini-2.5-flash-lite",
                 "generation_time_ms": 2400,
                 "validated": true,
                 "language": "he"
@@ -900,7 +900,7 @@ class InventoryViewSet(viewsets.ModelViewSet):
         generation_time_ms = int((time.time() - start_time) * 1000)
 
         # Phase 3: Save to cache
-        ai_model = 'gemini-2.0-flash-lite'
+        ai_model = 'gemini-2.5-flash-lite'
         if recipes and recipes[0].get('validation', {}).get('ai_provider') == 'groq':
             ai_model = 'groq-llama-3.3-70b'
 

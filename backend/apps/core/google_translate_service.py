@@ -128,7 +128,7 @@ class GoogleTranslateService:
             if api_key:
                 genai.configure(api_key=api_key)
                 self.gemini_client = genai.GenerativeModel(
-                    'gemini-2.0-flash-lite')
+                    'gemini-2.5-flash-lite')
                 logger.info("[GOOGLE_TRANSLATE] ✅ Gemini fallback ready")
         except Exception as e:
             logger.warning(

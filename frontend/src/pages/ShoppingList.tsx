@@ -10,7 +10,7 @@ import LeaveConfirmationModal from '../components/LeaveConfirmationModal';
 import { toast } from 'react-hot-toast';
 import { formatWeight, formatVolume, parseWeightInput, parseVolumeInput } from '../utils/unitConversion';
 import { getUserFriendlyError } from '../utils/errorHandler';
-import { Package, X, Check } from 'lucide-react';
+import { Package, X, Check, Trash2 } from 'lucide-react';
 import { LockedFeature } from '../components/LockedFeature';  // NEW: Import LockedFeature
 
 const ShoppingList: React.FC = () => {
@@ -991,7 +991,7 @@ const ShoppingList: React.FC = () => {
                 setRecipeSuggestions(errorData.suggestions || []);
                 setShowRecipeSuggestions(true);
             } else {
-                toast.error('Failed to add recipe ingredients');
+                toast.error(error?.message || 'Failed to add recipe ingredients');
             }
         } finally {
             setLoading(false);
@@ -1009,6 +1009,7 @@ const ShoppingList: React.FC = () => {
 
     const [isToggling, setIsToggling] = useState<Set<string>>(new Set());
     const [isDeleting, setIsDeleting] = useState<Set<string>>(new Set());
+    const [isClearingCompleted, setIsClearingCompleted] = useState<boolean>(false);
     const [isUpdatingQuantity, setIsUpdatingQuantity] = useState<Set<string>>(new Set());
     const [isUpdatingWeight, setIsUpdatingWeight] = useState<Set<string>>(new Set());
     const [isUpdatingLiquid, setIsUpdatingLiquid] = useState<Set<string>>(new Set());
@@ -1119,6 +1120,68 @@ const ShoppingList: React.FC = () => {
                 newSet.delete(itemId);
                 return newSet;
             });
+        }
+    };
+
+    const handleClearCompleted = async () => {
+        if (isClearingCompleted) return;
+
+        const completedItems = items.filter((item: any) => item.is_completed);
+        if (completedItems.length === 0) return;
+
+        // Confirmation window before bulk removal
+        const confirmed = window.confirm(
+            t('shopping.clearCompletedConfirm', {
+                count: completedItems.length,
+                defaultValue: `Remove all ${completedItems.length} checked items from this list?`
+            })
+        );
+        if (!confirmed) return;
+
+        const completedIds = new Set(completedItems.map((item: any) => item.id));
+
+        try {
+            setIsClearingCompleted(true);
+
+            // Optimistically remove all checked items at once
+            setItems(prev => prev.filter((item: any) => !completedIds.has(item.id)));
+
+            const results = await Promise.allSettled(
+                completedItems.map((item: any) => api.deleteItem(item.id))
+            );
+
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (failed > 0) {
+                toast.error(t('shopping.clearCompletedPartial', {
+                    failed,
+                    defaultValue: `${failed} item(s) could not be removed`
+                }));
+                // Reload to reconcile UI with server state
+                if (activeList?.id) {
+                    const data = await api.getShoppingLists();
+                    const currentList = (data.results || data).find((list: any) => list.id === activeList.id);
+                    if (currentList) {
+                        setItems(currentList.items || []);
+                    }
+                }
+            } else {
+                toast.success(t('shopping.clearCompletedSuccess', {
+                    count: completedItems.length,
+                    defaultValue: `Removed ${completedItems.length} checked items`
+                }));
+            }
+        } catch (error) {
+            console.error('❌ Clear completed error:', error);
+            toast.error(getUserFriendlyError(error));
+            if (activeList?.id) {
+                const data = await api.getShoppingLists();
+                const currentList = (data.results || data).find((list: any) => list.id === activeList.id);
+                if (currentList) {
+                    setItems(currentList.items || []);
+                }
+            }
+        } finally {
+            setIsClearingCompleted(false);
         }
     };
 
@@ -1858,11 +1921,33 @@ const ShoppingList: React.FC = () => {
     };
 
 
-    const categorizedItems = items.reduce((acc: any, item: any) => {
+    // Sort newest-added first (most recent created_at at the top), without mutating state
+    const sortedItems = [...items].sort((a: any, b: any) => {
+        const ta = a?.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b?.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
+    });
+
+    const categorizedItems = sortedItems.reduce((acc: any, item: any) => {
         if (!acc[item.category]) acc[item.category] = [];
         acc[item.category].push(item);
         return acc;
     }, {});
+
+    // Dynamic, continuous numbering that follows the exact on-screen order (categories are
+    // rendered in the same order as Object.values below, items newest-first within each).
+    // The newest item is #1 at the top; numbers recompute automatically as items change.
+    const itemNumberById = (() => {
+        const map = new Map<any, number>();
+        let counter = 0;
+        Object.values(categorizedItems).forEach((catItems: any) => {
+            (catItems as any[]).forEach((it: any) => {
+                counter += 1;
+                map.set(it.id, counter);
+            });
+        });
+        return map;
+    })();
 
     return (
         <div className="max-w-7xl mx-auto p-6">
@@ -2013,7 +2098,28 @@ const ShoppingList: React.FC = () => {
                 <div className="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
                     {activeList ? (
                         <>
-                            <h3 className="text-2xl font-semibold mb-4">{activeList.name}</h3>
+                            <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+                                <h3 className="text-2xl font-semibold">{activeList.name}</h3>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {items.filter((i: any) => i.is_completed).length > 0 && (
+                                        <button
+                                            onClick={handleClearCompleted}
+                                            disabled={isClearingCompleted}
+                                            className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full whitespace-nowrap transition disabled:opacity-50"
+                                            title={t('shopping.clearCompleted', 'Remove checked items')}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            {isClearingCompleted
+                                                ? t('shopping.processing', 'Processing...')
+                                                : t('shopping.clearCompleted', 'Remove checked')}
+                                            <span className="ml-0.5">({items.filter((i: any) => i.is_completed).length})</span>
+                                        </button>
+                                    )}
+                                    <span className="text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
+                                        🧺 {items.filter((i: any) => !i.is_completed).length}/{items.length} {t('shopping.items')}
+                                    </span>
+                                </div>
+                            </div>
 
                             <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg" id="ai-add-section">
                                 <label className="block text-sm font-medium mb-2">
@@ -2217,6 +2323,12 @@ const ShoppingList: React.FC = () => {
                                                         {/* Top row: checkbox, name, and indicators */}
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-3 flex-1">
+                                                                <span
+                                                                    className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-xs font-semibold ${item.is_completed ? 'bg-gray-100 text-gray-400' : 'bg-gray-200 text-gray-700'}`}
+                                                                    title={t('shopping.itemNumber', 'Item number')}
+                                                                >
+                                                                    {itemNumberById.get(item.id)}
+                                                                </span>
                                                                 <input
                                                                     type="checkbox"
                                                                     checked={item.is_completed}

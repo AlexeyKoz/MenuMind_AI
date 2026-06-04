@@ -3,6 +3,9 @@
         "name": "MenuMind AI"
     },
     "common": {
+        "comingSoonBadge": "Скоро",
+        "comingSoonTitle": "Эта функция скоро будет доступна",
+        "comingSoonSubtitle": "Мы заканчиваем работу над ней. Загляните чуть позже!",
         "save": "Сохранить",
         "cancel": "Отмена",
         "delete": "Удалить",
@@ -87,6 +90,11 @@
         "completedBy": "Выполнил",
         "new": "Новый",
         "aiSuggested": "AI",
+        "itemNumber": "Номер товара",
+        "clearCompleted": "Удалить отмеченные",
+        "clearCompletedConfirm": "Удалить все отмеченные товары ({{count}}) из этого списка?",
+        "clearCompletedSuccess": "Удалено отмеченных товаров: {{count}}",
+        "clearCompletedPartial": "Не удалось удалить товаров: {{failed}}",
         "removeItem": "Удалить товар из списка",
         "quantity": "Количество",
         "decreaseQuantity": "Уменьшить количество",
