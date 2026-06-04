@@ -107,7 +107,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
 
     return (
         <>
-            <nav className="bg-white text-gray-800 shadow-md sticky top-0 z-50 border-b border-gray-200">
+            <nav className="bg-white/80 backdrop-blur-md text-gray-800 shadow-sm sticky top-0 z-50 border-b border-gray-200/70">
                 <div className="max-w-7xl mx-auto px-4">
                     {/* Desktop & Mobile Header */}
                     <div className="flex justify-between items-center h-16 relative">
@@ -153,8 +153,10 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 <button
                                     key={item.id}
                                     onClick={() => handleNavigation(item.id)}
-                                    className={`hover:text-blue-600 transition flex items-center gap-1 px-3 py-2 rounded ${
-                                        currentPage === item.id && !isWhatsNewActive ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-700'
+                                    className={`transition-all duration-150 flex items-center gap-1.5 px-3 py-2 rounded-xl ${
+                                        currentPage === item.id && !isWhatsNewActive
+                                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold shadow-sm'
+                                            : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
                                     }`}
                                 >
                                     <span>{item.icon}</span>
@@ -199,7 +201,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                             
                             <button
                                 onClick={handleLogout}
-                                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded transition whitespace-nowrap ml-2"
+                                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl transition shadow-sm hover:shadow whitespace-nowrap ml-2 active:scale-95"
                             >
                                 {t('nav.logout')}
                             </button>
@@ -208,7 +210,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                         {/* Mobile Hamburger Button */}
                         <button
                             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                            className="lg:hidden p-2 hover:bg-gray-100 rounded transition z-10 text-gray-700"
+                            className="lg:hidden p-2.5 hover:bg-gray-100 rounded-xl transition z-10 text-gray-700 active:scale-95"
                             aria-label="Toggle menu"
                         >
                             {isMobileMenuOpen ? (
@@ -271,9 +273,9 @@ const Navigation: React.FC<NavigationProps> = ({ currentPage, setCurrentPage }) 
                                 <button
                                     key={item.id}
                                     onClick={() => handleNavigation(item.id)}
-                                    className={`w-full text-left px-4 py-3 rounded-lg transition flex items-center gap-3 text-lg ${
+                                    className={`w-full text-left px-4 py-3 rounded-xl transition flex items-center gap-3 text-lg active:scale-[0.98] ${
                                         currentPage === item.id && !isWhatsNewActive
-                                            ? 'bg-blue-50 text-blue-600 font-bold border border-blue-200'
+                                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold shadow-sm'
                                             : 'text-gray-700 hover:bg-gray-100 border border-transparent'
                                     }`}
                                 >

@@ -601,6 +601,10 @@ class RecipeAgentService:
                 progress.update_error()
                 return False, None, "Could not extract a valid recipe. The content may not contain a proper recipe. Please try a different search."
 
+            # STEP 5.5: Quality enrichment - make every step precise + add "more" guidance
+            print(f"[ENRICH] Enriching steps with precise instructions + detail...")
+            rcip_recipe = await self._enrich_steps_with_detail(rcip_recipe)
+
             # STEP 6: Create canonical recipe
             # 85% - Translating to your language...
             progress.update_translating()
@@ -1646,6 +1650,220 @@ class RecipeAgentService:
         # Recipe is too poor quality
         logger.error("[VALIDATION] ❌ Recipe quality too poor")
         return None
+
+    async def _enrich_steps_with_detail(self, rcip_recipe: Dict) -> Dict:
+        """
+        QUALITY STAGE: Rewrite each step to be precise and beginner-proof, and
+        attach a `detail` field (the "more" explanation shown behind a toggle).
+
+        - instruction: self-contained action with concrete specifics (quantities,
+          cut sizes, heat level, temperature °C/°F, time + a doneness/visual cue).
+        - detail: 2-4 sentences explaining HOW/WHY, what to look for, common mistakes.
+
+        Non-blocking: on ANY failure the original steps are returned unchanged so
+        generation never breaks because of enrichment.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            steps = rcip_recipe.get('steps', []) or []
+            if not steps:
+                return rcip_recipe
+
+            meta = rcip_recipe.get('meta', {}) if isinstance(
+                rcip_recipe.get('meta'), dict) else {}
+            recipe_name = meta.get('name', 'this recipe')
+            servings = meta.get('servings') or rcip_recipe.get('servings') or ''
+
+            # Build ingredient reference block
+            ingredients = rcip_recipe.get('ingredients', []) or []
+            ing_lines = []
+            for ing in ingredients:
+                if isinstance(ing, dict):
+                    amount = ing.get('quantity') or ing.get('amount') or ''
+                    unit = ing.get('unit') or ''
+                    name = ing.get('display_name') or ing.get('name') or ''
+                    if isinstance(name, dict):
+                        name = name.get('en') or next(iter(name.values()), '')
+                    ing_lines.append(
+                        f"- {amount} {unit} {name}".replace('  ', ' ').strip())
+                else:
+                    ing_lines.append(f"- {ing}")
+            ingredients_block = '\n'.join(ing_lines) if ing_lines else '(not provided)'
+
+            # Build numbered current steps + remember source field name per step
+            step_texts = []
+            step_fields = []
+            for step in steps:
+                if isinstance(step, dict):
+                    if step.get('instruction'):
+                        step_texts.append(step['instruction'])
+                        step_fields.append('instruction')
+                    elif step.get('text'):
+                        step_texts.append(step['text'])
+                        step_fields.append('text')
+                    else:
+                        step_texts.append('')
+                        step_fields.append('instruction')
+                else:
+                    step_texts.append(str(step))
+                    step_fields.append('instruction')
+
+            if all(not t for t in step_texts):
+                return rcip_recipe
+
+            current_steps_block = '\n'.join(
+                f"{i + 1}. {t}" for i, t in enumerate(step_texts))
+
+            prompt = f"""You are a meticulous professional chef and recipe editor. Rewrite the cooking steps for the recipe below so a beginner can follow them and succeed, then add a short "more" explanation for each step.
+
+RECIPE: {recipe_name}{f' (serves {servings})' if servings else ''}
+
+INGREDIENTS (with quantities):
+{ingredients_block}
+
+CURRENT STEPS:
+{current_steps_block}
+
+For EACH step keep the SAME number of steps and the SAME order. Return for each:
+- "instruction": one clear, self-contained action (1-2 sentences). ALWAYS add concrete specifics the action implies:
+   * exact quantities of the ingredients used in that step (take them from the ingredient list)
+   * cutting size/shape (e.g. "1 cm / 1/2-inch cubes", "thin 3 mm slices")
+   * pan/dish size and heat level (low / medium / high)
+   * temperature in BOTH units for baking/roasting/frying (e.g. "180°C / 350°F")
+   * time AND a doneness/visual/tactile cue (e.g. "bake 35-45 minutes until the crust is golden and the filling bubbles")
+- "detail": 2-4 sentences of deeper guidance (the expandable "more" text) explaining HOW and WHY: technique, what to look / listen / smell for, common mistakes to avoid, and useful tips or substitutions.
+
+RULES:
+- Output ENGLISH only (it will be translated later).
+- Be accurate. If the original step is vague, infer the standard professional method for THIS dish.
+- Do NOT invent ingredients that are not in the list.
+- Return ONLY a JSON array (no markdown, no commentary), exactly {len(step_texts)} objects:
+[
+  {{"instruction": "...", "detail": "..."}}
+]"""
+
+            enriched = await self._call_step_enrichment_ai(prompt)
+            if not enriched:
+                logger.warning(
+                    "[ENRICH] No enrichment returned, keeping original steps")
+                return rcip_recipe
+
+            # Merge enriched content back by index (never lose steps)
+            updated = 0
+            for i, step in enumerate(steps):
+                if i >= len(enriched):
+                    break
+                item = enriched[i]
+                if not isinstance(item, dict):
+                    continue
+                new_instruction = (item.get('instruction') or '').strip()
+                new_detail = (item.get('detail') or '').strip()
+
+                if not isinstance(step, dict):
+                    step = {'instruction': str(step), 'step_number': i + 1}
+                    steps[i] = step
+
+                field = step_fields[i] if i < len(step_fields) else 'instruction'
+                if new_instruction:
+                    step[field] = new_instruction
+                    # Keep instruction/text mirrored for frontend compatibility
+                    if field == 'instruction' and 'text' in step:
+                        step['text'] = new_instruction
+                    elif field == 'text':
+                        step['instruction'] = new_instruction
+                if new_detail:
+                    step['detail'] = new_detail
+                    updated += 1
+
+            logger.info(
+                f"[ENRICH] ✅ Enriched {updated}/{len(steps)} steps with detailed guidance")
+            rcip_recipe['steps'] = steps
+            return rcip_recipe
+
+        except Exception as e:
+            logger.warning(
+                f"[ENRICH] ⚠️ Step enrichment failed (keeping original): {e}")
+            return rcip_recipe
+
+    async def _call_step_enrichment_ai(self, prompt: str):
+        """Call Gemini (primary) then Groq (fallback) and parse a JSON array of steps."""
+        import logging
+        import json
+        logger = logging.getLogger(__name__)
+        response_text = None
+
+        # PRIMARY: Gemini 2.5 Flash Lite
+        try:
+            import google.generativeai as genai
+            api_key = getattr(settings, 'GEMINI_API_KEY', None)
+            if not api_key:
+                raise ImportError("No Gemini API key")
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.5-flash-lite')
+            loop = asyncio.get_event_loop()
+            gemini_response = await loop.run_in_executor(
+                None,
+                lambda: model.generate_content(
+                    prompt,
+                    generation_config={
+                        'temperature': 0.3,
+                        'max_output_tokens': 4096,
+                    }
+                )
+            )
+            response_text = gemini_response.text
+            logger.info(
+                f"[ENRICH][GEMINI] ✅ Received {len(response_text)} chars")
+        except Exception as gemini_error:
+            logger.warning(
+                f"[ENRICH][GEMINI] ⚠️ Failed: {gemini_error}, trying Groq")
+            if not self.groq_client:
+                return None
+            try:
+                loop = asyncio.get_event_loop()
+                chat_completion = await loop.run_in_executor(
+                    None,
+                    lambda: self.groq_client.chat.completions.create(
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a meticulous professional chef. Return ONLY a JSON array of {instruction, detail} objects in English."
+                            },
+                            {"role": "user", "content": prompt}
+                        ],
+                        model=self.model,
+                        temperature=0.3,
+                        max_tokens=4096
+                    )
+                )
+                response_text = chat_completion.choices[0].message.content
+                logger.info(
+                    f"[ENRICH][GROQ] ✅ Received {len(response_text)} chars")
+            except Exception as groq_error:
+                logger.warning(f"[ENRICH][GROQ] ⚠️ Failed: {groq_error}")
+                return None
+
+        if not response_text:
+            return None
+
+        # Parse JSON array out of the response
+        import re
+        text = re.sub(r'```json\s*', '', response_text)
+        text = re.sub(r'```\s*', '', text)
+        match = re.search(r'\[[\s\S]*\]', text)
+        if not match:
+            logger.warning("[ENRICH] No JSON array found in AI response")
+            return None
+        try:
+            data = json.loads(match.group(0))
+            if isinstance(data, list):
+                return data
+            return None
+        except json.JSONDecodeError as e:
+            logger.warning(f"[ENRICH] JSON decode error: {e}")
+            return None
 
     async def _convert_to_rcip(
         self,

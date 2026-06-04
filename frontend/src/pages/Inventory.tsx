@@ -753,13 +753,13 @@ const Inventory: React.FC = () => {
     }
 
     return (
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {/* Header */}
             <div className="mb-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                            <Package className="w-8 h-8" />
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
+                            <Package className="w-7 h-7 sm:w-8 sm:h-8" />
                             {t('inventory.title')}
                         </h1>
                         <p className="text-gray-600 mt-1">
@@ -770,12 +770,12 @@ const Inventory: React.FC = () => {
                             )}
                         </p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
                         <button
                             id="get-recipes-button"
                             onClick={() => handleGenerateRecipes()}
                             disabled={generatingRecipes || totalItems === 0}
-                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition disabled:opacity-50 font-medium"
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition disabled:opacity-50 font-medium active:scale-95 w-full sm:w-auto"
                             title={cachedRecipes.length > 0 ? 'Show previous recipe suggestions' : 'Generate recipe suggestions from your inventory'}
                         >
                             <ChefHat className="w-5 h-5" />
@@ -787,7 +787,7 @@ const Inventory: React.FC = () => {
                                 resetForm();
                                 setShowAddModal(true);
                             }}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium active:scale-95 w-full sm:w-auto"
                         >
                             <Plus className="w-5 h-5" />
                             {t('inventory.addItem')}

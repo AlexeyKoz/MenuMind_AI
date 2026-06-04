@@ -367,10 +367,10 @@ const Recipes: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-4 sm:p-6">
             {/* Header */}
-            <div className="max-w-7xl mx-auto mb-8">
-                <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
+                <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8">
                     <div className="flex justify-between items-start mb-6">
                         <div>
                             <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-2">
@@ -437,16 +437,16 @@ const Recipes: React.FC = () => {
 
                         <button
                             onClick={() => setShowFilters(!showFilters)}
-                            className="flex items-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                            className="flex items-center gap-2 px-4 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition shrink-0 whitespace-nowrap active:scale-95"
                         >
                             <Filter className="w-5 h-5" />
-                            {t('recipes.filters')}
+                            <span className="hidden sm:inline">{t('recipes.filters')}</span>
                         </button>
                     </div>
 
                     {/* Filter Panel */}
                     {showFilters && (
-                        <div className="mt-4 p-4 bg-gray-50 rounded-lg grid grid-cols-4 gap-4">
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">{t('recipes.difficulty')}</label>
                                 <select
@@ -764,6 +764,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
 
     const allergens = getAllergens(recipe);
     const [showJSON, setShowJSON] = useState(false);
+    const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
     const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(new Set());
     const [shoppingLists, setShoppingLists] = useState<any[]>([]);
     const [selectedListId, setSelectedListId] = useState<string>('');
@@ -1146,6 +1147,27 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
                                                         <span className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded">
                                                             🌡️ {step.params.temperature_c}°C
                                                         </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {step.detail && (
+                                                <div className="mt-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedSteps(prev => {
+                                                            const next = new Set(prev);
+                                                            next.has(idx) ? next.delete(idx) : next.add(idx);
+                                                            return next;
+                                                        })}
+                                                        className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition"
+                                                    >
+                                                        {expandedSteps.has(idx) ? t('common.showLess', 'Show less') : t('common.showMore', 'More')}
+                                                        <span className={`transition-transform ${expandedSteps.has(idx) ? 'rotate-180' : ''}`}>▾</span>
+                                                    </button>
+                                                    {expandedSteps.has(idx) && (
+                                                        <div className="mt-2 p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-gray-700 leading-relaxed">
+                                                            {step.detail}
+                                                        </div>
                                                     )}
                                                 </div>
                                             )}

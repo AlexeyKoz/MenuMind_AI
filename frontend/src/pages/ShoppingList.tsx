@@ -1950,7 +1950,7 @@ const ShoppingList: React.FC = () => {
     })();
 
     return (
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-7xl mx-auto p-3 sm:p-6">
             {/* NEW: Show loading or lock screen if email not verified */}
             {accessLoading ? (
                 <div className="flex justify-center items-center min-h-[60vh]">
@@ -1982,13 +1982,13 @@ const ShoppingList: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="bg-white rounded-lg shadow-lg p-4">
+                <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-xl font-semibold">{t('shopping.myLists')}</h3>
                         <button
                             id="create-list-button"
                             onClick={() => setShowCreateForm(!showCreateForm)}
-                            className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition"
+                            className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 transition shadow-sm active:scale-95"
                         >
                             ➕ {t('common.add')}
                         </button>
@@ -2095,7 +2095,7 @@ const ShoppingList: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
+                <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 sm:p-6">
                     {activeList ? (
                         <>
                             <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
@@ -2125,20 +2125,20 @@ const ShoppingList: React.FC = () => {
                                 <label className="block text-sm font-medium mb-2">
                                     🤖 {t('shopping.aiAddLabel')}
                                 </label>
-                                <div className="flex gap-2">
+                                <div className="flex flex-col sm:flex-row gap-2">
                                     <input
                                         type="text"
                                         value={aiInput}
                                         onChange={(e) => handleInputChange(e.target.value, setAiInput)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleAiAddItems()}
                                         placeholder={!activeList ? t('shopping.selectListFirst') : t('shopping.aiPlaceholder')}
-                                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         disabled={loading || !activeList}
                                     />
                                     <button
                                         onClick={handleAiAddItems}
                                         disabled={loading || !activeList}
-                                        className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition"
+                                        className="w-full sm:w-auto shrink-0 px-6 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 disabled:opacity-50 transition shadow-sm active:scale-95"
                                     >
                                         {loading ? t('shopping.processing') : t('shopping.aiAdd')}
                                     </button>
@@ -2262,7 +2262,7 @@ const ShoppingList: React.FC = () => {
                             </div>
 
                             <div className="mb-6">
-                                <div className="flex gap-2">
+                                <div className="flex flex-col sm:flex-row gap-2">
                                     <input
                                         id="manual-add-input"
                                         type="text"
@@ -2270,13 +2270,13 @@ const ShoppingList: React.FC = () => {
                                         onChange={(e) => handleInputChange(e.target.value, setNewItem)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleAddItem()}
                                         placeholder={!activeList ? t('shopping.selectListFirst') : t('shopping.addItemPlaceholder')}
-                                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                        className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         disabled={!activeList}
                                     />
                                     <button
                                         onClick={handleAddItem}
                                         disabled={!activeList}
-                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+                                        className="w-full sm:w-auto shrink-0 px-6 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition shadow-sm active:scale-95"
                                     >
                                         {t('shopping.addItem')}
                                     </button>
@@ -2572,8 +2572,8 @@ const ShoppingList: React.FC = () => {
 
                             {/* Send to Inventory Section */}
                             {items.filter(item => item.is_completed).length > 0 && (
-                                <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <div className="flex items-center justify-between">
+                                <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                         <div>
                                             <h4 className="font-semibold text-gray-900 mb-1">
                                                 📦 {t('shopping.readyToStock')}
@@ -2585,7 +2585,7 @@ const ShoppingList: React.FC = () => {
                                         <button
                                             onClick={handleSendToInventory}
                                             disabled={loadingInventory}
-                                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 font-medium"
+                                            className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50 font-medium shadow-sm active:scale-95"
                                         >
                                             <Package className="w-5 h-5" />
                                             {loadingInventory ? t('shopping.processing') : t('shopping.sendToInventory')}
@@ -2594,20 +2594,20 @@ const ShoppingList: React.FC = () => {
                                 </div>
                             )}
 
-                            <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+                            <div className="mt-8 p-4 bg-gray-50 rounded-2xl">
                                 <h4 className="font-semibold mb-3">{t('shopping.orderFromStore')}</h4>
-                                <div className="flex gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <button
                                         onClick={() => handleMockOrder('wolt')}
                                         disabled={loading}
-                                        className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50"
+                                        className="w-full px-4 py-2.5 bg-orange-500 text-white rounded-xl hover:bg-orange-600 disabled:opacity-50 transition shadow-sm active:scale-95 text-center"
                                     >
                                         🛵 {t('shopping.orderViaWolt')}
                                     </button>
                                     <button
                                         onClick={() => handleMockOrder('shufersal')}
                                         disabled={loading}
-                                        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                                        className="w-full px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition shadow-sm active:scale-95 text-center"
                                     >
                                         🛒 {t('shopping.checkPrices')}
                                     </button>

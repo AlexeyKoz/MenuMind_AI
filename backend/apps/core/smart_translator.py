@@ -336,6 +336,22 @@ class SmartTranslationService:
         translated_texts = self._translate_steps_with_gemini(
             step_texts, target_language, glossary)
 
+        # Also translate the per-step "detail" (the expandable "more" guidance)
+        # so it is shown in the user's language. Preserve alignment by index.
+        detail_texts = [
+            (step.get('detail') or '') if isinstance(step, dict) else ''
+            for step in steps
+        ]
+        translated_details = None
+        if any(d.strip() for d in detail_texts):
+            try:
+                translated_details = self._translate_steps_with_gemini(
+                    detail_texts, target_language, glossary)
+            except Exception as detail_err:
+                logger.warning(
+                    f"[SMART_TRANSLATE] Detail translation failed, keeping English detail: {detail_err}")
+                translated_details = None
+
         # Update steps with translations
         translated_steps = []
         for idx, step in enumerate(steps):
@@ -349,6 +365,10 @@ class SmartTranslationService:
                     translated_step['text'] = translated_texts[idx]
                 elif field_name == 'text' and 'instruction' in translated_step:
                     translated_step['instruction'] = translated_texts[idx]
+
+            if (translated_details and idx < len(translated_details)
+                    and translated_details[idx] and detail_texts[idx].strip()):
+                translated_step['detail'] = translated_details[idx]
 
             translated_steps.append(translated_step)
 

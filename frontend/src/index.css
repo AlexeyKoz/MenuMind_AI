@@ -30,7 +30,68 @@
   }
 }
 
+@layer base {
+  /* Smooth, modern scrolling + accessible focus */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #2563eb; /* blue-600 */
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Sleeker scrollbars (desktop) */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent; /* slate-300 */
+  }
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8; /* slate-400 */
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Reusable modern surface + control styles (same brand palette) */
+  .card-modern {
+    @apply bg-white rounded-2xl shadow-sm ring-1 ring-gray-100;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none bg-blue-600 text-white hover:bg-blue-700 shadow-sm;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none bg-gray-100 text-gray-700 hover:bg-gray-200;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:pointer-events-none bg-red-500 text-white hover:bg-red-600;
+  }
+}
+
 @layer utilities {
+  /* Fade/slide entrance for fresh, lively feel */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in-up {
+    animation: fadeInUp 0.25s ease-out both;
+  }
+
   /* Safe area support for iOS */
   .safe-area-inset-top {
     padding-top: env(safe-area-inset-top);

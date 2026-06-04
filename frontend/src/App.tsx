@@ -107,15 +107,18 @@ const AppContent: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-2xl">Loading...</div>
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin"></div>
+                    <div className="text-lg font-medium text-gray-500">Loading...</div>
+                </div>
             </div>
         );
     }
 
     if (!user) {
         return (
-            <div className="min-h-screen flex flex-col">
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex flex-col">
                 <Routes>
                     {/* Legal Routes - Public */}
                     <Route path="/legal/terms" element={<TermsOfService />} />
@@ -162,7 +165,7 @@ const AppContent: React.FC = () => {
     return (
         <CollaborationProvider>
             <UserGuideProvider>
-                <div className="min-h-screen bg-gray-100 flex flex-col">
+                <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex flex-col">
                     <EmailVerificationBanner />
                     <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
                     <AIWarningBanner />

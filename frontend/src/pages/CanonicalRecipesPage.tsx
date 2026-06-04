@@ -36,6 +36,7 @@ const CanonicalRecipesPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedRecipe, setSelectedRecipe] = useState<any>(null);
+    const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
     const [showBuilder, setShowBuilder] = useState(false);
     const [recipeLiked, setRecipeLiked] = useState(false);
     const [liking, setLiking] = useState(false);
@@ -237,6 +238,7 @@ const CanonicalRecipesPage: React.FC = () => {
             }
 
             setSelectedRecipe(recipe);
+            setExpandedSteps(new Set());
 
             // Check if translation is pending or in progress
             if (recipe.translation_status === 'pending' || recipe.translation_in_progress) {
@@ -647,6 +649,27 @@ const CanonicalRecipesPage: React.FC = () => {
                                                                 ⏱️ {t('discover.minutesLabel', { time: step.time_minutes })}
                                                             </p>
                                                         )}
+                                                        {step.detail && (
+                                                            <div className="mt-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setExpandedSteps(prev => {
+                                                                        const next = new Set(prev);
+                                                                        next.has(idx) ? next.delete(idx) : next.add(idx);
+                                                                        return next;
+                                                                    })}
+                                                                    className="inline-flex items-center gap-1 text-sm font-medium text-green-700 hover:text-green-800 transition"
+                                                                >
+                                                                    {expandedSteps.has(idx) ? t('common.showLess', 'Show less') : t('common.showMore', 'More')}
+                                                                    <span className={`transition-transform ${expandedSteps.has(idx) ? 'rotate-180' : ''}`}>▾</span>
+                                                                </button>
+                                                                {expandedSteps.has(idx) && (
+                                                                    <div className="mt-2 p-3 bg-green-50 border border-green-100 rounded-xl text-sm text-gray-700 leading-relaxed animate-fade-in-up">
+                                                                        {convertTemperaturesInText(step.detail, getUserTemperatureUnit(user))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
@@ -686,12 +709,10 @@ const CanonicalRecipesPage: React.FC = () => {
 
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="flex justify-between items-center mb-8">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6 sm:mb-8">
                     <div>
-                        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+                        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">
                             {t('discover.title')}
-                            {/* Debug marker - remove after confirming */}
-                            <span className="ml-2 text-xs bg-green-500 text-white px-2 py-1 rounded">v2.0</span>
                         </h1>
                         <p className="text-gray-600">
                             {t('discover.subtitle')}
@@ -700,7 +721,7 @@ const CanonicalRecipesPage: React.FC = () => {
                     <button
                         id="create-recipe-button"
                         onClick={() => setShowBuilder(true)}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2 active:scale-95 w-full sm:w-auto"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -713,22 +734,24 @@ const CanonicalRecipesPage: React.FC = () => {
                 <AllergenWarningBanner className="mb-6" />
 
                 {/* AI Search Panel */}
-                <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200" id="ai-recipe-search">
-                    <div className="flex items-center gap-3">
-                        <Sparkles className="w-6 h-6 text-purple-600" />
-                        <input
-                            type="text"
-                            value={aiQuery}
-                            onChange={(e) => setAiQuery(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleAISearch()}
-                            placeholder={t('discover.aiSearchPlaceholder')}
-                            className="flex-1 px-4 py-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-                            disabled={aiLoading}
-                        />
+                <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border border-purple-200" id="ai-recipe-search">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1">
+                            <Sparkles className="w-6 h-6 text-purple-600 shrink-0" />
+                            <input
+                                type="text"
+                                value={aiQuery}
+                                onChange={(e) => setAiQuery(e.target.value)}
+                                onKeyPress={(e) => e.key === 'Enter' && handleAISearch()}
+                                placeholder={t('discover.aiSearchPlaceholder')}
+                                className="flex-1 min-w-0 px-4 py-3 border border-purple-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                disabled={aiLoading}
+                            />
+                        </div>
                         <button
                             onClick={handleAISearch}
                             disabled={aiLoading}
-                            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition disabled:opacity-50 font-medium"
+                            className="px-6 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition disabled:opacity-50 font-medium active:scale-95 w-full sm:w-auto shrink-0"
                         >
                             {aiLoading ? t('discover.aiSearching') : t('discover.aiFindRecipe')}
                         </button>

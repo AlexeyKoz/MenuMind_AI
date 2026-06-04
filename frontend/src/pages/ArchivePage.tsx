@@ -380,8 +380,8 @@ const ArchivePage: React.FC = () => {
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-6xl mx-auto px-4">
                 {/* Header */}
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <div className="flex items-center justify-between mb-4">
+                <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 p-4 sm:p-6 mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                                 🗃️ {t('archive.title')}
@@ -436,7 +436,7 @@ const ArchivePage: React.FC = () => {
                 </div>
 
                 {/* Content */}
-                <div className="bg-white rounded-lg shadow-sm">
+                <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100">
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

@@ -246,7 +246,7 @@ const SettingsPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-50 py-8">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="bg-white shadow rounded-lg">
+                <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100">
                     <div className="px-6 py-4 border-b border-gray-200">
                         <h1 className="text-2xl font-bold text-gray-900">⚙️ {t('settings.title')}</h1>
                         <p className="mt-1 text-gray-600">{t('settings.subtitle')}</p>
@@ -618,7 +618,7 @@ const SettingsPage: React.FC = () => {
                 </div>
 
                 {/* AI Nutrition Coach Settings */}
-                <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
+                <div className="bg-white rounded-2xl shadow-sm ring-1 ring-gray-100 overflow-hidden mt-6">
                     <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50">
                         <h2 className="text-2xl font-bold text-gray-900">🤖 {t('settings.aiNutritionCoach')}</h2>
                         <p className="text-sm text-gray-600 mt-1">
