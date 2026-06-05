@@ -43,7 +43,7 @@ interface CollaborationContextType {
     // Actions
     connectToList: (listId: string) => Promise<void>;
     disconnect: () => void;
-    addCollaborator: (friendName: string, collaborationKey: string, canEdit: boolean) => Promise<boolean>;
+    addCollaborator: (friendEmail: string, collaborationKey: string, canEdit: boolean) => Promise<boolean>;
     updatePermissions: (userId: string, permissions: any) => Promise<boolean>;
     loadCollaborators: (listId: string) => Promise<void>;
     loadMyCollaborationKey: () => Promise<void>;
@@ -431,9 +431,9 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
         connectionTracker.currentListId = null;
     }, []);
 
-    const addCollaborator = useCallback(async (friendName: string, collaborationKey: string, canEdit: boolean): Promise<boolean> => {
+    const addCollaborator = useCallback(async (friendEmail: string, collaborationKey: string, canEdit: boolean): Promise<boolean> => {
         try {
-            console.log(`👥 addCollaborator called with: friendName=${friendName}, collaborationKey=${collaborationKey}, canEdit=${canEdit}, currentListId=${currentListId.current}`);
+            console.log(`👥 addCollaborator called with: friendEmail=${friendEmail}, collaborationKey=${collaborationKey}, canEdit=${canEdit}, currentListId=${currentListId.current}`);
 
             if (!currentListId.current) {
                 console.error('❌ addCollaborator: No current list ID');
@@ -441,7 +441,7 @@ export const CollaborationProvider: React.FC<CollaborationProviderProps> = ({ ch
             }
 
             const response = await api.current.addCollaborator(currentListId.current, {
-                friend_name: friendName,
+                friend_email: friendEmail,
                 collaboration_key: collaborationKey,
                 can_edit: canEdit,
                 can_add_items: canEdit,

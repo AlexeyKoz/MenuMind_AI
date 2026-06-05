@@ -20,7 +20,7 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
     } = useCollaboration();
 
     const [showAddForm, setShowAddForm] = useState(false);
-    const [friendName, setFriendName] = useState('');
+    const [friendEmail, setFriendEmail] = useState('');
     const [collaborationKey, setCollaborationKey] = useState('');
     const [canEdit, setCanEdit] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,25 +34,25 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
 
     const handleAddCollaborator = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log(`🔥 handleAddCollaborator triggered: friendName="${friendName}", key="${collaborationKey}", listId="${listId}"`);
+        console.log(`🔥 handleAddCollaborator triggered: friendEmail="${friendEmail}", key="${collaborationKey}", listId="${listId}"`);
 
         if (isSubmitting) {
             console.warn('⚠️ handleAddCollaborator: Already submitting, ignoring duplicate submission');
             return;
         }
 
-        if (!friendName.trim() || !collaborationKey.trim()) {
+        if (!friendEmail.trim() || !collaborationKey.trim()) {
             console.warn('⚠️ handleAddCollaborator: Missing required fields');
             return;
         }
 
         setIsSubmitting(true);
         try {
-            const success = await addCollaborator(friendName.trim(), collaborationKey.trim(), canEdit);
+            const success = await addCollaborator(friendEmail.trim(), collaborationKey.trim(), canEdit);
 
             if (success) {
                 // Reset form
-                setFriendName('');
+                setFriendEmail('');
                 setCollaborationKey('');
                 setCanEdit(true);
                 setShowAddForm(false);
@@ -160,14 +160,15 @@ const CollaboratorManager: React.FC<CollaboratorManagerProps> = ({ listId, canIn
 
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-sm font-medium mb-1">{t('collaboration.friendsName')}</label>
+                                <label className="block text-sm font-medium mb-1">{t('collaboration.friendsEmail')}</label>
                                 <input
-                                    type="text"
-                                    value={friendName}
-                                    onChange={(e) => setFriendName(e.target.value)}
-                                    placeholder={t('collaboration.enterFriendsName')}
+                                    type="email"
+                                    value={friendEmail}
+                                    onChange={(e) => setFriendEmail(e.target.value)}
+                                    placeholder={t('collaboration.enterFriendsEmail')}
                                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                                     required
+                                    autoComplete="email"
                                 />
                             </div>
 

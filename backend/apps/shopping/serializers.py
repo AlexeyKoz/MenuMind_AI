@@ -123,19 +123,22 @@ class CreateShoppingListSerializer(serializers.ModelSerializer):
 
 class AddCollaboratorSerializer(serializers.Serializer):
     """Serializer for adding collaborators to shopping lists"""
+    friend_email = serializers.EmailField()
     collaboration_key = serializers.CharField(max_length=6)
-    friend_name = serializers.CharField(max_length=100, required=False)
     can_edit = serializers.BooleanField(default=True)
     can_add_items = serializers.BooleanField(default=True)
     can_invite_others = serializers.BooleanField(default=False)
 
+    def validate_friend_email(self, value):
+        """Normalize email to lowercase for consistent lookup."""
+        return value.strip().lower()
+
     def validate_collaboration_key(self, value):
         """Validate that the collaboration key format is correct"""
-        # Only validate format, not existence - let the view handle user lookup for better error messages
-        if not value or len(value) != 6:
+        if not value or len(value.strip()) != 6:
             raise serializers.ValidationError(
                 "Collaboration key must be exactly 6 characters")
-        return value
+        return value.strip()
 
 
 class UpdateCollaboratorPermissionsSerializer(serializers.Serializer):

@@ -800,12 +800,17 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
     def add_list_collaborator(self, data):
         """Add collaborator to shopping list"""
         try:
+            from apps.shopping.collaborator_utils import resolve_collaborator_by_email_and_key
+
             collaboration_key = data.get('collaboration_key')
+            friend_email = data.get('friend_email')
             can_edit = data.get('can_edit', True)
 
-            # Find user by collaboration key
-            collaborator_user = User.objects.get(
-                collaboration_key=collaboration_key)
+            collaborator_user, lookup_error = resolve_collaborator_by_email_and_key(
+                friend_email, collaboration_key)
+            if lookup_error:
+                return None
+
             shopping_list = ShoppingList.objects.get(id=self.list_id)
 
             # Add collaborator
@@ -851,7 +856,7 @@ class ShoppingListConsumer(AsyncWebsocketConsumer):
                     'key_regenerated': True,
                     'already_existed': True
                 }
-        except User.DoesNotExist:
+        except Exception:
             return None
 
     @database_sync_to_async

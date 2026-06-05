@@ -1180,13 +1180,23 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
         serializer = AddCollaboratorSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        collaboration_key = serializer.validated_data['collaboration_key']
+        from .collaborator_utils import resolve_collaborator_by_email_and_key
+
+        collaborator_user, lookup_error = resolve_collaborator_by_email_and_key(
+            serializer.validated_data['friend_email'],
+            serializer.validated_data['collaboration_key'],
+        )
+        if lookup_error:
+            return Response(
+                {
+                    'error': lookup_error['error'],
+                    'message': lookup_error['message'],
+                    'error_type': lookup_error['error_type'],
+                },
+                status=lookup_error['status'],
+            )
 
         try:
-            from apps.users.models import User
-            collaborator_user = User.objects.get(
-                collaboration_key=collaboration_key)
-
             # Check if user is already a collaborator
             if shopping_list.participants.filter(id=collaborator_user.id).exists():
                 return Response(
@@ -1354,15 +1364,6 @@ class ShoppingListViewSet(viewsets.ModelViewSet):
                     'key_regenerated_for': 'participant'
                 })
 
-        except User.DoesNotExist:
-            return Response(
-                {
-                    'error': 'User not found',
-                    'message': 'No user found with this collaboration key. Please check the key and try again.',
-                    'error_type': 'user_not_found'
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
         except Exception as e:
             return Response(
                 {
