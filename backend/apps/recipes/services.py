@@ -471,6 +471,11 @@ class RecipeAgentService:
                 print(
                     f"[REUSE] ✅ AI found existing canonical: {existing_canonical.name}")
 
+                # QUALITY: upgrade older/cached recipes that lack step detail so that
+                # every agent path (Discovery + Inventory "View Recipe") returns the
+                # same enriched steps + "more" guidance, even on deduplication hits.
+                existing_canonical = await self._backfill_canonical_detail(existing_canonical)
+
                 # Send complete immediately (recipe already exists!)
                 progress.update_complete()
 
@@ -1864,6 +1869,101 @@ RULES:
         except json.JSONDecodeError as e:
             logger.warning(f"[ENRICH] JSON decode error: {e}")
             return None
+
+    async def _backfill_canonical_detail(self, canonical):
+        """
+        One-time quality upgrade for EXISTING canonical recipes.
+
+        When a query matches a recipe that already exists (deduplication hit),
+        the normal generation/enrichment pipeline is skipped. This means recipes
+        created before the enrichment feature (or by other agents) would be served
+        without the precise steps + "more" detail.
+
+        This method checks whether the canonical's steps already carry `detail`.
+        If not, it runs the SAME enrichment used by the Discovery agent, saves the
+        upgraded steps, and re-queues translations so the detail is also available
+        in other languages. Fully non-blocking: any failure returns the recipe as-is.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            @sync_to_async
+            def _read_fields():
+                return (
+                    list(canonical.base_steps or []),
+                    list(canonical.base_ingredients or []),
+                    canonical.name,
+                    getattr(canonical, 'servings', None),
+                )
+
+            base_steps, base_ingredients, name, servings = await _read_fields()
+
+            if not base_steps:
+                return canonical
+
+            # Already enriched? (at least one step carries non-empty detail)
+            already = any(
+                isinstance(s, dict) and (s.get('detail') or '').strip()
+                for s in base_steps
+            )
+            if already:
+                return canonical
+
+            logger.info(
+                f"[BACKFILL] Upgrading existing recipe '{name}' with step detail...")
+
+            rcip_like = {
+                'meta': {'name': name, 'servings': servings},
+                'ingredients': base_ingredients,
+                'steps': base_steps,
+            }
+            enriched = await self._enrich_steps_with_detail(rcip_like)
+            new_steps = enriched.get('steps', base_steps)
+
+            # Confirm enrichment actually produced detail before persisting
+            produced = any(
+                isinstance(s, dict) and (s.get('detail') or '').strip()
+                for s in new_steps
+            )
+            if not produced:
+                logger.info("[BACKFILL] No detail produced, leaving recipe as-is")
+                return canonical
+
+            @sync_to_async
+            def _persist_and_mark():
+                canonical.base_steps = new_steps
+                canonical.save(update_fields=['base_steps'])
+                # Mark non-English translations stale so they regenerate WITH detail
+                from .models import RecipeTranslation
+                stale_langs = list(
+                    RecipeTranslation.objects.filter(canonical_recipe=canonical)
+                    .exclude(language='en')
+                    .values_list('language', flat=True)
+                )
+                if stale_langs:
+                    RecipeTranslation.objects.filter(
+                        canonical_recipe=canonical
+                    ).exclude(language='en').update(status='pending')
+                return stale_langs
+
+            stale_langs = await _persist_and_mark()
+
+            # Re-queue translations (background) so detail is translated per language
+            try:
+                from .tasks import translate_recipe_to_language
+                for lang in stale_langs:
+                    if lang and lang != 'en':
+                        translate_recipe_to_language.delay(str(canonical.id), lang)
+            except Exception as tq:
+                logger.warning(f"[BACKFILL] Translation re-queue skipped: {tq}")
+
+            logger.info(f"[BACKFILL] ✅ Recipe '{name}' upgraded with step detail")
+            return canonical
+
+        except Exception as e:
+            logger.warning(f"[BACKFILL] ⚠️ Detail backfill skipped: {e}")
+            return canonical
 
     async def _convert_to_rcip(
         self,
